@@ -22,3 +22,26 @@ class ScenarioOptionsResponse(BaseModel):
     mw_options: list[float]
     duration_options: list[int]
     export_options: list[float]
+
+
+class BessSelection(BaseModel):
+    mw: float
+    duration: int
+
+
+class RunRequest(BaseModel):
+    archetypes: list[str]
+    bess_selections: list[BessSelection]
+    export_selections: list[float]
+    start_date: str  # YYYY-MM-DD
+    end_date: str    # YYYY-MM-DD
+
+
+class RunStatusResponse(BaseModel):
+    status: str
+    progress_pct: int
+    scenarios_complete: int
+    scenarios_total: int
+    current_scenario: Optional[str] = None
+    results: Optional[dict] = None
+    error: Optional[str] = None
