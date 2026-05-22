@@ -33,8 +33,9 @@ class RunRequest(BaseModel):
     archetypes: list[str]
     bess_selections: list[BessSelection]
     export_selections: list[float]
-    start_date: str  # YYYY-MM-DD
-    end_date: str    # YYYY-MM-DD
+    start_date: str       # YYYY-MM-DD
+    end_date: str         # YYYY-MM-DD
+    price_exposure: str   # "da" or "imbalance"
 
 
 class RunStatusResponse(BaseModel):

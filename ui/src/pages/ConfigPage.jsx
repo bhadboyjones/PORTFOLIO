@@ -13,6 +13,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
   const [selectedArchetypes, setSelectedArchetypes] = useState([]);
   const [selectedCells, setSelectedCells] = useState(new Set());
   const [selectedExports, setSelectedExports] = useState([]);
+  const [priceExposure, setPriceExposure] = useState("da");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [runError, setRunError] = useState(null);
@@ -74,6 +75,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
         export_selections: selectedExports,
         start_date: startDate,
         end_date: endDate,
+        price_exposure: priceExposure,
       });
       onRunStarted(job_id);
     } catch (e) {
@@ -139,6 +141,44 @@ export default function ConfigPage({ onRunStarted, jobError }) {
           endDate={endDate}
           onChange={handleDateChange}
         />
+      </section>
+
+      <section style={{ marginBottom: "2rem" }}>
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "1.25rem" }}>
+          <h2 style={{ margin: "0 0 0.85rem", fontSize: "1rem", fontWeight: 700 }}>
+            Price Exposure
+          </h2>
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            {[
+              { value: "da",        label: "Day-Ahead (DA)",      desc: "Settled against day-ahead market price" },
+              { value: "imbalance", label: "Imbalance (System)",  desc: "Settled against system imbalance price" },
+            ].map(({ value, label, desc }) => {
+              const active = priceExposure === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setPriceExposure(value)}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem 1rem",
+                    border: active ? "2px solid #2563eb" : "2px solid #e5e7eb",
+                    borderRadius: 6,
+                    background: active ? "#eff6ff" : "#fff",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "#1d4ed8" : "#111827" }}>
+                    {label}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#6b7280", marginTop: "0.2rem" }}>
+                    {desc}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
       {jobError && (

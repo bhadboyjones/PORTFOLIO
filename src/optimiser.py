@@ -1,7 +1,7 @@
 """
 optimiser.py
 ============
-MILP BESS dispatch optimiser — CPLEX/docplex backend.
+MILP BESS dispatch optimiser — PuLP/HiGHS backend.
 
 Designed for single-site runs. Call run_optimiser() once per site/scenario,
 then call calculate_settlement() on the output to get P&L.
@@ -72,7 +72,7 @@ import math
 from typing import Any, Dict, List
 
 import pandas as pd
-import docplex.mp.model as cpx
+import pulp
 
 logger = logging.getLogger(__name__)
 
@@ -206,31 +206,29 @@ def _solve_chunk(
     # -----------------------------------------------------------------------
     # Build model — fresh object every call
     # -----------------------------------------------------------------------
-    model = cpx.Model(name=f"BESS_chunk_{chunk_idx}")
+    prob = pulp.LpProblem(name=f"BESS_chunk_{chunk_idx}", sense=pulp.LpMaximize)
 
     chr1, chr2, dis1, dis2, soc_var = {}, {}, {}, {}, {}
 
     for i in range(n):
         # charge1: absorb on-site surplus — zero when site is net importing
         ub_chr1 = min(float(max(-nd_mw[i], 0.0)), power_mw)
-        chr1[i] = model.continuous_var(lb=0.0, ub=ub_chr1, name=f"chr1_{i}")
+        chr1[i] = pulp.LpVariable(f"chr1_{i}", lowBound=0.0, upBound=ub_chr1)
 
         # charge2: import from grid — headroom left after chr1
         ub_chr2 = power_mw - ub_chr1
-        chr2[i] = model.continuous_var(lb=0.0, ub=ub_chr2, name=f"chr2_{i}")
+        chr2[i] = pulp.LpVariable(f"chr2_{i}", lowBound=0.0, upBound=ub_chr2)
 
         # dis1: offset site demand — zero when site has surplus
         ub_dis1 = min(float(max(nd_mw[i], 0.0)), power_mw)
-        dis1[i] = model.continuous_var(lb=0.0, ub=ub_dis1, name=f"dis1_{i}")
+        dis1[i] = pulp.LpVariable(f"dis1_{i}", lowBound=0.0, upBound=ub_dis1)
 
         # dis2: export to grid — headroom left after dis1 capped at export limit
         ub_dis2 = min(export_limit_mw, power_mw - ub_dis1)
-        dis2[i] = model.continuous_var(lb=0.0, ub=ub_dis2, name=f"dis2_{i}")
+        dis2[i] = pulp.LpVariable(f"dis2_{i}", lowBound=0.0, upBound=ub_dis2)
 
         # SOC at each period (end-of-period state)
-        soc_var[i] = model.continuous_var(
-            lb=soc_min_mwh, ub=soc_max_mwh, name=f"soc_{i}"
-        )
+        soc_var[i] = pulp.LpVariable(f"soc_{i}", lowBound=soc_min_mwh, upBound=soc_max_mwh)
 
     def total_chr(i): return chr1[i] + chr2[i]
     def total_dis(i): return dis1[i] + dis2[i]
@@ -240,38 +238,32 @@ def _solve_chunk(
     # -----------------------------------------------------------------------
 
     # C1: Opening SOC pinned to carried-in value
-    model.add_constraint(soc_var[0] == soc_start_mwh, ctname="soc_init")
+    prob += (soc_var[0] == soc_start_mwh, "soc_init")
 
     # C2: SOC balance — MWh = MW × 0.5 h × efficiency
     for i in range(1, n):
-        model.add_constraint(
+        prob += (
             soc_var[i]
             == soc_var[i - 1]
             + total_chr(i - 1) * 0.5 * eta_c
             - total_dis(i - 1) * 0.5 / eta_d,
-            ctname=f"soc_bal_{i}",
+            f"soc_bal_{i}",
         )
 
     # C3: Power limit per period
     for i in range(n):
-        model.add_constraint(
-            total_chr(i) + total_dis(i) <= power_mw,
-            ctname=f"pwr_{i}",
-        )
+        prob += (total_chr(i) + total_dis(i) <= power_mw, f"pwr_{i}")
 
     # C4: End-of-chunk SOC target (±10% of capacity)
-    model.add_constraint(
-        soc_var[n - 1] >= soc_target_mwh - soc_tol_mwh, ctname="soc_end_lo"
-    )
-    model.add_constraint(
-        soc_var[n - 1] <= soc_target_mwh + soc_tol_mwh, ctname="soc_end_hi"
-    )
+    prob += (soc_var[n - 1] >= soc_target_mwh - soc_tol_mwh, "soc_end_lo")
+    prob += (soc_var[n - 1] <= soc_target_mwh + soc_tol_mwh, "soc_end_hi")
 
     # C5: Throughput cap
-    total_throughput = model.sum(
-        (total_chr(i) + total_dis(i)) * 0.5 for i in range(n)
+    prob += (
+        pulp.lpSum((total_chr(i) + total_dis(i)) * 0.5 for i in range(n))
+        <= max_throughput_mwh,
+        "cycle_cap",
     )
-    model.add_constraint(total_throughput <= max_throughput_mwh, ctname="cycle_cap")
 
     # -----------------------------------------------------------------------
     # Objective
@@ -292,18 +284,18 @@ def _solve_chunk(
         terms.append(-export_rate * chr1[i] * 0.5)
         terms.append(-deg_cost * (total_chr(i) + total_dis(i)) * 0.5)
 
-    model.maximize(model.sum(terms))
+    prob += pulp.lpSum(terms)
 
     # -----------------------------------------------------------------------
     # Solve
     # -----------------------------------------------------------------------
-    solution = model.solve(log_output=False)
+    prob.solve(pulp.HiGHS(msg=False))
 
     chunk = chunk.copy()
 
-    if solution is None:
+    if prob.status != pulp.LpStatusOptimal:
         logger.warning(
-            "Chunk %d: CPLEX returned no solution — filling with zeros.", chunk_idx
+            "Chunk %d: HiGHS returned no optimal solution — filling with zeros.", chunk_idx
         )
         chunk["charge1_mw"] = 0.0
         chunk["charge2_mw"] = 0.0
@@ -313,8 +305,10 @@ def _solve_chunk(
         return chunk
 
     def _sv(var_dict, i):
-        v = var_dict[i].solution_value
-        return round(v, 6) if v > 1e-9 else 0.0
+        v = pulp.value(var_dict[i])
+        if v is None or v < 1e-9:
+            return 0.0
+        return round(v, 6)
 
     chunk["charge1_mw"] = [_sv(chr1,    i) for i in range(n)]
     chunk["charge2_mw"] = [_sv(chr2,    i) for i in range(n)]
@@ -325,7 +319,7 @@ def _solve_chunk(
     logger.info(
         "Chunk %d solved — objective £%.2f, end SOC %.3f MWh",
         chunk_idx,
-        solution.get_objective_value(),
+        pulp.value(prob.objective),
         chunk["soc_mwh"].iloc[-1],
     )
 

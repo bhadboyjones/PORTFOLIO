@@ -23,6 +23,11 @@ _DISPLAY_NAMES = {
     "large_industrial":  "Large Industrial",
 }
 
+_PRICE_COLUMNS = {
+    "da":         ("da_forecast_gbp",  "da_actual_gbp"),
+    "imbalance":  ("imb_forecast_gbp", "imb_actual_gbp"),
+}
+
 
 def _validate_run_request(req: RunRequest) -> str | None:
     if not req.archetypes:
@@ -34,6 +39,8 @@ def _validate_run_request(req: RunRequest) -> str | None:
         return "Select at least one BESS configuration."
     if not req.export_selections:
         return "Select at least one export limit."
+    if req.price_exposure not in _PRICE_COLUMNS:
+        return "price_exposure must be 'da' or 'imbalance'."
     try:
         start = date.fromisoformat(req.start_date)
         end = date.fromisoformat(req.end_date)
@@ -135,6 +142,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
 
         start_utc = req.start_date + "T00:00:00Z"
         end_utc   = req.end_date   + "T00:00:00Z"
+        forecast_col, actual_col = _PRICE_COLUMNS[req.price_exposure]
 
         total_scenarios = (
             len(req.archetypes) *
@@ -155,7 +163,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                 site_name=archetype_id,
                 force_refresh=True,
             )
-            df_baseline = calculate_baseline(df)
+            df_baseline = calculate_baseline(df, actual_price_col=actual_col)
 
             archetype_scenarios = []
 
@@ -170,8 +178,11 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                     update_job(job_id, current_scenario=current)
 
                     bess_params = _build_bess_params(scenario, export_limit)
-                    results_df  = run_optimiser(df_baseline, bess_params)
-                    settled     = calculate_settlement(results_df, bess_params)
+                    results_df  = run_optimiser(df_baseline, bess_params,
+                                                forecast_price_col=forecast_col,
+                                                actual_price_col=actual_col)
+                    settled     = calculate_settlement(results_df, bess_params,
+                                                      actual_price_col=actual_col)
 
                     # Tag DF with identification columns required by build_report
                     settled = settled.copy()
