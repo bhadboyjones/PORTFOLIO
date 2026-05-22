@@ -10,7 +10,11 @@ app = FastAPI(title="BESS Portfolio Optimiser API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://portfolio-chi-lime-89.vercel.app",
+        "https://portfolio-187og8zux-flexiq-s-projects.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
