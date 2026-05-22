@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://flexiq-5eo2.onrender.com";
 
 export async function getArchetypes() {
   const res = await fetch(`${API_BASE_URL}/archetypes`);
