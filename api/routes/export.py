@@ -2,12 +2,10 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-import tempfile
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from api.jobs import get_job
-from src.report import build_report
 
 router = APIRouter()
 
@@ -22,17 +20,12 @@ def export_xlsx(job_id: str):
     if job["status"] != "complete":
         raise HTTPException(status_code=404, detail="Job not complete — results not yet available.")
 
-    dataframes = job.get("dataframes")
-    if not dataframes:
-        raise HTTPException(status_code=404, detail="No DataFrames stored for this job.")
-
-    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-    tmp.close()
-
-    build_report(dataframes, tmp.name)
+    xlsx_path = job.get("xlsx_path")
+    if not xlsx_path or not os.path.exists(xlsx_path):
+        raise HTTPException(status_code=404, detail="Export file not available for this job.")
 
     return FileResponse(
-        path=tmp.name,
+        path=xlsx_path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="bess_scenarios.xlsx",
     )

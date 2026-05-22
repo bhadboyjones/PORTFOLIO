@@ -134,8 +134,10 @@ def _serialise_scenario(settled, scenario_label: str, export_limit: float) -> di
 
 
 def _run_background(job_id: str, req: RunRequest) -> None:
+    import tempfile
     from src.data_builder import build_optimiser_input
     from src.optimiser import calculate_baseline, run_optimiser, calculate_settlement
+    from src.report import build_report
 
     try:
         update_job(job_id, status="running")
@@ -151,7 +153,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
         )
         scenarios_complete = 0
         all_results = {}
-        all_dataframes = []   # settled DFs for XLSX export
+        all_dataframes = []
 
         for archetype_id in req.archetypes:
             site_params = SITE_ARCHETYPES[archetype_id]
@@ -184,7 +186,6 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                     settled     = calculate_settlement(results_df, bess_params,
                                                       actual_price_col=actual_col)
 
-                    # Tag DF with identification columns required by build_report
                     settled = settled.copy()
                     settled["scenario_label"] = scenario["label"]
                     settled["export_limit_mw"] = export_limit
@@ -206,6 +207,12 @@ def _run_background(job_id: str, req: RunRequest) -> None:
 
             all_results[archetype_id] = archetype_scenarios
 
+        # Write XLSX once now while all DFs are still in scope, then discard them
+        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        tmp.close()
+        build_report(all_dataframes, tmp.name)
+        del all_dataframes
+
         update_job(
             job_id,
             status="complete",
@@ -213,7 +220,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
             scenarios_complete=total_scenarios,
             scenarios_total=total_scenarios,
             results=all_results,
-            dataframes=all_dataframes,
+            xlsx_path=tmp.name,
         )
 
     except Exception as exc:

@@ -14,6 +14,7 @@ app.add_middleware(
         "http://localhost:5173",
         "https://portfolio-chi-lime-89.vercel.app",
         "https://portfolio-187og8zux-flexiq-s-projects.vercel.app",
+        "https://flexiq-bess.vercel.app",
     ],
     allow_methods=["*"],
     allow_headers=["*"],

@@ -14,7 +14,7 @@ def create_job(job_id: str, scenarios_total: int) -> None:
             "scenarios_total": scenarios_total,
             "current_scenario": None,
             "results": None,
-            "dataframes": None,   # list of settled DataFrames for XLSX export
+            "xlsx_path": None,    # path to pre-built XLSX temp file
             "error": None,
         }
 
