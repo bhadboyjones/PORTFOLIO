@@ -81,7 +81,7 @@ from .config import NETWORK_CONFIG_NEC_HV, TOTAL_IMPORT_LEVIES_GBP_PER_MWH, CHP_
 # ---------------------------------------------------------------------------
 # Module constants
 # ---------------------------------------------------------------------------
-CHUNK_DAYS: int    = 3
+CHUNK_DAYS: int    = 1
 SPS_PER_DAY: int   = 48
 SPS_PER_CHUNK: int = CHUNK_DAYS * SPS_PER_DAY  # 144
 
