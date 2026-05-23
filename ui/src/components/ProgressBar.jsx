@@ -4,23 +4,22 @@ export default function ProgressBar({ pct }) {
     <div style={{ width: "100%" }}>
       <div
         style={{
-          height: 20,
-          background: "#e5e7eb",
-          borderRadius: 10,
+          height: 6,
+          background: "#1e3352",
+          borderRadius: 999,
           overflow: "hidden",
         }}
       >
         <div
+          className="progress-fill"
           style={{
             height: "100%",
             width: `${clamped}%`,
-            background: "#2563eb",
-            borderRadius: 10,
-            transition: "width 0.4s ease",
+            borderRadius: 999,
           }}
         />
       </div>
-      <div style={{ textAlign: "right", fontSize: "0.875rem", color: "#374151", marginTop: "0.35rem" }}>
+      <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#7ba0c8", marginTop: "0.4rem", fontWeight: 600 }}>
         {clamped}%
       </div>
     </div>

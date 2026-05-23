@@ -6,39 +6,34 @@ import TimeframePicker from "../components/TimeframePicker";
 import RunButton from "../components/RunButton";
 
 export default function ConfigPage({ onRunStarted, jobError }) {
-  const [archetypes, setArchetypes] = useState([]);
+  const [archetypes, setArchetypes]         = useState([]);
   const [scenarioOptions, setScenarioOptions] = useState(null);
-  const [loadError, setLoadError] = useState(null);
+  const [loadError, setLoadError]           = useState(null);
 
   const [selectedArchetypes, setSelectedArchetypes] = useState([]);
-  const [selectedCells, setSelectedCells] = useState(new Set());
-  const [selectedExports, setSelectedExports] = useState([]);
-  const [priceExposure, setPriceExposure] = useState("da");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [runError, setRunError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [selectedCells, setSelectedCells]           = useState(new Set());
+  const [selectedExports, setSelectedExports]       = useState([]);
+  const [priceExposure, setPriceExposure]           = useState("da");
+  const [startDate, setStartDate]                   = useState("");
+  const [endDate, setEndDate]                       = useState("");
+  const [runError, setRunError]                     = useState(null);
+  const [submitting, setSubmitting]                 = useState(false);
 
   useEffect(() => {
     Promise.all([getArchetypes(), getScenarioOptions()])
-      .then(([arch, opts]) => {
-        setArchetypes(arch);
-        setScenarioOptions(opts);
-      })
+      .then(([arch, opts]) => { setArchetypes(arch); setScenarioOptions(opts); })
       .catch((e) => setLoadError(e.message));
   }, []);
 
   function toggleArchetype(id) {
-    setSelectedArchetypes((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
+    setSelectedArchetypes((prev) => (prev.includes(id) ? [] : [id]));
   }
 
   function toggleCell(cellId) {
     setSelectedCells((prev) => {
       const next = new Set(prev);
-      if (next.has(cellId)) next.delete(cellId);
-      else next.add(cellId);
+      if (next.has(cellId)) { next.delete(cellId); }
+      else if (next.size < 3) { next.add(cellId); }
       return next;
     });
   }
@@ -49,17 +44,13 @@ export default function ConfigPage({ onRunStarted, jobError }) {
     );
   }
 
-  function handleDateChange(start, end) {
-    setStartDate(start);
-    setEndDate(end);
-  }
+  function handleDateChange(start, end) { setStartDate(start); setEndDate(end); }
 
   const canRun =
     selectedArchetypes.length > 0 &&
     selectedCells.size > 0 &&
     selectedExports.length > 0 &&
-    startDate &&
-    endDate;
+    startDate && endDate;
 
   async function handleRun() {
     setRunError(null);
@@ -87,71 +78,114 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
   if (loadError) {
     return (
-      <div style={{ padding: "2rem", color: "#dc2626" }}>
-        Failed to load configuration: {loadError}. Is the API server running?
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080e1a" }}>
+        <div style={{ padding: "1.5rem 2rem", background: "#152236", border: "1px solid rgba(255,85,119,0.3)", borderRadius: 10, color: "#ff5577", maxWidth: 480 }}>
+          <strong>Failed to load configuration</strong>
+          <p style={{ margin: "0.5rem 0 0", fontSize: "0.875rem", color: "#7ba0c8" }}>
+            {loadError}. Is the API server running?
+          </p>
+        </div>
       </div>
     );
   }
 
   if (!scenarioOptions) {
-    return <div style={{ padding: "2rem", color: "#6b7280" }}>Loading…</div>;
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080e1a" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "#4a6b8c" }}>
+          <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#00c8e8", boxShadow: "0 0 8px rgba(0,200,232,0.5)", flexShrink: 0 }} />
+          <span style={{ fontSize: "0.875rem" }}>Loading configuration…</span>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "2rem 1rem" }}>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.25rem" }}>
-        BTM BESS Portfolio Optimiser
-      </h1>
-      <p style={{ color: "#6b7280", marginBottom: "2rem", fontSize: "0.9rem" }}>
-        Configure site archetypes, BESS specifications, and analysis window to model behind-the-meter battery economics.
-      </p>
+    <div style={{ minHeight: "100vh", background: "#080e1a" }}>
 
-      <section style={{ marginBottom: "2rem" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.75rem" }}>
-          Site Archetypes
-        </h2>
-        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-          {archetypes.map((a) => (
-            <ArchetypeCard
-              key={a.id}
-              archetype={a}
-              selected={selectedArchetypes.includes(a.id)}
-              onToggle={() => toggleArchetype(a.id)}
-            />
-          ))}
+      {/* Hero */}
+      <div style={{
+        background: "#0f1928",
+        backgroundImage: `
+          linear-gradient(rgba(0,200,232,0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,200,232,0.04) 1px, transparent 1px)
+        `,
+        backgroundSize: "48px 48px",
+        borderBottom: "1px solid #1e3352",
+        padding: "2.5rem 1.5rem 2rem",
+      }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem" }}>
+            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.025em" }}>
+              flex<span style={{ color: "#00c8e8" }}>iq</span>
+            </h1>
+            <span style={{
+              fontSize: "0.62rem", fontWeight: 700, color: "#00c8e8",
+              background: "rgba(0,200,232,0.1)", border: "1px solid rgba(0,200,232,0.25)",
+              borderRadius: 3, padding: "0.12rem 0.4rem", letterSpacing: "0.1em", textTransform: "uppercase",
+            }}>
+              BETA
+            </span>
+          </div>
+          <p style={{ margin: "0 0 1rem", color: "#7ba0c8", fontSize: "0.9rem" }}>
+            BTM BESS portfolio optimisation
+          </p>
+          <p style={{
+            margin: 0, color: "#4a6b8c", fontSize: "0.8rem",
+            background: "rgba(0,200,232,0.05)", border: "1px solid rgba(0,200,232,0.12)",
+            borderRadius: 5, padding: "0.45rem 0.85rem", display: "inline-block",
+          }}>
+            Select 1 site archetype, up to 3 BESS configurations and up to 4 export limits (max 12 scenarios).
+          </p>
         </div>
-      </section>
+      </div>
 
-      <section style={{ marginBottom: "2rem" }}>
-        <BessConfigurator
-          mwOptions={scenarioOptions.mw_options}
-          durationOptions={scenarioOptions.duration_options}
-          exportOptions={scenarioOptions.export_options}
-          selectedCells={selectedCells}
-          selectedExports={selectedExports}
-          onToggleCell={toggleCell}
-          onToggleExport={toggleExport}
-          archetypeCount={selectedArchetypes.length}
-        />
-      </section>
+      {/* Config body */}
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "1.75rem 1rem" }}>
 
-      <section style={{ marginBottom: "2rem" }}>
-        <TimeframePicker
-          startDate={startDate}
-          endDate={endDate}
-          onChange={handleDateChange}
-        />
-      </section>
+        {/* Site Archetypes */}
+        <Card label="Site Archetypes">
+          <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap" }}>
+            {archetypes.map((a) => (
+              <ArchetypeCard
+                key={a.id}
+                archetype={a}
+                selected={selectedArchetypes.includes(a.id)}
+                onToggle={() => toggleArchetype(a.id)}
+              />
+            ))}
+          </div>
+        </Card>
 
-      <section style={{ marginBottom: "2rem" }}>
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "1.25rem" }}>
-          <h2 style={{ margin: "0 0 0.85rem", fontSize: "1rem", fontWeight: 700 }}>
-            Price Exposure
-          </h2>
+        {/* BESS Configuration */}
+        <Card label="BESS Configuration">
+          <BessConfigurator
+            mwOptions={scenarioOptions.mw_options}
+            durationOptions={scenarioOptions.duration_options}
+            exportOptions={scenarioOptions.export_options}
+            selectedCells={selectedCells}
+            selectedExports={selectedExports}
+            onToggleCell={toggleCell}
+            onToggleExport={toggleExport}
+            archetypeCount={selectedArchetypes.length}
+          />
+        </Card>
+
+        {/* Analysis Window */}
+        <Card label="Analysis Window">
+          <TimeframePicker
+            startDate={startDate}
+            endDate={endDate}
+            onChange={handleDateChange}
+          />
+        </Card>
+
+        {/* Price Exposure */}
+        <Card label="Price Exposure">
           <div style={{ display: "flex", gap: "0.75rem" }}>
             {[
-              { value: "da",        label: "Day-Ahead (DA)",      desc: "Settled against day-ahead market price" },
-              { value: "imbalance", label: "Imbalance (System)",  desc: "Settled against system imbalance price" },
+              { value: "da",        label: "Day-Ahead (DA)",     desc: "Settled against day-ahead market price" },
+              { value: "imbalance", label: "Imbalance (System)", desc: "Settled against system imbalance price" },
             ].map(({ value, label, desc }) => {
               const active = priceExposure === value;
               return (
@@ -160,40 +194,62 @@ export default function ConfigPage({ onRunStarted, jobError }) {
                   onClick={() => setPriceExposure(value)}
                   style={{
                     flex: 1,
-                    padding: "0.75rem 1rem",
-                    border: active ? "2px solid #2563eb" : "2px solid #e5e7eb",
-                    borderRadius: 6,
-                    background: active ? "#eff6ff" : "#fff",
+                    padding: "0.85rem 1rem",
+                    border: active ? "1px solid #00c8e8" : "1px solid #1e3352",
+                    borderRadius: 7,
+                    background: active ? "rgba(0,200,232,0.08)" : "#0f1928",
                     cursor: "pointer",
                     textAlign: "left",
+                    boxShadow: active ? "0 0 16px rgba(0,200,232,0.1)" : "none",
+                    transition: "all 0.15s",
                   }}
                 >
-                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "#1d4ed8" : "#111827" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "#00c8e8" : "#7ba0c8", marginBottom: "0.25rem" }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#6b7280", marginTop: "0.2rem" }}>
+                  <div style={{ fontSize: "0.75rem", color: "#4a6b8c" }}>
                     {desc}
                   </div>
                 </button>
               );
             })}
           </div>
-        </div>
-      </section>
+        </Card>
 
-      {jobError && (
-        <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, color: "#dc2626", fontSize: "0.875rem" }}>
-          Run failed: {jobError}
-        </div>
-      )}
+        {/* Errors */}
+        {jobError && (
+          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.3)", borderRadius: 6, color: "#ff5577", fontSize: "0.875rem" }}>
+            Run failed: {jobError}
+          </div>
+        )}
+        {runError && (
+          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.3)", borderRadius: 6, color: "#ff5577", fontSize: "0.875rem" }}>
+            {runError}
+          </div>
+        )}
 
-      {runError && (
-        <div style={{ marginBottom: "1rem", color: "#dc2626", fontSize: "0.875rem" }}>
-          Error: {runError}
-        </div>
-      )}
+        <RunButton disabled={!canRun || submitting} onClick={handleRun} />
+      </div>
+    </div>
+  );
+}
 
-      <RunButton disabled={!canRun || submitting} onClick={handleRun} />
+function Card({ label, children }) {
+  return (
+    <div style={{
+      background: "#152236",
+      border: "1px solid #1e3352",
+      borderRadius: 10,
+      padding: "1.5rem",
+      marginBottom: "1rem",
+    }}>
+      <div style={{
+        fontSize: "0.68rem", fontWeight: 700, color: "#4a6b8c",
+        textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.1rem",
+      }}>
+        {label}
+      </div>
+      {children}
     </div>
   );
 }

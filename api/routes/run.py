@@ -206,7 +206,8 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                     del settled
 
                     scenarios_complete += 1
-                    progress_pct = int(scenarios_complete / total_scenarios * 100)
+                    # Cap at 99 — 100 is reserved for after build_report() confirms XLSX written
+                    progress_pct = min(99, int(scenarios_complete / total_scenarios * 100))
                     update_job(
                         job_id,
                         scenarios_complete=scenarios_complete,

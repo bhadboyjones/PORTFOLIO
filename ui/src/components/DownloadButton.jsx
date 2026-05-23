@@ -37,21 +37,25 @@ export default function DownloadButton({ jobId }) {
         onClick={handleDownload}
         disabled={loading}
         style={{
-          padding: "0.65rem 1.5rem",
-          fontSize: "0.9rem",
+          padding: "0.65rem 1.75rem",
+          fontSize: "0.85rem",
           fontWeight: 700,
-          border: "none",
+          letterSpacing: "0.05em",
+          border: loading ? "1px solid #1e3352" : "1px solid rgba(0,229,160,0.4)",
           borderRadius: 6,
           cursor: loading ? "not-allowed" : "pointer",
-          background: loading ? "#d1d5db" : "#16a34a",
-          color: "#fff",
-          transition: "background 0.15s",
+          background: loading
+            ? "#0f1928"
+            : "linear-gradient(135deg, #00e5a0 0%, #00c896 100%)",
+          color: loading ? "#4a6b8c" : "#080e1a",
+          boxShadow: loading ? "none" : "0 0 16px rgba(0,229,160,0.2)",
+          transition: "all 0.2s ease",
         }}
       >
-        {loading ? "Generating…" : "Download Full Report (XLSX)"}
+        {loading ? "Generating…" : "Download Report (XLSX)"}
       </button>
       {error && (
-        <div style={{ marginTop: "0.5rem", color: "#dc2626", fontSize: "0.8rem" }}>
+        <div style={{ marginTop: "0.5rem", color: "#ff5577", fontSize: "0.8rem" }}>
           {error}
         </div>
       )}

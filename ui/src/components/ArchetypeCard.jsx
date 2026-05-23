@@ -3,47 +3,41 @@ export default function ArchetypeCard({ archetype, selected, onToggle }) {
     <div
       onClick={onToggle}
       style={{
-        border: selected ? "2px solid #2563eb" : "2px solid #e5e7eb",
-        borderRadius: 8,
+        border: selected ? "1px solid #00c8e8" : "1px solid #1e3352",
+        borderRadius: 10,
         padding: "1.25rem",
         cursor: "pointer",
-        background: selected ? "#eff6ff" : "#fff",
+        background: selected ? "rgba(0,200,232,0.07)" : "#152236",
         flex: 1,
-        minWidth: 220,
-        transition: "border-color 0.15s, background 0.15s",
+        minWidth: 200,
+        transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+        boxShadow: selected ? "0 0 0 1px #00c8e8, 0 0 20px rgba(0,200,232,0.12)" : "none",
       }}
     >
-      <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem", fontWeight: 700 }}>
-        {archetype.display_name}
-      </h3>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.9rem" }}>
+        <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: selected ? "#00c8e8" : "#e0eaf8" }}>
+          {archetype.display_name}
+        </h3>
+        {selected && (
+          <span style={{
+            fontSize: "0.65rem", fontWeight: 700, color: "#080e1a",
+            background: "#00c8e8", borderRadius: 3, padding: "0.15rem 0.45rem",
+            letterSpacing: "0.06em", textTransform: "uppercase",
+          }}>
+            Selected
+          </span>
+        )}
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
         <tbody>
           <Row label="Peak demand" value={`${archetype.peak_mw} MW`} />
-          <Row label="Base load" value={`${archetype.base_mw} MW`} />
-          <Row label="Off-peak" value={`${archetype.offpeak_mw} MW`} />
-          <Row label="PV" value={archetype.has_pv ? `${archetype.pv_kwp} kWp` : "None"} />
-          <Row label="CHP" value={archetype.has_chp ? `${archetype.chp_kw} kW` : "None"} />
-          <Row label="DNO" value={archetype.dno} />
-          <Row label="Tariff" value={archetype.tariff} />
+          <Row label="Base load"   value={`${archetype.base_mw} MW`} />
+          <Row label="Off-peak"    value={`${archetype.offpeak_mw} MW`} />
+          <Row label="PV"          value={archetype.has_pv  ? `${archetype.pv_kwp} kWp` : "None"} />
+          <Row label="CHP"         value={archetype.has_chp ? `${archetype.chp_kw} kW`  : "None"} />
         </tbody>
       </table>
-      <button
-        style={{
-          marginTop: "1rem",
-          width: "100%",
-          padding: "0.4rem",
-          border: "1px solid #2563eb",
-          borderRadius: 4,
-          background: selected ? "#2563eb" : "#fff",
-          color: selected ? "#fff" : "#2563eb",
-          cursor: "pointer",
-          fontWeight: 600,
-          fontSize: "0.85rem",
-        }}
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      >
-        {selected ? "Selected" : "Select"}
-      </button>
     </div>
   );
 }
@@ -51,10 +45,10 @@ export default function ArchetypeCard({ archetype, selected, onToggle }) {
 function Row({ label, value }) {
   return (
     <tr>
-      <td style={{ color: "#6b7280", paddingRight: "0.5rem", paddingBottom: "0.2rem", whiteSpace: "nowrap" }}>
-        {label}:
+      <td style={{ color: "#4a6b8c", paddingRight: "0.6rem", paddingBottom: "0.25rem", whiteSpace: "nowrap", fontWeight: 500 }}>
+        {label}
       </td>
-      <td style={{ fontWeight: 500 }}>{value}</td>
+      <td style={{ color: "#7ba0c8", fontWeight: 500 }}>{value}</td>
     </tr>
   );
 }

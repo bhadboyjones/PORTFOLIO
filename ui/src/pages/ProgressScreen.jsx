@@ -12,65 +12,89 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
       try {
         const data = await getRunStatus(jobId);
         if (cancelled) return;
-
         setStatus(data);
-
-        if (data.status === "complete") {
-          onComplete(data.results);
-          return;
-        }
-        if (data.status === "failed") {
-          onFailed(data.error || "Run failed — unknown error.");
-          return;
-        }
-
+        if (data.status === "complete") { onComplete(data.results); return; }
+        if (data.status === "failed")   { onFailed(data.error || "Run failed — unknown error."); return; }
         setTimeout(poll, 3000);
-      } catch (err) {
+      } catch {
         if (!cancelled) onFailed("Lost connection to API server.");
       }
     }
 
     poll();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [jobId]);
 
   const pct      = status?.progress_pct      ?? 0;
   const complete = status?.scenarios_complete ?? 0;
   const total    = status?.scenarios_total    ?? 0;
   const current  = status?.current_scenario   ?? null;
+  const isBuilding = pct === 99 && complete === total && total > 0;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "2rem",
-        background: "#f9fafb",
-      }}
-    >
-      <div style={{ width: "100%", maxWidth: 560 }}>
-        <h2 style={{ marginBottom: "2rem", fontSize: "1.25rem", fontWeight: 700, color: "#111827" }}>
-          Running scenarios…
-        </h2>
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "2rem",
+      background: "#080e1a",
+    }}>
+      <div style={{ width: "100%", maxWidth: 520 }}>
+
+        {/* Brand */}
+        <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+          <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.02em", marginBottom: "0.25rem" }}>
+            flex<span style={{ color: "#00c8e8" }}>iq</span>
+          </div>
+          <div style={{ fontSize: "0.8rem", color: "#4a6b8c", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            BTM BESS Portfolio Optimiser
+          </div>
+        </div>
+
+        {/* Pulse indicator */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.75rem" }}>
+          <div
+            className="pulse-dot"
+            style={{
+              width: 10, height: 10, borderRadius: "50%",
+              background: "#00c8e8",
+              boxShadow: "0 0 10px rgba(0,200,232,0.5)",
+              flexShrink: 0,
+            }}
+          />
+          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#e0eaf8" }}>
+            {isBuilding ? "Building report…" : "Running optimisation…"}
+          </h2>
+        </div>
 
         <ProgressBar pct={pct} />
 
-        <p style={{ marginTop: "1rem", color: "#374151", fontSize: "0.9rem" }}>
-          {total > 0
-            ? `${complete} of ${total} scenario${total !== 1 ? "s" : ""} complete`
-            : "Initialising…"}
-        </p>
-
-        {current && (
-          <p style={{ color: "#6b7280", fontSize: "0.85rem", marginTop: "0.25rem" }}>
-            Current: {current}
+        <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <p style={{ margin: 0, color: "#7ba0c8", fontSize: "0.875rem" }}>
+            {total > 0
+              ? `${complete} of ${total} scenario${total !== 1 ? "s" : ""} complete`
+              : "Initialising…"}
           </p>
+          {isBuilding && (
+            <span style={{ fontSize: "0.78rem", color: "#4a6b8c" }}>Writing XLSX…</span>
+          )}
+        </div>
+
+        {current && !isBuilding && (
+          <div style={{
+            marginTop: "1rem",
+            padding: "0.6rem 0.9rem",
+            background: "#0f1928",
+            border: "1px solid #1e3352",
+            borderRadius: 6,
+            fontSize: "0.78rem",
+            color: "#4a6b8c",
+            fontFamily: "monospace",
+          }}>
+            {current}
+          </div>
         )}
       </div>
     </div>

@@ -13,12 +13,7 @@ const DISPLAY_NAMES = {
   large_industrial:  "Large Industrial",
 };
 
-const CHART_TABS = [
-  "Cumulative P&L",
-  "Dispatch Profile",
-  "Revenue Stack",
-  "Baseline vs BESS",
-];
+const CHART_TABS = ["Cumulative P&L", "Dispatch Profile", "Revenue Stack", "Baseline vs BESS"];
 
 function rankScenarios(scenarios) {
   return [...scenarios]
@@ -28,22 +23,28 @@ function rankScenarios(scenarios) {
 
 function TabBar({ tabs, active, onSelect, small }) {
   return (
-    <div style={{ display: "flex", gap: "0.25rem", borderBottom: "2px solid #e5e7eb", marginBottom: small ? "1.25rem" : "1.75rem" }}>
+    <div style={{
+      display: "flex",
+      gap: 0,
+      borderBottom: "1px solid #1e3352",
+      marginBottom: small ? "1.25rem" : "1.5rem",
+    }}>
       {tabs.map((tab, i) => (
         <button
           key={tab}
           onClick={() => onSelect(i)}
           style={{
-            padding: small ? "0.4rem 0.85rem" : "0.55rem 1.1rem",
+            padding: small ? "0.45rem 1rem" : "0.6rem 1.25rem",
             border: "none",
-            borderBottom: active === i ? "2px solid #2563eb" : "2px solid transparent",
-            marginBottom: -2,
+            borderBottom: active === i ? "2px solid #00c8e8" : "2px solid transparent",
+            marginBottom: -1,
             background: "none",
             cursor: "pointer",
-            fontWeight: active === i ? 700 : 400,
-            color: active === i ? "#2563eb" : "#374151",
-            fontSize: small ? "0.85rem" : "0.9rem",
+            fontWeight: active === i ? 700 : 500,
+            color: active === i ? "#00c8e8" : "#4a6b8c",
+            fontSize: small ? "0.82rem" : "0.875rem",
             whiteSpace: "nowrap",
+            transition: "color 0.15s",
           }}
         >
           {tab}
@@ -54,12 +55,12 @@ function TabBar({ tabs, active, onSelect, small }) {
 }
 
 export default function ResultsPage({ results, jobId, onBack }) {
-  const archetypeIds = Object.keys(results);
+  const archetypeIds   = Object.keys(results);
   const [activeArchetype, setActiveArchetype] = useState(archetypeIds[0]);
-  const [chartTab, setChartTab] = useState(0);
+  const [chartTab, setChartTab]               = useState(0);
 
   const rankedScenarios = rankScenarios(results[activeArchetype] || []);
-  const topScenario = rankedScenarios[0] ?? null;
+  const topScenario     = rankedScenarios[0] ?? null;
 
   function handleArchetypeChange(i) {
     setActiveArchetype(archetypeIds[i]);
@@ -67,58 +68,78 @@ export default function ResultsPage({ results, jobId, onBack }) {
   }
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: "2rem 1rem" }}>
+    <div style={{ minHeight: "100vh", background: "#080e1a" }}>
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
+      {/* Top bar */}
+      <div style={{
+        background: "#0f1928",
+        borderBottom: "1px solid #1e3352",
+        padding: "0.9rem 1.5rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "1.25rem",
+      }}>
         <button
           onClick={onBack}
           style={{
-            padding: "0.4rem 0.85rem",
-            border: "1px solid #d1d5db",
-            borderRadius: 4,
-            background: "#fff",
+            padding: "0.35rem 0.85rem",
+            border: "1px solid #1e3352",
+            borderRadius: 5,
+            background: "transparent",
             cursor: "pointer",
-            fontSize: "0.85rem",
+            fontSize: "0.82rem",
+            color: "#7ba0c8",
+            transition: "border-color 0.15s",
           }}
         >
           ← New run
         </button>
-        <h1 style={{ margin: 0, fontSize: "1.4rem", fontWeight: 800 }}>Results</h1>
-      </div>
-
-      {/* Archetype tabs */}
-      <TabBar
-        tabs={archetypeIds.map((id) => DISPLAY_NAMES[id] ?? id)}
-        active={archetypeIds.indexOf(activeArchetype)}
-        onSelect={handleArchetypeChange}
-      />
-
-      {/* KPI cards */}
-      <KpiCards topScenario={topScenario} />
-
-      {/* Scenario table */}
-      <ScenarioTable rankedScenarios={rankedScenarios} />
-
-      {/* Charts */}
-      <div style={{ marginTop: "2rem" }}>
-        <TabBar
-          tabs={CHART_TABS}
-          active={chartTab}
-          onSelect={setChartTab}
-          small
-        />
-
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "1.25rem" }}>
-          {chartTab === 0 && <CumulativePnlChart    rankedScenarios={rankedScenarios} />}
-          {chartTab === 1 && <DispatchProfileChart  rankedScenarios={rankedScenarios} />}
-          {chartTab === 2 && <RevenueStackChart     rankedScenarios={rankedScenarios} />}
-          {chartTab === 3 && <BaselineComparisonChart rankedScenarios={rankedScenarios} />}
+        <div>
+          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.01em" }}>
+            flex<span style={{ color: "#00c8e8" }}>iq</span>
+          </span>
+          <span style={{ marginLeft: "0.75rem", fontSize: "0.8rem", color: "#4a6b8c" }}>Results</span>
         </div>
       </div>
 
-      <div style={{ marginTop: "1.5rem", display: "flex", justifyContent: "flex-end" }}>
-        <DownloadButton jobId={jobId} />
+      <div style={{ maxWidth: 1020, margin: "0 auto", padding: "1.75rem 1rem" }}>
+
+        {/* Archetype tabs */}
+        {archetypeIds.length > 1 && (
+          <TabBar
+            tabs={archetypeIds.map((id) => DISPLAY_NAMES[id] ?? id)}
+            active={archetypeIds.indexOf(activeArchetype)}
+            onSelect={handleArchetypeChange}
+          />
+        )}
+
+        {/* KPI cards */}
+        <KpiCards topScenario={topScenario} />
+
+        {/* Scenario table */}
+        <div style={{ marginBottom: "2rem" }}>
+          <ScenarioTable rankedScenarios={rankedScenarios} />
+        </div>
+
+        {/* Charts */}
+        <div style={{
+          background: "#152236",
+          border: "1px solid #1e3352",
+          borderRadius: 10,
+          padding: "1.5rem",
+          marginBottom: "1.5rem",
+        }}>
+          <TabBar tabs={CHART_TABS} active={chartTab} onSelect={setChartTab} small />
+          {chartTab === 0 && <CumulativePnlChart     rankedScenarios={rankedScenarios} />}
+          {chartTab === 1 && <DispatchProfileChart   rankedScenarios={rankedScenarios} />}
+          {chartTab === 2 && <RevenueStackChart      rankedScenarios={rankedScenarios} />}
+          {chartTab === 3 && <BaselineComparisonChart rankedScenarios={rankedScenarios} />}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <DownloadButton jobId={jobId} />
+        </div>
+
       </div>
     </div>
   );
