@@ -128,7 +128,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
             </span>
           </div>
           <p style={{ margin: "0 0 1rem", color: "#7ba0c8", fontSize: "0.9rem" }}>
-            BTM BESS portfolio optimisation
+            BTM BESS optimisation
           </p>
           <p style={{
             margin: 0, color: "#4a6b8c", fontSize: "0.8rem",
