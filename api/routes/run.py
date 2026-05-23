@@ -153,7 +153,9 @@ def _run_background(job_id: str, req: RunRequest) -> None:
         )
         scenarios_complete = 0
         all_results = {}
-        all_dataframes = []
+        scenario_paths = []   # paths to per-scenario pickle files on disk
+
+        tmp_dir = tempfile.mkdtemp()
 
         for archetype_id in req.archetypes:
             site_params = SITE_ARCHETYPES[archetype_id]
@@ -166,6 +168,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                 force_refresh=True,
             )
             df_baseline = calculate_baseline(df, actual_price_col=actual_col)
+            del df
 
             archetype_scenarios = []
 
@@ -185,6 +188,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                                                 actual_price_col=actual_col)
                     settled     = calculate_settlement(results_df, bess_params,
                                                       actual_price_col=actual_col)
+                    del results_df
 
                     settled = settled.copy()
                     settled["scenario_label"] = scenario["label"]
@@ -194,7 +198,12 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                     archetype_scenarios.append(
                         _serialise_scenario(settled, scenario["label"], export_limit)
                     )
-                    all_dataframes.append(settled)
+
+                    # Persist to disk immediately — frees this DF from memory
+                    pkl_path = os.path.join(tmp_dir, f"scenario_{len(scenario_paths)}.pkl")
+                    settled.to_pickle(pkl_path)
+                    scenario_paths.append(pkl_path)
+                    del settled
 
                     scenarios_complete += 1
                     progress_pct = int(scenarios_complete / total_scenarios * 100)
@@ -206,12 +215,15 @@ def _run_background(job_id: str, req: RunRequest) -> None:
                     )
 
             all_results[archetype_id] = archetype_scenarios
+            del df_baseline
 
-        # Write XLSX once now while all DFs are still in scope, then discard them
-        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-        tmp.close()
-        build_report(all_dataframes, tmp.name)
-        del all_dataframes
+        # Build XLSX — build_report loads one scenario at a time from disk
+        xlsx_path = os.path.join(tmp_dir, "bess_scenarios.xlsx")
+        build_report(scenario_paths, xlsx_path)
+
+        # Per-scenario pickles no longer needed
+        for p in scenario_paths:
+            os.unlink(p)
 
         update_job(
             job_id,
@@ -220,7 +232,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
             scenarios_complete=total_scenarios,
             scenarios_total=total_scenarios,
             results=all_results,
-            xlsx_path=tmp.name,
+            xlsx_path=xlsx_path,
         )
 
     except Exception as exc:

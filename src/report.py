@@ -76,59 +76,49 @@ def _safe_float(value):
 # Summary sheet
 # ---------------------------------------------------------------------------
 
-def _build_summary_rows(all_results):
+def _build_summary_row(scenario):
     """
-    Build one summary row per scenario with full P&L stack:
-        - Site identification
-        - Baseline cost (without BESS)
-        - Standing charges (sunk, both scenarios)
-        - BESS P&L components
-        - Site cost with BESS
-        - Net benefit
+    Build one summary row dict for a single scenario DataFrame.
     """
-    rows = []
-    for scenario in all_results:
-        baseline_net      = scenario["baseline_net_gbp"].sum()
-        total_standing    = scenario["total_standing_gbp"].sum()
-        net_settlement    = scenario["net_settlement_gbp"].sum()
+    baseline_net      = scenario["baseline_net_gbp"].sum()
+    total_standing    = scenario["total_standing_gbp"].sum()
+    net_settlement    = scenario["net_settlement_gbp"].sum()
 
-        site_cost_wo_bess = baseline_net + total_standing
-        site_cost_w_bess  = site_cost_wo_bess - net_settlement
-        bess_net_benefit  = net_settlement   # = site_cost_wo_bess - site_cost_w_bess
+    site_cost_wo_bess = baseline_net + total_standing
+    site_cost_w_bess  = site_cost_wo_bess - net_settlement
+    bess_net_benefit  = net_settlement
 
-        rows.append({
-            # Identification
-            "site_name":                    scenario["site_name"].iloc[0] if "site_name" in scenario.columns else "",
-            "scenario_label":               scenario["scenario_label"].iloc[0],
-            "export_limit_mw":              scenario["export_limit_mw"].iloc[0],
+    return {
+        # Identification
+        "site_name":                    scenario["site_name"].iloc[0] if "site_name" in scenario.columns else "",
+        "scenario_label":               scenario["scenario_label"].iloc[0],
+        "export_limit_mw":              scenario["export_limit_mw"].iloc[0],
 
-            # Baseline (without BESS)
-            "baseline_import_cost_gbp":     scenario["baseline_import_cost_gbp"].sum(),
-            "baseline_export_rev_gbp":      scenario["baseline_export_rev_gbp"].sum(),
-            "baseline_chp_cost_gbp":        scenario["baseline_chp_cost_gbp"].sum(),
-            "baseline_net_gbp":             baseline_net,
+        # Baseline (without BESS)
+        "baseline_import_cost_gbp":     scenario["baseline_import_cost_gbp"].sum(),
+        "baseline_export_rev_gbp":      scenario["baseline_export_rev_gbp"].sum(),
+        "baseline_chp_cost_gbp":        scenario["baseline_chp_cost_gbp"].sum(),
+        "baseline_net_gbp":             baseline_net,
 
-            # Standing charges (same in both scenarios)
-            "dduos_fixed_gbp":              scenario["dduos_fixed_gbp"].sum(),
-            "dduos_capacity_gbp":           scenario["dduos_capacity_gbp"].sum(),
-            "gduos_fixed_gbp":              scenario["gduos_fixed_gbp"].sum(),
-            "total_standing_gbp":           total_standing,
+        # Standing charges (same in both scenarios)
+        "dduos_fixed_gbp":              scenario["dduos_fixed_gbp"].sum(),
+        "dduos_capacity_gbp":           scenario["dduos_capacity_gbp"].sum(),
+        "gduos_fixed_gbp":              scenario["gduos_fixed_gbp"].sum(),
+        "total_standing_gbp":           total_standing,
 
-            # BESS P&L components
-            "dis1_saving_gbp":              scenario["dis1_saving_gbp"].sum(),
-            "dis2_revenue_gbp":             scenario["dis2_revenue_gbp"].sum(),
-            "charge2_cost_gbp":             scenario["charge2_cost_gbp"].sum(),
-            "charge1_opp_cost_gbp":         scenario["charge1_opp_cost_gbp"].sum(),
-            "deg_cost_gbp":                 scenario["deg_cost_gbp"].sum(),
-            "net_settlement_gbp":           net_settlement,
+        # BESS P&L components
+        "dis1_saving_gbp":              scenario["dis1_saving_gbp"].sum(),
+        "dis2_revenue_gbp":             scenario["dis2_revenue_gbp"].sum(),
+        "charge2_cost_gbp":             scenario["charge2_cost_gbp"].sum(),
+        "charge1_opp_cost_gbp":         scenario["charge1_opp_cost_gbp"].sum(),
+        "deg_cost_gbp":                 scenario["deg_cost_gbp"].sum(),
+        "net_settlement_gbp":           net_settlement,
 
-            # Comparison
-            "site_cost_wo_bess_gbp":        site_cost_wo_bess,
-            "site_cost_w_bess_gbp":         site_cost_w_bess,
-            "bess_net_benefit_gbp":         bess_net_benefit,
-        })
-
-    return pd.DataFrame(rows).sort_values("bess_net_benefit_gbp", ascending=False)
+        # Comparison
+        "site_cost_wo_bess_gbp":        site_cost_wo_bess,
+        "site_cost_w_bess_gbp":         site_cost_w_bess,
+        "bess_net_benefit_gbp":         bess_net_benefit,
+    }
 
 
 def _write_summary_sheet(wb, summary_df):
@@ -259,16 +249,26 @@ def build_report(all_results, output_path):
     if not all_results:
         raise ValueError("all_results is empty — nothing to report.")
 
+    def _load(item):
+        """Accept a file path (str) or a DataFrame directly."""
+        if isinstance(item, str):
+            return pd.read_pickle(item)
+        return item
+
     wb = Workbook()
     wb.remove(wb.active)  # remove default blank sheet
 
-    # Summary first
-    summary_df = _build_summary_rows(all_results)
-    _write_summary_sheet(wb, summary_df)
-
-    # One detail sheet per scenario
-    for scenario in all_results:
+    # Single pass: load one scenario at a time, collect summary row, write detail sheet
+    summary_rows = []
+    for item in all_results:
+        scenario = _load(item)
+        summary_rows.append(_build_summary_row(scenario))
         _write_detail_sheet(wb, scenario)
+        # scenario goes out of scope here — only one DF in memory at a time
+
+    # Summary sheet inserted at position 0 regardless of detail sheet order
+    summary_df = pd.DataFrame(summary_rows).sort_values("bess_net_benefit_gbp", ascending=False)
+    _write_summary_sheet(wb, summary_df)
 
     wb.save(output_path)
     print(f"Report saved — summary + {len(all_results)} detail sheets → {output_path}")
