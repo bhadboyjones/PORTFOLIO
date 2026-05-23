@@ -14,8 +14,6 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
 
   return (
     <div>
-      <h2 style={sectionLabel}>Analysis Window</h2>
-
       <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", marginBottom: "1rem" }}>
         <div
           onClick={() => setUseDefault((v) => !v)}

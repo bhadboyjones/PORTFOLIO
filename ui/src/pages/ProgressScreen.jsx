@@ -49,7 +49,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
             flex<span style={{ color: "#00c8e8" }}>iq</span>
           </div>
           <div style={{ fontSize: "0.8rem", color: "#4a6b8c", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            BTM BESS Portfolio Optimiser
+            BTM BESS Optimiser
           </div>
         </div>
 
