@@ -28,6 +28,25 @@ export async function getRunStatus(jobId) {
   return res.json();
 }
 
+export async function postRunCsv(formData) {
+  const res = await fetch(`${API_BASE_URL}/run/csv`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    let detail = "Failed to start CSV run";
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+export async function getDnoRates(dno, voltage) {
+  const res = await fetch(`${API_BASE_URL}/duos-rates/${encodeURIComponent(dno)}/${encodeURIComponent(voltage)}`);
+  if (!res.ok) throw new Error("Failed to fetch DNO rates");
+  return res.json();
+}
+
 export function getExportUrl(jobId) {
   return `${API_BASE_URL}/export/${jobId}`;
 }

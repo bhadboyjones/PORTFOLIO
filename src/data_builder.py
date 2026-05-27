@@ -78,13 +78,14 @@ def build_optimiser_input(
     # ================================================================
     if site_params is not None:
         df_gen = build_generation_df(start_utc, end_utc, site_params)
+        df_gen = df_gen.rename(columns={"chp_gen_mw": "thermal_gen_mw"})
 
         gen_cols = [
             "startTime",
             "demand_mw",
             "demand_mwh",
             "pv_gen_mw",
-            "chp_gen_mw",
+            "thermal_gen_mw",
             "net_demand_mw",
             "net_demand_mwh"
         ]

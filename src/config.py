@@ -155,22 +155,24 @@ NETWORK_CONFIG_NEC_HV = {
 }
 
 # ============================================================
-# IMPORT LEVIES
+# NON-ENERGY CHARGES (NEC)
 # ============================================================
 
 # Apply to grid imports only — not exports.
-# Values are indicative placeholders, replace with actual supplier quotes.
+# Upper-bound defaults for a standard I&C site (not EII-exempt).
+# EII-exempt sites pay 0 on policy_levies + CfD — use the UI
+# override to set NEC_GBP_MWH = 43.75 for those clients.
 
-IMPORT_CHARGES = {
-    "bsuos_gbp_per_mwh":    5.0,    # Balancing Services Use of System
-    "cfd_levy_gbp_per_mwh": 15.0,   # Contracts for Difference
-    "ro_levy_gbp_per_mwh":  10.0,   # Renewables Obligation
-    "cm_levy_gbp_per_mwh":   2.0,   # Capacity Market
-    "fit_levy_gbp_per_mwh":  1.0,   # Feed-in Tariff
+NEC_COMPONENTS = {
+    "policy_levies_gbp_mwh": 60.00,   # RO + FiT + CfD upper bound
+    "bsuos_gbp_mwh":         16.00,   # BSUoS — 100% on demand since April 2023
+    "ccl_gbp_mwh":            7.75,   # CCL flat rate
+    "cm_gbp_mwh":            20.00,   # Capacity Market upper bound
 }
+NEC_GBP_MWH = sum(NEC_COMPONENTS.values())  # 103.75 £/MWh
 
-# Single total used in optimiser and settlement calculations
-TOTAL_IMPORT_LEVIES_GBP_PER_MWH = sum(IMPORT_CHARGES.values())
+# Backwards-compatible alias — imported by data_builder, optimiser, csv_pipeline
+TOTAL_IMPORT_LEVIES_GBP_PER_MWH = NEC_GBP_MWH
 
 # ============================================================
 # SITE OPERATING COST ASSUMPTIONS

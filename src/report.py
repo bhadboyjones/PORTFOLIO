@@ -26,6 +26,9 @@ When paths are passed, each file is loaded, used, then freed — only one
 scenario DataFrame is in memory at any time.
 """
 
+import os
+from datetime import datetime, timezone
+
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
@@ -206,7 +209,17 @@ def _write_detail_sheet(wb, scenario):
 # Public API
 # ---------------------------------------------------------------------------
 
-def build_report(all_results, output_path):
+def _write_metadata_sheet(wb, job_id):
+    """Write a Metadata sheet as the first tab — makes the file self-identifying."""
+    ws = wb.create_sheet(title="Metadata")
+    ws.sheet_format.defaultColWidth = 36
+
+    ws.append(_header_row(ws, ["Field", "Value"]))
+    ws.append(["Job ID",    job_id])
+    ws.append(["Generated", datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")])
+
+
+def build_report(all_results, output_path, job_id=None):
     """
     Build and save the full BESS scenario Excel report.
 
@@ -218,14 +231,30 @@ def build_report(all_results, output_path):
         all_results  : list of scenario DataFrames or pickle file paths (str).
                        When paths are given, each is loaded, processed, and
                        freed before the next is loaded.
-        output_path  : destination .xlsx path
+        output_path  : destination .xlsx path (used as the output directory;
+                       filename is replaced with bess_results_{job_id}.xlsx
+                       when job_id is provided)
+        job_id       : optional run identifier (YYYYMMDD_HHMMSS_xxxx).
+                       When provided: appended to the output filename and
+                       written to a Metadata sheet as the first tab.
+
+    Returns:
+        str — the path the file was actually written to.
 
     Output sheets (in order):
+        Metadata     : job_id + generated timestamp (only when job_id provided)
         Summary      : one row per scenario, full P&L stack, sorted by net benefit
         <scenario>   : one SP-level detail sheet per scenario
     """
     if not all_results:
         raise ValueError("all_results is empty — nothing to report.")
+
+    # Derive final output path
+    if job_id is not None:
+        output_path = os.path.join(
+            os.path.dirname(output_path),
+            f"bess_results_{job_id}.xlsx",
+        )
 
     def _load(item):
         if isinstance(item, str):
@@ -245,7 +274,11 @@ def build_report(all_results, output_path):
     # Write workbook in streaming mode — no in-memory cell tree
     wb = Workbook(write_only=True)
 
-    # Summary must be created first so it appears as the first sheet
+    # Metadata sheet first (tab 1) when job_id is present
+    if job_id is not None:
+        _write_metadata_sheet(wb, job_id)
+
+    # Summary sheet next
     _write_summary_sheet(wb, summary_df)
 
     # Pass 2: stream detail sheets — one DF in memory at a time
@@ -254,4 +287,6 @@ def build_report(all_results, output_path):
         _write_detail_sheet(wb, scenario)
 
     wb.save(output_path)
-    print(f"Report saved — summary + {len(all_results)} detail sheets → {output_path}")
+    print(f"Report saved — {len(all_results)} scenarios → {output_path}")
+
+    return output_path

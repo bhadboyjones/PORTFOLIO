@@ -13,7 +13,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         const data = await getRunStatus(jobId);
         if (cancelled) return;
         setStatus(data);
-        if (data.status === "complete") { onComplete(data.results); return; }
+        if (data.status === "complete") { onComplete(data.results, data.validation_warnings ?? null); return; }
         if (data.status === "failed")   { onFailed(data.error || "Run failed — unknown error."); return; }
         setTimeout(poll, 3000);
       } catch {
@@ -25,10 +25,11 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
     return () => { cancelled = true; };
   }, [jobId]);
 
-  const pct      = status?.progress_pct      ?? 0;
-  const complete = status?.scenarios_complete ?? 0;
-  const total    = status?.scenarios_total    ?? 0;
-  const current  = status?.current_scenario   ?? null;
+  const pct        = status?.progress_pct        ?? 0;
+  const complete   = status?.scenarios_complete  ?? 0;
+  const total      = status?.scenarios_total     ?? 0;
+  const current    = status?.current_scenario    ?? null;
+  const csvWarns   = status?.validation_warnings ?? null;
   const isBuilding = pct === 99 && complete === total && total > 0;
 
   return (
@@ -94,6 +95,25 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
             fontFamily: "monospace",
           }}>
             {current}
+          </div>
+        )}
+
+        {csvWarns?.length > 0 && (
+          <div style={{
+            marginTop: "1.25rem",
+            padding: "0.75rem 1rem",
+            background: "rgba(245,158,11,0.07)",
+            border: "1px solid rgba(245,158,11,0.25)",
+            borderRadius: 6,
+          }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
+              Validation warnings
+            </div>
+            {csvWarns.map((w, i) => (
+              <div key={i} style={{ fontSize: "0.78rem", color: "#d97706", marginTop: i > 0 ? "0.25rem" : 0 }}>
+                {w}
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -54,7 +54,50 @@ function TabBar({ tabs, active, onSelect, small }) {
   );
 }
 
-export default function ResultsPage({ results, jobId, onBack }) {
+function fmt(v, dec = 0) {
+  if (v == null || isNaN(v)) return "—";
+  return v.toLocaleString("en-GB", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function BaselineBreakdown({ topScenario }) {
+  if (!topScenario) return null;
+  const rows = [
+    { label: "Import cost",   value: topScenario.baseline_import_cost_gbp, sign: 1  },
+    { label: "Thermal generation cost", value: topScenario.baseline_thermal_cost_gbp, sign: 1  },
+    { label: "Export revenue",value: topScenario.baseline_export_rev_gbp,  sign: -1 },
+    { label: "Standing charges", value: topScenario.total_standing_gbp,    sign: 1  },
+    { label: "Net site cost", value: topScenario.baseline_net_gbp + topScenario.total_standing_gbp, sign: 1, bold: true },
+  ];
+  return (
+    <div style={{
+      background: "#152236",
+      border: "1px solid #1e3352",
+      borderRadius: 10,
+      padding: "1.25rem 1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#4a6b8c", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
+        Baseline Site Cost (without BESS)
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
+        {rows.map(({ label, value, sign, bold }) => {
+          const display = value != null ? `£${fmt(value, 0)}` : "—";
+          const color = bold ? "#e0eaf8" : sign < 0 ? "#00e5a0" : "#7ba0c8";
+          return (
+            <div key={label} style={{ paddingBottom: bold ? "0" : "0", borderTop: bold ? "1px solid #1e3352" : "none", paddingTop: bold ? "0.6rem" : "0" }}>
+              <div style={{ fontSize: "0.7rem", color: "#4a6b8c", marginBottom: "0.2rem" }}>{label}</div>
+              <div style={{ fontSize: bold ? "1rem" : "0.9rem", fontWeight: bold ? 700 : 600, color }}>
+                {display}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function ResultsPage({ results, jobId, mode, onBack, validationWarnings }) {
   const archetypeIds   = Object.keys(results);
   const [activeArchetype, setActiveArchetype] = useState(archetypeIds[0]);
   const [chartTab, setChartTab]               = useState(0);
@@ -113,8 +156,47 @@ export default function ResultsPage({ results, jobId, onBack }) {
           />
         )}
 
+        {/* Mode badge */}
+        {mode === "archetype" && (
+          <div style={{
+            marginBottom: "1rem",
+            fontSize: "0.72rem",
+            color: "#4a6b8c",
+            background: "rgba(0,200,232,0.03)",
+            border: "1px solid rgba(0,200,232,0.1)",
+            borderRadius: 5,
+            padding: "0.4rem 0.75rem",
+            display: "inline-block",
+          }}>
+            ⓘ Archetype mode — demand profile is representative, not site-specific
+          </div>
+        )}
+
+        {/* Validation warnings from CSV upload */}
+        {validationWarnings?.length > 0 && (
+          <div style={{
+            marginBottom: "1.25rem",
+            padding: "0.75rem 1rem",
+            background: "rgba(245,158,11,0.07)",
+            border: "1px solid rgba(245,158,11,0.25)",
+            borderRadius: 6,
+          }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
+              Data warnings
+            </div>
+            {validationWarnings.map((w, i) => (
+              <div key={i} style={{ fontSize: "0.78rem", color: "#d97706", marginTop: i > 0 ? "0.25rem" : 0 }}>
+                {w}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* KPI cards */}
         <KpiCards topScenario={topScenario} />
+
+        {/* Baseline breakdown — CSV mode only */}
+        {mode === "csv" && <BaselineBreakdown topScenario={topScenario} />}
 
         {/* Scenario table */}
         <div style={{ marginBottom: "2rem" }}>

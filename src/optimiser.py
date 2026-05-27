@@ -81,9 +81,9 @@ from .config import NETWORK_CONFIG_NEC_HV, TOTAL_IMPORT_LEVIES_GBP_PER_MWH, CHP_
 # ---------------------------------------------------------------------------
 # Module constants
 # ---------------------------------------------------------------------------
-CHUNK_DAYS: int    = 1
+CHUNK_DAYS: int    = 3
 SPS_PER_DAY: int   = 48
-SPS_PER_CHUNK: int = CHUNK_DAYS * SPS_PER_DAY  # 144
+SPS_PER_CHUNK: int = CHUNK_DAYS * SPS_PER_DAY  # 48
 
 # Columns always required regardless of price signal chosen
 _REQUIRED_BASE_COLS: List[str] = [
@@ -166,6 +166,8 @@ def _solve_chunk(
     forecast_price_col: str,
     soc_start_mwh: float,
     chunk_idx: int,
+    sp_duration_hrs: float = 0.5,
+    n_sps_per_day: int = SPS_PER_DAY,
 ) -> pd.DataFrame:
     """
     Solve a single 3-day MILP chunk and return it with dispatch columns appended.
@@ -198,7 +200,7 @@ def _solve_chunk(
     max_cycles      = float(bess_params["max_cycles_per_day"])
 
     soc_tol_mwh        = 0.10 * capacity_mwh
-    n_days             = n / SPS_PER_DAY
+    n_days             = n / n_sps_per_day
     max_throughput_mwh = max_cycles * capacity_mwh * n_days * 2
 
     nd_mw = chunk["net_demand_mw"].values  # negative = on-site surplus
@@ -240,13 +242,13 @@ def _solve_chunk(
     # C1: Opening SOC pinned to carried-in value
     prob += (soc_var[0] == soc_start_mwh, "soc_init")
 
-    # C2: SOC balance — MWh = MW × 0.5 h × efficiency
+    # C2: SOC balance — MWh = MW × sp_duration_hrs × efficiency
     for i in range(1, n):
         prob += (
             soc_var[i]
             == soc_var[i - 1]
-            + total_chr(i - 1) * 0.5 * eta_c
-            - total_dis(i - 1) * 0.5 / eta_d,
+            + total_chr(i - 1) * sp_duration_hrs * eta_c
+            - total_dis(i - 1) * sp_duration_hrs / eta_d,
             f"soc_bal_{i}",
         )
 
@@ -260,7 +262,7 @@ def _solve_chunk(
 
     # C5: Throughput cap
     prob += (
-        pulp.lpSum((total_chr(i) + total_dis(i)) * 0.5 for i in range(n))
+        pulp.lpSum((total_chr(i) + total_dis(i)) * sp_duration_hrs for i in range(n))
         <= max_throughput_mwh,
         "cycle_cap",
     )
@@ -278,11 +280,11 @@ def _solve_chunk(
         import_rate = price + duos + nec
         export_rate = price - gduos
 
-        terms.append( import_rate * dis1[i] * 0.5)
-        terms.append( export_rate * dis2[i] * 0.5)
-        terms.append(-import_rate * chr2[i] * 0.5)
-        terms.append(-export_rate * chr1[i] * 0.5)
-        terms.append(-deg_cost * (total_chr(i) + total_dis(i)) * 0.5)
+        terms.append( import_rate * dis1[i] * sp_duration_hrs)
+        terms.append( export_rate * dis2[i] * sp_duration_hrs)
+        terms.append(-import_rate * chr2[i] * sp_duration_hrs)
+        terms.append(-export_rate * chr1[i] * sp_duration_hrs)
+        terms.append(-deg_cost * (total_chr(i) + total_dis(i)) * sp_duration_hrs)
 
     prob += pulp.lpSum(terms)
 
@@ -367,7 +369,7 @@ def calculate_baseline(
     required = [
         "net_demand_mw",
         "net_demand_mwh",
-        "chp_gen_mw",
+        "thermal_gen_mw",
         "duos_gbp_mwh",
         "gduos_gbp_mwh",
         "nec_gbp_mwh",
@@ -402,17 +404,16 @@ def calculate_baseline(
         df["net_demand_mwh"].clip(upper=0).abs() * export_rate
     )
 
-    # CHP fuel cost — all SPs where CHP is generating
-    # chp_gen_mw * 0.5 = MWh per SP
-    df["baseline_chp_cost_gbp"] = (
-        df["chp_gen_mw"] * 0.5 * CHP_MARGINAL_COST_GBP_PER_MWH
+    # Thermal generation fuel cost — all SPs where thermal gen is running
+    df["baseline_thermal_cost_gbp"] = (
+        df["thermal_gen_mw"] * 0.5 * CHP_MARGINAL_COST_GBP_PER_MWH
     )
 
     # Net baseline cost per SP
     # Positive = net cost, negative = net earner (site exporting more than it imports)
     df["baseline_net_gbp"] = (
         df["baseline_import_cost_gbp"]
-        + df["baseline_chp_cost_gbp"]
+        + df["baseline_thermal_cost_gbp"]
         - df["baseline_export_rev_gbp"]
     )
 
@@ -424,6 +425,8 @@ def run_optimiser(
     bess_params: Dict[str, Any],
     forecast_price_col: str = "da_forecast_gbp",
     actual_price_col: str = "da_actual_gbp",
+    sp_duration_hrs: float = 0.5,
+    n_sps_per_day: int = SPS_PER_DAY,
 ) -> pd.DataFrame:
     """
     Run chunked MILP optimisation for a single site over its full time-series.
@@ -454,15 +457,16 @@ def run_optimiser(
 
     df = df.copy().reset_index(drop=True)
 
-    n_rows    = len(df)
-    n_chunks  = math.ceil(n_rows / SPS_PER_CHUNK)
-    soc_carry = float(bess_params["soc_initial"]) * float(bess_params["capacity_mwh"])
+    n_rows        = len(df)
+    sps_per_chunk = CHUNK_DAYS * n_sps_per_day
+    n_chunks      = math.ceil(n_rows / sps_per_chunk)
+    soc_carry     = float(bess_params["soc_initial"]) * float(bess_params["capacity_mwh"])
 
     chunks_solved: List[pd.DataFrame] = []
 
     for idx in range(n_chunks):
-        start = idx * SPS_PER_CHUNK
-        end   = min(start + SPS_PER_CHUNK, n_rows)
+        start = idx * sps_per_chunk
+        end   = min(start + sps_per_chunk, n_rows)
 
         solved = _solve_chunk(
             chunk=df.iloc[start:end].copy(),
@@ -470,6 +474,8 @@ def run_optimiser(
             forecast_price_col=forecast_price_col,
             soc_start_mwh=soc_carry,
             chunk_idx=idx + 1,
+            sp_duration_hrs=sp_duration_hrs,
+            n_sps_per_day=n_sps_per_day,
         )
 
         chunks_solved.append(solved)
@@ -492,6 +498,7 @@ def calculate_settlement(
     df: pd.DataFrame,
     bess_params: Dict[str, Any],
     actual_price_col: str = None,
+    sp_duration_hrs: float = 0.5,
 ) -> pd.DataFrame:
     """
     Calculate per-SP settlement P&L using actual price columns.
@@ -602,14 +609,14 @@ def calculate_settlement(
         - df["gduos_gbp_mwh"]
     )
 
-    # P&L per SP — MW × 0.5h = MWh
-    df["dis1_saving_gbp"]      = df["dis1_mw"]    * 0.5 * df["import_rate_gbp"]
-    df["dis2_revenue_gbp"]     = df["dis2_mw"]    * 0.5 * df["export_rate_gbp"]
-    df["charge2_cost_gbp"]     = df["charge2_mw"] * 0.5 * df["import_rate_gbp"]
-    df["charge1_opp_cost_gbp"] = df["charge1_mw"] * 0.5 * df["export_rate_gbp"]
+    # P&L per SP — MW × sp_duration_hrs = MWh
+    df["dis1_saving_gbp"]      = df["dis1_mw"]    * sp_duration_hrs * df["import_rate_gbp"]
+    df["dis2_revenue_gbp"]     = df["dis2_mw"]    * sp_duration_hrs * df["export_rate_gbp"]
+    df["charge2_cost_gbp"]     = df["charge2_mw"] * sp_duration_hrs * df["import_rate_gbp"]
+    df["charge1_opp_cost_gbp"] = df["charge1_mw"] * sp_duration_hrs * df["export_rate_gbp"]
     df["deg_cost_gbp"]         = (
         (df["charge1_mw"] + df["charge2_mw"] + df["dis1_mw"] + df["dis2_mw"])
-        * 0.5
+        * sp_duration_hrs
         * deg
     )
 

@@ -1,8 +1,25 @@
+import os
 import threading
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 _jobs: Dict[str, Dict[str, Any]] = {}
 _lock = threading.Lock()
+
+
+def generate_job_id() -> str:
+    """
+    Generate a unique job ID for an optimisation run.
+
+    Format: YYYYMMDD_HHMMSS_{4-char-hex}
+    Example: 20260526_143022_a3f9
+
+    The hex fragment is taken from os.urandom to avoid collisions between
+    jobs started within the same second.
+    """
+    now = datetime.now(tz=timezone.utc)
+    hex_fragment = os.urandom(2).hex()  # 4 hex chars
+    return now.strftime("%Y%m%d_%H%M%S") + f"_{hex_fragment}"
 
 
 def create_job(job_id: str, scenarios_total: int) -> None:

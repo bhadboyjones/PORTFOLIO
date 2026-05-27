@@ -4,14 +4,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import json
 import math
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 from fastapi import APIRouter, HTTPException
 
 from api.schemas import RunRequest, RunStatusResponse
-from api.jobs import create_job, update_job, get_job
+from api.jobs import create_job, generate_job_id, update_job, get_job
 from src.config import SITE_ARCHETYPES, BESS_SCENARIOS
 
 router = APIRouter()
@@ -220,7 +219,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
 
         # Build XLSX — build_report loads one scenario at a time from disk
         xlsx_path = os.path.join(tmp_dir, "bess_scenarios.xlsx")
-        build_report(scenario_paths, xlsx_path)
+        xlsx_path = build_report(scenario_paths, xlsx_path, job_id=job_id)
 
         # Per-scenario pickles no longer needed
         for p in scenario_paths:
@@ -234,6 +233,7 @@ def _run_background(job_id: str, req: RunRequest) -> None:
             scenarios_total=total_scenarios,
             results=all_results,
             xlsx_path=xlsx_path,
+            mode="archetype",
         )
 
     except Exception as exc:
@@ -252,7 +252,7 @@ def post_run(req: RunRequest):
         len(req.export_selections)
     )
 
-    job_id = str(uuid.uuid4())
+    job_id = generate_job_id()
     create_job(job_id, scenarios_total=total_scenarios)
     _executor.submit(_run_background, job_id, req)
     return {"job_id": job_id}
@@ -271,4 +271,6 @@ def get_run_status(job_id: str):
         current_scenario=job.get("current_scenario"),
         results=job["results"],
         error=job["error"],
+        mode=job.get("mode"),
+        validation_warnings=job.get("validation_warnings"),
     )

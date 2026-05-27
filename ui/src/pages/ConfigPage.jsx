@@ -228,6 +228,18 @@ export default function ConfigPage({ onRunStarted, jobError }) {
           </div>
         )}
 
+        <div style={{
+          fontSize: "0.75rem",
+          color: "#2a4772",
+          background: "rgba(0,200,232,0.03)",
+          border: "1px solid rgba(0,200,232,0.1)",
+          borderRadius: 6,
+          padding: "0.5rem 0.85rem",
+          marginBottom: "0.75rem",
+        }}>
+          ⓘ Using representative demand profiles for typical I&amp;C sites. Network rates based on Northern Powergrid NE HV 2026/27 tariffs.
+        </div>
+
         <RunButton disabled={!canRun || submitting} onClick={handleRun} />
       </div>
     </div>
