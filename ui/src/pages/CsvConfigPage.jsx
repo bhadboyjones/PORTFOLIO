@@ -362,10 +362,18 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   Drop CSV or XLSX here, or click to browse
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "#4a6b8c", marginTop: "0.35rem" }}>
-                  Required columns:{" "}
-                  <code style={{ color: "#00c8e8" }}>timestamp</code>,{" "}
+                  Required: <code style={{ color: "#00c8e8" }}>timestamp</code>,{" "}
                   <code style={{ color: "#00c8e8" }}>net_demand_mw</code>
                   {" "}· Optional: <code style={{ color: "#00c8e8" }}>thermal_gen_mw</code>
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "#2a4772", marginTop: "0.4rem", lineHeight: 1.7 }}>
+                  <code style={{ color: "#4a6b8c" }}>net_demand_mw</code> is your grid meter reading – positive when the site is importing from the grid, negative when exporting.
+                  {" "}If your metering records grid flow directly, use that column as-is. If you only have submetered data, calculate it as:
+                  <br />
+                  <code style={{ color: "#4a6b8c" }}>net_demand_mw = site_load_mw − (all other BTM generation)</code>
+                  {" "}e.g. <code style={{ color: "#4a6b8c" }}>pv_gen_mw</code>, <code style={{ color: "#4a6b8c" }}>wind_gen_mw</code>, <code style={{ color: "#4a6b8c" }}>thermal_gen_mw</code>
+                  <br />
+                  PV, wind, and thermal generation must all be subtracted before uploading.
                 </div>
               </div>
             )}
@@ -453,14 +461,29 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 })}
               </div>
               {thermalGenToggle && (
-                <div style={{ marginTop: "0.75rem", maxWidth: 240 }}>
-                  <FieldLabel>Thermal generation marginal cost</FieldLabel>
-                  <SuffixInput
-                    type="number" step="0.5" min="0"
-                    value={thermalMcGbpMwh}
-                    onChange={(e) => setThermalMcGbpMwh(e.target.value)}
-                    suffix="£/MWh"
-                  />
+                <div style={{ marginTop: "0.75rem" }}>
+                  <div style={{ maxWidth: 240 }}>
+                    <FieldLabel>Thermal generation marginal cost</FieldLabel>
+                    <SuffixInput
+                      type="number" step="0.5" min="0"
+                      value={thermalMcGbpMwh}
+                      onChange={(e) => setThermalMcGbpMwh(e.target.value)}
+                      suffix="£/MWh"
+                    />
+                  </div>
+                  <div style={{
+                    marginTop: "0.75rem",
+                    fontSize: "0.72rem",
+                    color: "#4a6b8c",
+                    background: "rgba(245,158,11,0.05)",
+                    border: "1px solid rgba(245,158,11,0.15)",
+                    borderRadius: 5,
+                    padding: "0.5rem 0.75rem",
+                    lineHeight: 1.6,
+                    maxWidth: 520,
+                  }}>
+                    Thermal generation is treated as a fixed input. flexiq calculates its fuel cost in the baseline but does not co-optimise BESS dispatch with dispatchable thermal. Sites where BESS value comes from modulating a thermal asset or genset are still work in progress.
+                  </div>
                 </div>
               )}
             </div>
