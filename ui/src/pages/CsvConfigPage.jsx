@@ -367,7 +367,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   {" "}· Optional: <code style={{ color: "#00c8e8" }}>thermal_gen_mw</code>
                 </div>
                 <div style={{ fontSize: "0.72rem", color: "#2a4772", marginTop: "0.4rem", lineHeight: 1.7 }}>
-                  <code style={{ color: "#4a6b8c" }}>net_demand_mw</code> is your grid meter reading – positive when the site is importing from the grid, negative when exporting.
+                  <code style={{ color: "#4a6b8c" }}>net_demand_mw</code> is your boundary/grid meter reading – positive when the site is importing from the grid, negative when exporting.
                   {" "}If your metering records grid flow directly, use that column as-is. If you only have submetered data, calculate it as:
                   <br />
                   <code style={{ color: "#4a6b8c" }}>net_demand_mw = site_load_mw − (all other BTM generation)</code>
