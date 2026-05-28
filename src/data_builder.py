@@ -5,6 +5,7 @@ from .charges import build_network_charges
 from .prices import build_price_df
 from .generation import build_generation_df
 from .config import NETWORK_CONFIG_NEC_HV, TOTAL_IMPORT_LEVIES_GBP_PER_MWH
+from .duos_rates import get_duos_rates, duos_rates_to_charges_config
 
 
 
@@ -31,7 +32,12 @@ def build_optimiser_input(
     """
 
     if network_config is None:
-        network_config = NETWORK_CONFIG_NEC_HV
+        if site_params and "dno_key" in site_params:
+            network_config = duos_rates_to_charges_config(
+                get_duos_rates(site_params["dno_key"], site_params["voltage_level"])
+            )
+        else:
+            network_config = NETWORK_CONFIG_NEC_HV
 
     start_ts = pd.Timestamp(start_utc)
     end_ts = pd.Timestamp(end_utc)

@@ -54,6 +54,8 @@ SITE_ARCHETYPES = {
         "chp_kw":         0,
         "pv_kwp":         400,
         "contracted_kva": 1000,   # peak_mw x 1000, unity PF assumption
+        "dno_key":        "NPG",
+        "voltage_level":  "HV",
     },
     "medium_industrial": {
         "peak_mw":        2.0,
@@ -63,6 +65,8 @@ SITE_ARCHETYPES = {
         "chp_kw":         500,
         "pv_kwp":         600,
         "contracted_kva": 2000,   # peak_mw x 1000, unity PF assumption
+        "dno_key":        "NPG",
+        "voltage_level":  "HV",
     },
     "large_industrial": {
         "peak_mw":        3.0,
@@ -72,6 +76,8 @@ SITE_ARCHETYPES = {
         "chp_kw":         1000,
         "pv_kwp":         800,
         "contracted_kva": 3000,   # peak_mw x 1000, unity PF assumption
+        "dno_key":        "NPG",
+        "voltage_level":  "HV",
     },
 }
 

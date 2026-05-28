@@ -310,3 +310,44 @@ def convert_rates_to_model_units(rates: dict) -> dict:
         "gduos_fixed_gbp_per_day":    rates["gduos_fixed_p_per_day"]   / 100,
         "rag_schedule":               rates["rag_schedule"],
     }
+
+
+def duos_rates_to_charges_config(rates: dict) -> dict:
+    """
+    Convert a raw get_duos_rates() dict into the config format expected by
+    build_network_charges() in charges.py.
+
+    Handles:
+      - p/kWh  → £/MWh  for volumetric rates (× 10)
+      - GDUoS negated to match model sign convention (negative = credit)
+      - rag_schedule weekday HH:MM strings → (start_mins, end_mins) tuples
+      - Standing charges passed through in pence (data_builder converts to £)
+    """
+    def _to_mins(hhmm: str) -> int:
+        h, m = hhmm.split(":")
+        return int(h) * 60 + int(m)
+
+    sched = rates["rag_schedule"]
+    rag_bands = {
+        "red":   [(_to_mins(w[0]), _to_mins(w[1])) for w in sched["red"]["weekday"]],
+        "amber": [(_to_mins(w[0]), _to_mins(w[1])) for w in sched["amber"]["weekday"]],
+    }
+
+    return {
+        "dduos_gbp_per_mwh": {
+            "red":   rates["duos_red_p_kwh"]   * 10,
+            "amber": rates["duos_amber_p_kwh"]  * 10,
+            "green": rates["duos_green_p_kwh"]  * 10,
+        },
+        "gduos_gbp_per_mwh": {
+            "red":   -rates["gduos_red_p_kwh"]   * 10,
+            "amber": -rates["gduos_amber_p_kwh"]  * 10,
+            "green": -rates["gduos_green_p_kwh"]  * 10,
+        },
+        "rag_bands":                    rag_bands,
+        "weekends_are_green":           True,
+        "bank_holidays_are_green":      True,
+        "dduos_fixed_p_per_day":        rates["fixed_p_per_day"],
+        "dduos_capacity_p_per_kva_day": rates["capacity_p_per_kva_day"],
+        "gduos_fixed_p_per_day":        rates["gduos_fixed_p_per_day"],
+    }
