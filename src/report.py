@@ -47,6 +47,9 @@ _FILL_MID_BLUE  = PatternFill("solid", start_color="2E75B6")
 
 _CENTER = Alignment(horizontal="center")
 
+# Excel sheet names cannot contain: \ / ? * [ ] :
+_EXCEL_ILLEGAL = frozenset('\\/?*[]:')
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -188,7 +191,8 @@ def _write_detail_sheet(wb, scenario):
     label        = scenario["scenario_label"].iloc[0]
     export_limit = scenario["export_limit_mw"].iloc[0]
     site         = scenario["site_name"].iloc[0] if "site_name" in scenario.columns else ""
-    sheet_name   = f"{site}_{label}_exp{export_limit}".replace(".", "p")[:31]
+    raw          = f"{site}_{label}_exp{export_limit}"
+    sheet_name   = "".join("-" if c in _EXCEL_ILLEGAL else c for c in raw).replace(".", "p").replace(" ", "")[:31]
 
     scenario = scenario.copy()
     scenario["startTime"] = pd.to_datetime(scenario["startTime"]).dt.tz_localize(None)
