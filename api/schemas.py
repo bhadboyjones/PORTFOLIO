@@ -62,11 +62,12 @@ class CsvRunParams:
     Inject with Depends(CsvRunParams) in the route handler.
     Raises HTTPException 422 on validation failure.
 
-    BESS fields:
-      bess_power_mw        — BESS rated power (MW)
-      bess_capacity_mwh    — BESS energy capacity (MWh)
+    Multi-scenario BESS fields:
+      bess_configs_json    — JSON array of {power_mw, capacity_mwh} objects (≥1 entry)
+      export_limits_json   — JSON array of export limit values in MW (≥1 entry)
       bess_rte_pct         — Round-trip efficiency (%, default 90)
       bess_max_cycles      — Max charge+discharge cycles/day (default 1.5)
+      Total scenarios (configs × export limits) must be ≤ 12.
 
     RAG band overrides (all optional with sensible defaults):
       Frontend always sends these explicitly (pre-populated from DNO defaults)
@@ -85,12 +86,16 @@ class CsvRunParams:
         # --- Core fields ---
         dno_key: str = Form(..., description="DNO identifier, e.g. 'NPG', 'NGED'"),
         voltage_level: str = Form("LV", description="'LV' or 'HV'. Defaults to LV."),
-        export_limit_mw: float = Form(..., description="Site export limit (MW). Must be > 0."),
-        # --- BESS ---
-        bess_power_mw: float = Form(..., description="BESS rated power (MW)"),
-        bess_capacity_mwh: float = Form(..., description="BESS energy capacity (MWh)"),
-        bess_rte_pct: float = Form(90.0, description="Round-trip efficiency (%)"),
+        # --- BESS matrix (multi-scenario) ---
+        bess_configs_json: str = Form(..., description="JSON array of {power_mw, capacity_mwh} objects"),
+        export_limits_json: str = Form(..., description="JSON array of export limit values (MW, must be > 0)"),
+        bess_rte_pct: float = Form(90.0, description="Round-trip efficiency (%) — fallback if charge/discharge eff not provided"),
         bess_max_cycles: float = Form(1.5, description="Max charge+discharge cycles per day"),
+        bess_charge_eff_pct: Optional[float] = Form(None, description="One-way charge efficiency (%). Defaults to sqrt(RTE)."),
+        bess_discharge_eff_pct: Optional[float] = Form(None, description="One-way discharge efficiency (%). Defaults to sqrt(RTE)."),
+        bess_soc_min_pct: float = Form(5.0, description="Minimum SOC (% of capacity). Default 5%."),
+        bess_soc_max_pct: float = Form(95.0, description="Maximum SOC (% of capacity). Default 95%."),
+        bess_deg_cost_gbp_mwh: float = Form(8.0, description="Degradation cost (£/MWh throughput)."),
         # --- Site ---
         contracted_kva: Optional[float] = Form(
             None, description="Contracted capacity (kVA). Defaults to peak CSV demand at unity PF.",
@@ -135,39 +140,62 @@ class CsvRunParams:
                 status_code=422,
                 detail="price_exposure must be 'da' or 'imbalance'.",
             )
-        if export_limit_mw <= 0:
+        # --- Validate BESS configs ---
+        try:
+            raw_configs = _json.loads(bess_configs_json)
+        except Exception:
+            raise HTTPException(status_code=422, detail="bess_configs_json must be valid JSON.")
+        if not isinstance(raw_configs, list) or len(raw_configs) == 0:
+            raise HTTPException(status_code=422, detail="bess_configs_json must be a non-empty JSON array.")
+        for cfg in raw_configs:
+            pw = float(cfg.get("power_mw", 0))
+            cap = float(cfg.get("capacity_mwh", 0))
+            if pw <= 0:
+                raise HTTPException(status_code=422, detail=f"bess_configs: power_mw must be > 0, got {pw}.")
+            if cap <= 0:
+                raise HTTPException(status_code=422, detail=f"bess_configs: capacity_mwh must be > 0, got {cap}.")
+            dur = cap / pw
+            if not (0.5 <= dur <= 6.0):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"BESS duration {dur:.2f}h for {pw:g}MW/{cap:g}MWh is outside the 0.5–6.0h range.",
+                )
+        # --- Validate export limits ---
+        try:
+            raw_limits = _json.loads(export_limits_json)
+        except Exception:
+            raise HTTPException(status_code=422, detail="export_limits_json must be valid JSON.")
+        if not isinstance(raw_limits, list) or len(raw_limits) == 0:
+            raise HTTPException(status_code=422, detail="export_limits_json must be a non-empty JSON array.")
+        parsed_limits: list[float] = []
+        for v in raw_limits:
+            fv = float(v)
+            if fv <= 0:
+                raise HTTPException(status_code=422, detail=f"All export limits must be > 0, got {fv}.")
+            parsed_limits.append(fv)
+        total_scenarios = len(raw_configs) * len(parsed_limits)
+        if total_scenarios > 12:
             raise HTTPException(
                 status_code=422,
-                detail="export_limit_mw must be greater than 0.",
-            )
-        if bess_power_mw <= 0:
-            raise HTTPException(
-                status_code=422,
-                detail="bess_power_mw must be greater than 0.",
-            )
-        if bess_capacity_mwh <= 0:
-            raise HTTPException(
-                status_code=422,
-                detail="bess_capacity_mwh must be greater than 0.",
-            )
-        duration_h = bess_capacity_mwh / bess_power_mw
-        if not (0.5 <= duration_h <= 6.0):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"BESS duration (capacity / power = {duration_h:.2f} hr) must be "
-                    "between 0.5 and 6.0 hours."
-                ),
+                detail=f"Too many scenarios ({total_scenarios}). Maximum is 12.",
             )
 
         self.dno_key        = dno_key
         self.voltage_level  = voltage_level
-        self.export_limit_mw = export_limit_mw
 
-        self.bess_power_mw    = bess_power_mw
-        self.bess_capacity_mwh = bess_capacity_mwh
-        self.bess_rte_pct     = bess_rte_pct
-        self.bess_max_cycles  = bess_max_cycles
+        self.bess_configs = [
+            {"power_mw": float(c["power_mw"]), "capacity_mwh": float(c["capacity_mwh"])}
+            for c in raw_configs
+        ]
+        self.export_limits = parsed_limits
+
+        self.bess_rte_pct           = bess_rte_pct
+        self.bess_max_cycles        = bess_max_cycles
+        self.bess_charge_eff_pct    = bess_charge_eff_pct
+        self.bess_discharge_eff_pct = bess_discharge_eff_pct
+        self.bess_soc_min_pct       = bess_soc_min_pct
+        self.bess_soc_max_pct       = bess_soc_max_pct
+        self.bess_deg_cost_gbp_mwh  = bess_deg_cost_gbp_mwh
 
         self.contracted_kva  = contracted_kva
         self.chp_toggle      = chp_toggle

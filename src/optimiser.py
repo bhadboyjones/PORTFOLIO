@@ -193,8 +193,8 @@ def _solve_chunk(
     soc_min_mwh     = float(bess_params["soc_min"])     * capacity_mwh
     soc_max_mwh     = float(bess_params["soc_max"])     * capacity_mwh
     soc_target_mwh  = float(bess_params["soc_initial"]) * capacity_mwh
-    eta_c           = math.sqrt(float(bess_params["charge_efficiency"]))
-    eta_d           = math.sqrt(float(bess_params["discharge_efficiency"]))
+    eta_c           = float(bess_params["charge_efficiency"])
+    eta_d           = float(bess_params["discharge_efficiency"])
     deg_cost        = float(bess_params["deg_cost_gbp_mwh"])
     export_limit_mw = float(bess_params["export_limit_mw"])
     max_cycles      = float(bess_params["max_cycles_per_day"])

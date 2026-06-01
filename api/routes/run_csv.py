@@ -43,18 +43,23 @@ def _build_bess_params(
     rte_pct: float,
     max_cycles: float,
     export_limit_mw: float,
+    charge_eff_pct: float = None,
+    discharge_eff_pct: float = None,
+    soc_min_pct: float = 5.0,
+    soc_max_pct: float = 95.0,
+    deg_cost_gbp_mwh: float = 8.0,
 ) -> dict:
-    """Build BESS parameter dict from free-form user inputs using shared base defaults."""
-    one_way_eff = math.sqrt(rte_pct / 100)
+    """Build BESS parameter dict. Charge/discharge eff default to sqrt(RTE) if not supplied."""
+    fallback = math.sqrt(rte_pct / 100)
     return {
         "power_mw":             power_mw,
         "capacity_mwh":         capacity_mwh,
-        "soc_min":              _BESS_BASE["min_soc"],
-        "soc_max":              _BESS_BASE["max_soc"],
+        "soc_min":              soc_min_pct / 100,
+        "soc_max":              soc_max_pct / 100,
         "soc_initial":          _BESS_BASE["initial_soc"],
-        "charge_efficiency":    one_way_eff,
-        "discharge_efficiency": one_way_eff,
-        "deg_cost_gbp_mwh":     _BESS_BASE["deg_cost_gbp_per_mwh"],
+        "charge_efficiency":    (charge_eff_pct / 100) if charge_eff_pct is not None else fallback,
+        "discharge_efficiency": (discharge_eff_pct / 100) if discharge_eff_pct is not None else fallback,
+        "deg_cost_gbp_mwh":     deg_cost_gbp_mwh,
         "max_cycles_per_day":   max_cycles,
         "export_limit_mw":      export_limit_mw,
     }
@@ -189,65 +194,83 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
         )
         del df
 
+        total_scenarios = len(params.bess_configs) * len(params.export_limits)
         update_job(
             job_id,
-            scenarios_total=1,
+            scenarios_total=total_scenarios,
             scenarios_complete=0,
             progress_pct=30,
             validation_warnings=warnings if warnings else None,
         )
 
-        # 4. Single BESS run (CSV mode: one config, one export limit)
-        label = f"{params.bess_power_mw}MW / {params.bess_capacity_mwh}MWh"
-        update_job(job_id, current_scenario=f"{label} | Export {params.export_limit_mw} MW")
+        # 4. Multi-scenario BESS loop: configs × export limits
+        all_results = []
+        pkl_paths = []
+        scenario_idx = 0
 
-        bess_params = _build_bess_params(
-            params.bess_power_mw,
-            params.bess_capacity_mwh,
-            params.bess_rte_pct,
-            params.bess_max_cycles,
-            params.export_limit_mw,
-        )
+        for bess_cfg in params.bess_configs:
+            for export_lim in params.export_limits:
+                label = f"{bess_cfg['power_mw']:g}MW / {bess_cfg['capacity_mwh']:g}MWh"
+                update_job(job_id, current_scenario=f"{label} | Export {export_lim:g} MW")
 
-        results_df = run_optimiser(
-            df_baseline,
-            bess_params,
-            forecast_price_col=forecast_col,
-            actual_price_col=actual_col,
-            sp_duration_hrs=sp_duration_hrs,
-            n_sps_per_day=n_sps_per_day,
-        )
-        settled = calculate_settlement(
-            results_df,
-            bess_params,
-            actual_price_col=actual_col,
-            sp_duration_hrs=sp_duration_hrs,
-        )
-        del results_df
+                bess_params = _build_bess_params(
+                    bess_cfg["power_mw"],
+                    bess_cfg["capacity_mwh"],
+                    params.bess_rte_pct,
+                    params.bess_max_cycles,
+                    export_lim,
+                    charge_eff_pct=params.bess_charge_eff_pct,
+                    discharge_eff_pct=params.bess_discharge_eff_pct,
+                    soc_min_pct=params.bess_soc_min_pct,
+                    soc_max_pct=params.bess_soc_max_pct,
+                    deg_cost_gbp_mwh=params.bess_deg_cost_gbp_mwh,
+                )
 
-        settled = settled.copy()
-        settled["scenario_label"]  = label
-        settled["export_limit_mw"] = params.export_limit_mw
+                results_df = run_optimiser(
+                    df_baseline,
+                    bess_params,
+                    forecast_price_col=forecast_col,
+                    actual_price_col=actual_col,
+                    sp_duration_hrs=sp_duration_hrs,
+                    n_sps_per_day=n_sps_per_day,
+                )
+                settled = calculate_settlement(
+                    results_df,
+                    bess_params,
+                    actual_price_col=actual_col,
+                    sp_duration_hrs=sp_duration_hrs,
+                )
+                del results_df
 
-        all_results = [_serialise_scenario(settled, label, params.export_limit_mw, sp_duration_hrs=sp_duration_hrs)]
+                settled = settled.copy()
+                settled["scenario_label"]  = label
+                settled["export_limit_mw"] = export_lim
 
-        pkl_path = os.path.join(tmp_dir, "scenario_0.pkl")
-        settled.to_pickle(pkl_path)
-        del settled, df_baseline
+                all_results.append(_serialise_scenario(settled, label, export_lim, sp_duration_hrs=sp_duration_hrs))
 
-        update_job(job_id, scenarios_complete=1, progress_pct=90)
+                pkl_path = os.path.join(tmp_dir, f"scenario_{scenario_idx}.pkl")
+                settled.to_pickle(pkl_path)
+                pkl_paths.append(pkl_path)
+                del settled
+
+                scenario_idx += 1
+                progress = 30 + int(60 * scenario_idx / total_scenarios)
+                update_job(job_id, scenarios_complete=scenario_idx, progress_pct=min(progress, 90))
+
+        del df_baseline
 
         # 5. Build XLSX
         xlsx_path = os.path.join(tmp_dir, "bess_csv_results.xlsx")
-        xlsx_path = build_report([pkl_path], xlsx_path, job_id=job_id)
-        os.unlink(pkl_path)
+        xlsx_path = build_report(pkl_paths, xlsx_path, job_id=job_id)
+        for p in pkl_paths:
+            os.unlink(p)
 
         update_job(
             job_id,
             status="complete",
             progress_pct=100,
-            scenarios_complete=1,
-            scenarios_total=1,
+            scenarios_complete=total_scenarios,
+            scenarios_total=total_scenarios,
             results={"csv_run": all_results},
             xlsx_path=xlsx_path,
             mode="csv",
@@ -284,7 +307,7 @@ async def post_run_csv(
         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
 
     job_id = generate_job_id()
-    create_job(job_id, scenarios_total=1)
+    create_job(job_id, scenarios_total=len(params.bess_configs) * len(params.export_limits))
     _executor.submit(_run_csv_background, job_id, csv_path, params)
 
     return {"job_id": job_id}

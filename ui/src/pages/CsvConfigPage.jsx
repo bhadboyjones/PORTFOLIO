@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 
 const DNO_OPTIONS = [
@@ -10,15 +10,6 @@ const DNO_OPTIONS = [
   { key: "SSEN", label: "Scottish & Southern EN (N Scotland / South)" },
 ];
 
-const BESS_PRESETS = [
-  { label: "— Select a standard config —", power: null, capacity: null },
-  { label: "1 MW / 2 MWh  (2h)",  power: 1,  capacity: 2 },
-  { label: "1 MW / 4 MWh  (4h)",  power: 1,  capacity: 4 },
-  { label: "2 MW / 4 MWh  (2h)",  power: 2,  capacity: 4 },
-  { label: "2 MW / 8 MWh  (4h)",  power: 2,  capacity: 8 },
-  { label: "3 MW / 6 MWh  (2h)",  power: 3,  capacity: 6 },
-  { label: "3 MW / 12 MWh (4h)",  power: 3,  capacity: 12 },
-];
 
 const DEFAULT_ADV = {
   contractedKva: "",
@@ -30,6 +21,9 @@ const DEFAULT_ADV = {
   ragAmberMorningStart: "07:00", ragAmberMorningEnd: "16:00",
   ragAmberEveningStart: "19:00", ragAmberEveningEnd: "23:00",
   ragWeekendAmberStart: "", ragWeekendAmberEnd: "",
+  chargeEffPct: "", dischargeEffPct: "",
+  socMinPct: "5", socMaxPct: "95",
+  degCostGbpMwh: "8",
 };
 
 function r4(v) { return String(parseFloat(v.toFixed(4))); }
@@ -85,14 +79,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
   const [dnoKey, setDnoKey]               = useState("");
   const [voltageLevel, setVoltageLevel]   = useState("LV");
-  const [exportLimitMw, setExportLimitMw] = useState("");
   const [priceExposure, setPriceExposure] = useState("da");
   const [thermalGenToggle, setThermalGenToggle] = useState(false);
   const [thermalMcGbpMwh, setThermalMcGbpMwh] = useState("70");
 
-  const [bessPreset, setBessPreset]     = useState("0");
-  const [bessPower, setBessPower]       = useState("");
-  const [bessCapacity, setBessCapacity] = useState("");
+  const [powers, setPowers]           = useState(["1", "2", "3"]);
+  const [capacities, setCapacities]   = useState(["1", "2", "4"]);
+  const [selectedCells, setSelectedCells] = useState(new Set());
+  const [exportLimits, setExportLimits]   = useState(["", "", "", ""]);
   const [bessRte, setBessRte]           = useState("90");
   const [bessMaxCycles, setBessMaxCycles] = useState("1.5");
 
@@ -106,17 +100,32 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError]     = useState(null);
 
+  // Auto-select all valid cells whenever the power/capacity grid changes
+  useEffect(() => {
+    const next = new Set();
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const pw = parseFloat(powers[r]);
+        const cap = parseFloat(capacities[c]);
+        if (pw > 0 && cap > 0) {
+          const dur = cap / pw;
+          if (dur >= 0.5 && dur <= 6.0) next.add(`${r},${c}`);
+        }
+      }
+    }
+    setSelectedCells(next);
+  }, [powers, capacities]);
+
   // Derived
-  const pw  = parseFloat(bessPower);
-  const cap = parseFloat(bessCapacity);
-  const durationH    = pw > 0 && cap > 0 ? cap / pw : null;
-  const durationValid = durationH !== null && durationH >= 0.5 && durationH <= 6.0;
-  const exportVal    = parseFloat(exportLimitMw);
-  const exportValid  = exportLimitMw !== "" && !isNaN(exportVal) && exportVal > 0;
-  const bessValid    = bessPower !== "" && bessCapacity !== "" && pw > 0 && cap > 0 && durationValid;
+  const validExportLimits = exportLimits
+    .filter(v => v !== "" && !isNaN(parseFloat(v)) && parseFloat(v) > 0)
+    .map(v => parseFloat(v));
+  const validExportCount = validExportLimits.length;
+  const selectedCount    = selectedCells.size;
+  const scenarioCount    = selectedCount * validExportCount;
   const thermalGenWarning = thermalGenToggle && parsedMeta?.headers?.length > 0 && !parsedMeta.headers.includes("thermal_gen_mw");
   const resolutionError   = parsedMeta?.resolution?.valid === false;
-  const canRun            = file != null && dnoKey !== "" && exportValid && bessValid && !submitting && !resolutionError;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -191,15 +200,6 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
     setAdvancedDirty(true);
   }
 
-  function handlePresetChange(idx) {
-    setBessPreset(idx);
-    const preset = BESS_PRESETS[parseInt(idx, 10)];
-    if (preset.power !== null) {
-      setBessPower(String(preset.power));
-      setBessCapacity(String(preset.capacity));
-    }
-  }
-
   async function handleFileChange(f) {
     setFile(f);
     setParsedMeta(null);
@@ -213,13 +213,22 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
     setRunError(null);
     setSubmitting(true);
     try {
+      // Build BESS configs from selected matrix cells (row order: powers × capacities)
+      const bessConfigs = [];
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (selectedCells.has(`${r},${c}`)) {
+            bessConfigs.push({ power_mw: parseFloat(powers[r]), capacity_mwh: parseFloat(capacities[c]) });
+          }
+        }
+      }
+
       const fd = new FormData();
       fd.append("file", file);
       fd.append("dno_key", dnoKey);
       fd.append("voltage_level", voltageLevel === "unknown" ? "LV" : voltageLevel);
-      fd.append("export_limit_mw", exportLimitMw);
-      fd.append("bess_power_mw", bessPower);
-      fd.append("bess_capacity_mwh", bessCapacity);
+      fd.append("bess_configs_json", JSON.stringify(bessConfigs));
+      fd.append("export_limits_json", JSON.stringify(validExportLimits));
       fd.append("bess_rte_pct", bessRte || "90");
       fd.append("bess_max_cycles", bessMaxCycles || "1.5");
       fd.append("chp_toggle", String(thermalGenToggle));
@@ -249,6 +258,13 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       if (advanced.fixedGbpPerDay) fd.append("fixed_gbp_per_day",          advanced.fixedGbpPerDay);
       if (advanced.capacityRate)   fd.append("capacity_gbp_per_kva_day",   advanced.capacityRate);
       if (advanced.gduosFixed)     fd.append("gduos_fixed_gbp_per_day",    advanced.gduosFixed);
+
+      // BESS technical params — always send (have defaults)
+      if (advanced.chargeEffPct)    fd.append("bess_charge_eff_pct",    advanced.chargeEffPct);
+      if (advanced.dischargeEffPct) fd.append("bess_discharge_eff_pct", advanced.dischargeEffPct);
+      fd.append("bess_soc_min_pct",      advanced.socMinPct    || "5");
+      fd.append("bess_soc_max_pct",      advanced.socMaxPct    || "95");
+      fd.append("bess_deg_cost_gbp_mwh", advanced.degCostGbpMwh || "8");
 
       const { job_id } = await postRunCsv(fd);
       onRunStarted(job_id);
@@ -425,23 +441,6 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               )}
             </div>
 
-            {/* Export limit */}
-            <div>
-              <FieldLabel>Site export limit</FieldLabel>
-              <SuffixInput
-                type="number" min="0.01" step="0.25"
-                placeholder="e.g. 1.0"
-                value={exportLimitMw}
-                onChange={(e) => setExportLimitMw(e.target.value)}
-                suffix="MW"
-              />
-              {exportLimitMw !== "" && !exportValid && (
-                <div style={{ fontSize: "0.72rem", color: "#ff5577", marginTop: "0.25rem" }}>
-                  Must be greater than 0
-                </div>
-              )}
-            </div>
-
             {/* Thermal generation toggle */}
             <div style={{ gridColumn: "1 / -1" }}>
               <FieldLabel>On-site thermal generation? (CHP, genset, gas engine)</FieldLabel>
@@ -494,42 +493,90 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
         {/* ── BESS Configuration ──────────────────────── */}
         <Card label="BESS Configuration">
 
-          {/* Shortcut preset dropdown */}
+          {/* 3×3 power × capacity matrix */}
           <div style={{ marginBottom: "1rem" }}>
-            <FieldLabel>Standard configuration shortcut</FieldLabel>
-            <select
-              value={bessPreset}
-              onChange={(e) => handlePresetChange(e.target.value)}
-              style={selectStyle(bessPreset !== "0")}
-            >
-              {BESS_PRESETS.map((p, i) => (
-                <option key={i} value={i}>{p.label}</option>
+            <div style={{ display: "grid", gridTemplateColumns: "88px repeat(3, 1fr)", gap: "0.4rem" }}>
+
+              {/* Top-left corner */}
+              <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "0.3rem" }}>
+                <span style={{ fontSize: "0.62rem", color: "#2a4772", lineHeight: 1.4 }}>
+                  Power ↓<br />Capacity →
+                </span>
+              </div>
+
+              {/* Capacity column headers */}
+              {capacities.map((cap, c) => (
+                <SuffixInput
+                  key={c}
+                  type="number" min="0.1" step="0.5"
+                  value={cap}
+                  onChange={(e) => {
+                    const next = [...capacities];
+                    next[c] = e.target.value;
+                    setCapacities(next);
+                  }}
+                  suffix="MWh"
+                />
               ))}
-            </select>
+
+              {/* Power row headers + cells */}
+              {powers.map((pw, r) => [
+                <SuffixInput
+                  key={`pw-${r}`}
+                  type="number" min="0.1" step="0.5"
+                  value={pw}
+                  onChange={(e) => {
+                    const next = [...powers];
+                    next[r] = e.target.value;
+                    setPowers(next);
+                  }}
+                  suffix="MW"
+                />,
+                ...capacities.map((cap, c) => {
+                  const pwVal = parseFloat(pw);
+                  const capVal = parseFloat(cap);
+                  const dur = pwVal > 0 && capVal > 0 ? capVal / pwVal : null;
+                  const cellValid = dur !== null && dur >= 0.5 && dur <= 6.0;
+                  const key = `${r},${c}`;
+                  const isSelected = cellValid && selectedCells.has(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        if (!cellValid) return;
+                        setSelectedCells(prev => {
+                          const next = new Set(prev);
+                          if (next.has(key)) next.delete(key); else next.add(key);
+                          return next;
+                        });
+                      }}
+                      style={{
+                        padding: "0.55rem 0.25rem",
+                        border: isSelected ? "1px solid #00c8e8" : "1px solid #1e3352",
+                        borderRadius: 6,
+                        background: !cellValid ? "#0a111e" : isSelected ? "rgba(0,200,232,0.1)" : "#0f1928",
+                        color: !cellValid ? "#1e3352" : isSelected ? "#00c8e8" : "#4a6b8c",
+                        cursor: cellValid ? "pointer" : "not-allowed",
+                        fontSize: "0.8rem",
+                        fontWeight: isSelected ? 700 : 500,
+                        textAlign: "center",
+                        width: "100%",
+                        transition: "all 0.12s",
+                      }}
+                    >
+                      {cellValid && dur !== null ? `${dur.toFixed(1)}h` : "—"}
+                    </button>
+                  );
+                }),
+              ])}
+            </div>
+            <div style={{ fontSize: "0.7rem", color: "#2a4772", marginTop: "0.4rem" }}>
+              Click cells to select/deselect. Grey cells have duration outside 0.5–6 h.
+            </div>
           </div>
 
-          {/* Free-form inputs */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-            <div>
-              <FieldLabel>Power</FieldLabel>
-              <SuffixInput
-                type="number" min="0.01" step="0.5"
-                placeholder="e.g. 1"
-                value={bessPower}
-                onChange={(e) => { setBessPower(e.target.value); setBessPreset("0"); }}
-                suffix="MW"
-              />
-            </div>
-            <div>
-              <FieldLabel>Capacity</FieldLabel>
-              <SuffixInput
-                type="number" min="0.01" step="0.5"
-                placeholder="e.g. 2"
-                value={bessCapacity}
-                onChange={(e) => { setBessCapacity(e.target.value); setBessPreset("0"); }}
-                suffix="MWh"
-              />
-            </div>
+          {/* Global BESS params */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
             <div>
               <FieldLabel>Round-trip efficiency</FieldLabel>
               <SuffixInput
@@ -550,23 +597,49 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             </div>
           </div>
 
-          {/* Duration derived display */}
-          {bessPower !== "" && bessCapacity !== "" && (
-            <div style={{
-              fontSize: "0.8rem",
-              color: durationValid ? "#7ba0c8" : "#ff5577",
-              padding: "0.5rem 0",
-              borderTop: "1px solid #1e3352",
-            }}>
-              {durationH !== null ? (
-                durationValid
-                  ? <span>Duration: <strong style={{ color: "#00c8e8" }}>{durationH.toFixed(1)}h</strong> · {(cap).toFixed(1)} MWh</span>
-                  : <span>Duration {durationH.toFixed(2)}h is outside the 0.5–6.0h range</span>
-              ) : (
-                <span>Enter valid power and capacity</span>
-              )}
+          {/* Export limits */}
+          <div style={{ borderTop: "1px solid #1e3352", paddingTop: "1rem" }}>
+            <FieldLabel>Export limits — up to 4 scenarios</FieldLabel>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem" }}>
+              {exportLimits.map((v, i) => (
+                <SuffixInput
+                  key={i}
+                  type="number" min="0.01" step="0.25"
+                  placeholder={i === 0 ? "e.g. 1.0" : "optional"}
+                  value={v}
+                  onChange={(e) => setExportLimits(prev => {
+                    const next = [...prev];
+                    next[i] = e.target.value;
+                    return next;
+                  })}
+                  suffix="MW"
+                />
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Scenario count */}
+          <div style={{
+            marginTop: "0.75rem",
+            fontSize: "0.82rem",
+            padding: "0.45rem 0.85rem",
+            background: "rgba(0,200,232,0.03)",
+            border: `1px solid ${scenarioCount > 12 ? "rgba(255,85,119,0.3)" : "#1e3352"}`,
+            borderRadius: 5,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
+            <span style={{ color: scenarioCount > 12 ? "#ff5577" : scenarioCount > 0 ? "#7ba0c8" : "#4a6b8c" }}>
+              <strong style={{ color: scenarioCount > 12 ? "#ff5577" : "#00c8e8" }}>{scenarioCount}</strong>
+              {" "}scenario{scenarioCount !== 1 ? "s" : ""}
+              {" "}({selectedCount} config{selectedCount !== 1 ? "s" : ""} × {validExportCount} export limit{validExportCount !== 1 ? "s" : ""})
+            </span>
+            {scenarioCount > 12 && (
+              <span style={{ fontSize: "0.72rem", color: "#ff5577" }}>max 12</span>
+            )}
+          </div>
+
         </Card>
 
         {/* ── Price Exposure ──────────────────────────── */}
@@ -796,6 +869,51 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 </div>
               </AdvancedSection>
 
+              {/* BESS Technical Parameters */}
+              <AdvancedSection label="BESS Technical Parameters">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                  <div>
+                    <FieldLabel>Charge efficiency</FieldLabel>
+                    <SuffixInput type="number" step="0.5" min="50" max="100"
+                      placeholder="default: √RTE"
+                      value={advanced.chargeEffPct}
+                      onChange={(e) => updateAdv("chargeEffPct", e.target.value)}
+                      suffix="%" />
+                  </div>
+                  <div>
+                    <FieldLabel>Discharge efficiency</FieldLabel>
+                    <SuffixInput type="number" step="0.5" min="50" max="100"
+                      placeholder="default: √RTE"
+                      value={advanced.dischargeEffPct}
+                      onChange={(e) => updateAdv("dischargeEffPct", e.target.value)}
+                      suffix="%" />
+                  </div>
+                  <div>
+                    <FieldLabel>Degradation cost</FieldLabel>
+                    <SuffixInput type="number" step="0.5" min="0"
+                      value={advanced.degCostGbpMwh}
+                      onChange={(e) => updateAdv("degCostGbpMwh", e.target.value)}
+                      suffix="£/MWh" />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <FieldLabel>Minimum SOC</FieldLabel>
+                    <SuffixInput type="number" step="1" min="0" max="50"
+                      value={advanced.socMinPct}
+                      onChange={(e) => updateAdv("socMinPct", e.target.value)}
+                      suffix="%" />
+                  </div>
+                  <div>
+                    <FieldLabel>Maximum SOC</FieldLabel>
+                    <SuffixInput type="number" step="1" min="50" max="100"
+                      value={advanced.socMaxPct}
+                      onChange={(e) => updateAdv("socMaxPct", e.target.value)}
+                      suffix="%" />
+                  </div>
+                </div>
+              </AdvancedSection>
+
             </div>
           )}
         </div>
@@ -837,14 +955,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             {!file && "Upload a CSV or XLSX · "}
             {resolutionError && <span style={{ color: "#ff5577" }}>{parsedMeta.resolution.label} · </span>}
             {!dnoKey && "Select a DNO · "}
-            {dnoKey && !exportValid && "Enter export limit (> 0) · "}
-            {!bessValid && (
-              bessPower === "" || bessCapacity === ""
-                ? "Enter BESS power and capacity"
-                : !durationValid
-                  ? `BESS duration ${durationH?.toFixed(2)}h outside 0.5–6.0h range`
-                  : ""
-            )}
+            {selectedCount === 0 && "Select at least one BESS configuration · "}
+            {validExportCount === 0 && "Enter at least one export limit (> 0) · "}
+            {scenarioCount > 12 && <span style={{ color: "#ff5577" }}>Reduce scenarios to ≤ 12 (currently {scenarioCount})</span>}
           </div>
         )}
 
