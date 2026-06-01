@@ -89,7 +89,7 @@ Net demand is negative when on-site generation exceeds site load. PV carries no 
 ```
 site_cost_without_bess = baseline_net_gbp.sum() + total_standing_gbp.sum()
 site_cost_with_bess    = site_cost_without_bess − net_settlement_gbp.sum()
-net_benefit            = net_settlement_gbp.sum()
+net_benefit            = site_cost_without_bess − site_cost_with_bess
 ```
 
 ### Network charges
