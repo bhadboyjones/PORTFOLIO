@@ -495,11 +495,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
           {/* 3×3 power × capacity matrix */}
           <div style={{ marginBottom: "1rem" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "88px repeat(3, 1fr)", gap: "0.4rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "112px repeat(3, 1fr)", gap: "0.4rem" }}>
 
               {/* Top-left corner */}
               <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "0.3rem" }}>
-                <span style={{ fontSize: "0.62rem", color: "#2a4772", lineHeight: 1.4 }}>
+                <span
+                  title="Power (MW): max rate the battery can charge or discharge&#10;Capacity (MWh): total energy the battery can store"
+                  style={{ fontSize: "0.62rem", color: "#2a4772", lineHeight: 1.4, cursor: "help", borderBottom: "1px dotted #2a4772" }}
+                >
                   Power ↓<br />Capacity →
                 </span>
               </div>
@@ -564,7 +567,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                         transition: "all 0.12s",
                       }}
                     >
-                      {cellValid && dur !== null ? `${dur.toFixed(1)}h` : "—"}
+                      {cellValid && dur !== null ? `${dur.toFixed(1)}h` : dur !== null && dur < 0.5 ? "< 0.5h" : dur !== null && dur > 6.0 ? "> 6h" : "—"}
                     </button>
                   );
                 }),
@@ -875,7 +878,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   <div>
                     <FieldLabel>Charge efficiency</FieldLabel>
                     <SuffixInput type="number" step="0.5" min="50" max="100"
-                      placeholder="default: √RTE"
+                      placeholder="90"
                       value={advanced.chargeEffPct}
                       onChange={(e) => updateAdv("chargeEffPct", e.target.value)}
                       suffix="%" />
@@ -883,7 +886,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   <div>
                     <FieldLabel>Discharge efficiency</FieldLabel>
                     <SuffixInput type="number" step="0.5" min="50" max="100"
-                      placeholder="default: √RTE"
+                      placeholder="90"
                       value={advanced.dischargeEffPct}
                       onChange={(e) => updateAdv("dischargeEffPct", e.target.value)}
                       suffix="%" />
