@@ -87,7 +87,6 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const [capacities, setCapacities]   = useState(["1", "2", "4"]);
   const [selectedCells, setSelectedCells] = useState(new Set());
   const [exportLimits, setExportLimits]   = useState(["", "", "", ""]);
-  const [bessRte, setBessRte]           = useState("90");
   const [bessMaxCycles, setBessMaxCycles] = useState("1.5");
 
   const [showAdvanced, setShowAdvanced]         = useState(false);
@@ -229,7 +228,6 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       fd.append("voltage_level", voltageLevel === "unknown" ? "LV" : voltageLevel);
       fd.append("bess_configs_json", JSON.stringify(bessConfigs));
       fd.append("export_limits_json", JSON.stringify(validExportLimits));
-      fd.append("bess_rte_pct", bessRte || "90");
       fd.append("bess_max_cycles", bessMaxCycles || "1.5");
       fd.append("chp_toggle", String(thermalGenToggle));
       fd.append("price_exposure", priceExposure);
@@ -579,25 +577,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
           </div>
 
           {/* Global BESS params */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
-            <div>
-              <FieldLabel>Round-trip efficiency</FieldLabel>
-              <SuffixInput
-                type="number" min="50" max="100" step="1"
-                value={bessRte}
-                onChange={(e) => setBessRte(e.target.value)}
-                suffix="%"
-              />
-            </div>
-            <div>
-              <FieldLabel>Max cycles / day</FieldLabel>
-              <input
-                type="number" min="0.5" max="4" step="0.5"
-                value={bessMaxCycles}
-                onChange={(e) => setBessMaxCycles(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
+          <div style={{ maxWidth: 240, marginBottom: "1rem" }}>
+            <FieldLabel>Max cycles / day</FieldLabel>
+            <input
+              type="number" min="0.5" max="4" step="0.5"
+              value={bessMaxCycles}
+              onChange={(e) => setBessMaxCycles(e.target.value)}
+              style={inputStyle}
+            />
           </div>
 
           {/* Export limits */}
@@ -639,7 +626,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {" "}({selectedCount} config{selectedCount !== 1 ? "s" : ""} × {validExportCount} export limit{validExportCount !== 1 ? "s" : ""})
             </span>
             {scenarioCount > 12 && (
-              <span style={{ fontSize: "0.72rem", color: "#ff5577" }}>max 12</span>
+              <span style={{ fontSize: "0.72rem", color: "#ff5577" }}>max 12 — deselect some configs</span>
             )}
           </div>
 
