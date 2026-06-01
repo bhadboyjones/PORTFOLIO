@@ -14,9 +14,14 @@
 
 ## What it is
 
-flexiq is a BTM BESS dispatch optimiser for pre-feasibility analysis. It takes a site load profile, a set of BESS hardware configurations, and an analysis window, solves a MILP for each scenario to find the optimal charge/discharge schedule, then settles results against real UK market prices pulled from Elexon's BMRS API.
+flexiq is a BTM BESS dispatch optimiser for pre-feasibility analysis. It solves a MILP for each scenario to find the optimal charge/discharge schedule, then settles results against real UK market prices pulled from Elexon's BMRS API.
 
-The output is a ranked comparison of up to 12 scenarios showing net bill reduction, site cost with and without BESS, and a full SP-level dispatch timeseries — exportable as a formatted Excel report.
+Two input modes are supported:
+
+- **CSV mode** — upload real half-hourly or hourly site meter data. flexiq validates the file, detects resolution, joins market prices and DNO tariff rates, and runs the optimiser against actual demand.
+- **Archetype mode** — select from representative I&C demand profiles (small commercial, mid-size industrial, large industrial) with synthetic demand shapes when no meter data is available.
+
+In both modes the user configures a BESS matrix (up to 9 power/capacity combinations) and up to 4 export limit scenarios. Results are a ranked comparison of up to 12 scenarios showing net bill reduction, site cost with and without BESS, and a full SP-level dispatch timeseries — exportable as a formatted Excel report.
 
 ---
 
@@ -51,34 +56,34 @@ GDUoS is stored as a negative value — subtraction adds the credit.
 - DUoS capacity charge (scales with contracted kVA)
 - GDUoS fixed daily charge
 
-Charges are published in pence per day — converted to £/SP in `data_builder.py` before the optimiser runs:
+Charges are published in pence per day — converted to £/SP before the optimiser runs:
 
 ```
-dduos_fixed_gbp_per_sp     = dduos_fixed_p_per_day / 100 / 48
-dduos_capacity_gbp_per_sp  = (dduos_capacity_p_per_kva_day × contracted_kva) / 100 / 48
-gduos_fixed_gbp_per_sp     = gduos_fixed_p_per_day / 100 / 48
+dduos_fixed_gbp_per_sp     = fixed_p_per_day / 100 / n_sps_per_day
+dduos_capacity_gbp_per_sp  = (capacity_p_per_kva_day × contracted_kva) / 100 / n_sps_per_day
+gduos_fixed_gbp_per_sp     = gduos_fixed_p_per_day / 100 / n_sps_per_day
 ```
 
-`contracted_kva` is derived from `peak_mw × 1000` at unity power factor assumption.
+`n_sps_per_day` is 48 for half-hourly data and 24 for hourly data. `contracted_kva` defaults to peak net demand × 1000 at unity power factor if not supplied.
 
 **P&L per SP:**
 ```
 net_settlement = dis1_saving + dis2_revenue − charge2_cost − charge1_opp_cost − deg_cost
 ```
 
-`charge1_opp_cost` is the foregone export revenue from absorbing on-site surplus rather than exporting it. `deg_cost` is a flat £8/MWh throughput degradation charge.
+`charge1_opp_cost` is the foregone export revenue from absorbing on-site surplus rather than exporting it. `deg_cost` defaults to £8/MWh throughput and is user-configurable.
 
 **Baseline (no BESS) — calculated per SP before the optimiser runs:**
 
 ```
 import_cost = net_demand_mwh × (price + DUoS + NEC)     [where net_demand_mw > 0]
 export_rev  = |net_demand_mwh| × (price − GDUoS)        [where net_demand_mw ≤ 0]
-chp_cost    = chp_gen_mwh × £70/MWh
+thermal_cost = thermal_gen_mw × sp_duration_hrs × MC
 
-baseline_net_gbp = import_cost + chp_cost − export_rev
+baseline_net_gbp = import_cost + thermal_cost − export_rev
 ```
 
-Net demand is negative when on-site generation (PV/CHP) exceeds site load — the site is a net exporter in those SPs. PV carries no fuel cost and is already embedded in net demand. CHP fuel cost accrues regardless of whether the site is importing or exporting. Standing charges are sunk costs added at reporting stage only.
+Net demand is negative when on-site generation exceeds site load. PV carries no fuel cost and is already embedded in net demand. Thermal (CHP/genset) fuel cost accrues regardless of import/export state.
 
 **Site-level comparison:**
 ```
@@ -89,13 +94,18 @@ net_benefit            = net_settlement_gbp.sum()
 
 ### Network charges
 
-Northern Powergrid (Northeast) HV Site Specific tariff (2025/26 rates). DUoS volumetric rates follow the RAG band structure:
+Six DNOs are supported with 2025/26 published tariff rates, selectable at LV or HV:
 
-- **Red** (16:00–19:00 weekdays): £88/MWh
-- **Amber** (07:00–16:00 and 19:00–23:00): £5/MWh
-- **Green** (all other times, weekends, bank holidays): £0.50/MWh
+| DNO | Coverage |
+|---|---|
+| UK Power Networks (UKPN) | South East, East, London |
+| National Grid ED (NGED) | South West, East Midlands |
+| Northern Powergrid (NPG) | North East, Yorkshire |
+| Electricity North West (ENWL) | North West England |
+| SP Energy Networks (SPEN) | Scotland, Merseyside |
+| Scottish & Southern EN (SSEN) | North Scotland, South |
 
-GDUoS credits mirror the same band structure with a negative sign convention.
+DUoS volumetric rates follow the RAG band structure with DNO-specific time windows. RAG band windows are pre-populated from DNO defaults and overridable in the Advanced settings panel. GDUoS credits mirror the band structure with a negative sign convention.
 
 ### Price signals
 
@@ -114,15 +124,18 @@ Currently implemented with **perfect foresight** — forecast equals actual. Res
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  React (Vite)  ─────────────────────────  Vercel            │
-│  ConfigPage → ProgressScreen → ResultsPage                   │
+│  LandingPage → CsvConfigPage / ConfigPage                    │
+│             → ProgressScreen → ResultsPage                   │
 │  recharts · date-fns · inline styles                        │
 └─────────────────────┬───────────────────────────────────────┘
                       │  REST (CORS-gated)
 ┌─────────────────────▼───────────────────────────────────────┐
 │  FastAPI  ──────────────────────────────  Render            │
-│  POST /run           → submits background job               │
+│  POST /run           → archetype optimisation job           │
+│  POST /run/csv       → CSV upload optimisation job          │
 │  GET  /run/{job_id}  → polls status + progress              │
 │  GET  /export/{id}   → streams pre-built XLSX               │
+│  GET  /dno-rates/{dno}/{voltage} → DNO tariff lookup        │
 │                                                             │
 │  ThreadPoolExecutor (max 2 concurrent jobs)                  │
 │  In-memory job store (resets on restart)                    │
@@ -130,7 +143,7 @@ Currently implemented with **perfect foresight** — forecast equals actual. Res
                       │
 ┌─────────────────────▼───────────────────────────────────────┐
 │  src/ — Python engine                                       │
-│  data_builder → [prices, charges, generation] → optimiser   │
+│  data_builder / csv_pipeline → prices + charges → optimiser  │
 │  PuLP + HiGHS MILP, 3-day chunks, SOC handoff               │
 │  openpyxl write_only streaming → report                     │
 └─────────────────────────────────────────────────────────────┘
@@ -143,11 +156,13 @@ Currently implemented with **perfect foresight** — forecast equals actual. Res
 ```
 flexiq/
 ├── src/                        Core Python engine
-│   ├── config.py               Site archetypes, BESS matrix, network tariff, levies
-│   ├── data_builder.py         Assembles per-SP optimiser input DataFrame
+│   ├── config.py               Site archetypes, BESS defaults, policy levies
+│   ├── data_builder.py         Assembles per-SP optimiser input (archetype mode)
+│   ├── csv_pipeline.py         CSV validation, RAG mapping, baseline (CSV mode)
+│   ├── duos_rates.py           DNO tariff lookup — 6 DNOs, LV/HV, 2025/26 rates
 │   ├── prices.py               Elexon BMRS pulls — MID (DA) + DISEBSP (imbalance)
 │   ├── charges.py              DUoS/GDUoS RAG band logic + standing charges
-│   ├── generation.py           Synthetic demand/PV/CHP profiles
+│   ├── generation.py           Synthetic demand/PV/CHP profiles (archetype mode)
 │   ├── optimiser.py            MILP formulation, baseline calc, settlement P&L
 │   └── report.py               Excel report — openpyxl write_only, one sheet per scenario
 │
@@ -158,17 +173,19 @@ flexiq/
 │   └── routes/
 │       ├── archetypes.py       GET /archetypes
 │       ├── scenarios.py        GET /scenarios/options
-│       ├── run.py              POST /run · GET /run/{job_id}
+│       ├── run.py              POST /run · GET /run/{job_id} (archetype)
+│       ├── run_csv.py          POST /run/csv (CSV multi-scenario loop)
 │       └── export.py           GET /export/{job_id}
 │
 ├── ui/                         React + Vite frontend
 │   └── src/
 │       ├── pages/
-│       │   ├── ConfigPage.jsx          Site/BESS/timeframe/price configuration
+│       │   ├── LandingPage.jsx         Mode selection (CSV vs archetype)
+│       │   ├── CsvConfigPage.jsx       CSV upload, BESS matrix, DNO config
+│       │   ├── ConfigPage.jsx          Archetype config
 │       │   ├── ProgressScreen.jsx      Polling progress display
 │       │   └── ResultsPage.jsx         KPI cards, scenario table, 4 chart tabs
 │       ├── components/
-│       │   ├── BessConfigurator.jsx    MW × duration selection matrix
 │       │   ├── KpiCards.jsx            Summary metrics for top scenario
 │       │   ├── ScenarioTable.jsx       Ranked sortable results table
 │       │   ├── CumulativePnlChart.jsx  Cumulative P&L over time (top 3 scenarios)
@@ -219,16 +236,18 @@ Runs on `http://localhost:5173`. Make sure `ui/src/api/client.js` has `API_BASE_
 
 | Area | Detail |
 |---|---|
-| **Demand profiles** | Fully synthetic. Modelled from archetype parameters (peak/base/offpeak MW) with a deterministic intraday shape — no real meter data. |
+| **CSV mode demand** | Real site meter data — half-hourly or hourly. `net_demand_mw` must be the grid boundary meter reading, net of all on-site generation (PV, wind, thermal). |
+| **Archetype demand** | Fully synthetic. Modelled from archetype parameters (peak/base/offpeak MW) with a deterministic intraday shape — not site-specific. |
 | **Price foresight** | Perfect foresight — forecast equals actual. Results are an optimistic upper bound. |
-| **DNO/tariff** | Hardcoded to Northern Powergrid (Northeast), HV Site Specific 2025/26. Single network configuration only. |
-| **Chunk size** | MILP solved in 3-day (144 SP) chunks with SOC continuity between chunks. |
-| **Policy levies** | NEC (BSUoS, CfD, RO, CM, FiT) are indicative flat rates — not supplier-quoted actuals. |
-| **CHP fuel cost** | Fixed at £70/MWh — a pre-feasibility benchmark. |
-| **Degradation** | Flat £8/MWh throughput cost. No cycle-depth or temperature curves. |
-| **Efficiency** | 90% round-trip, split symmetrically (√0.9 per side). |
-| **SoC bounds** | 5–95% of capacity. End-of-chunk SoC target is initial SoC (50%) ± 10% of capacity. |
-| **Scenario cap** | 1 archetype × max 3 BESS configs × max 4 export limits = 12 scenarios per run. |
+| **DNO/tariff** | Six DNOs supported at LV and HV (2025/26 published rates). RAG band windows are per-DNO defaults, overridable in Advanced settings. |
+| **Chunk size** | MILP solved in 3-day chunks with SOC continuity between chunks. |
+| **Policy levies** | NEC (BSUoS, CfD, RO, CM, FiT) defaults to an indicative flat rate — overridable. EII-exempt sites can set a reduced NEC. |
+| **Thermal generation** | Treated as a fixed input to the baseline. flexiq does not co-optimise BESS dispatch with dispatchable thermal assets. |
+| **CHP fuel cost** | User-configurable marginal cost input; defaults to £70/MWh as a pre-feasibility benchmark. |
+| **Degradation** | Flat £/MWh throughput cost, user-configurable (default £8/MWh). No cycle-depth or temperature curves. |
+| **Efficiency** | One-way charge and discharge efficiency are independently configurable. Default: √RTE per side (symmetric split). |
+| **SoC bounds** | Configurable min/max SOC (default 5–95%). End-of-chunk SOC target is initial SOC (50%) ± 10% of capacity. |
+| **Scenario cap** | Max 12 scenarios per run (BESS configs × export limits). |
 | **Job persistence** | Results held in memory on the Render instance. A restart clears all jobs — no database. |
 | **Concurrency** | Maximum 2 simultaneous optimisation jobs. |
 
@@ -246,13 +265,11 @@ Add GB ancillary service markets alongside energy arbitrage:
 
 This requires extending the MILP objective to include availability payments and adding headroom state variables alongside the current energy dispatch variables.
 
-### V3 — Real site data
+### V3 — Forecasting and degradation
 
-- Half-hourly AMR meter data upload (CSV/XLSX) replacing synthetic profiles
-- Site-specific DNO connection parameters (export limit, contracted capacity)
-- Multiple DNO tariff configurations
-- Gas price input for CHP marginal cost
-- Forecast price integration (EPEXSpot DA auction results)
+- Substitute perfect foresight with a real DA price forecast (EPEXSpot auction results or a simple regression model)
+- Cycle-depth aware degradation model replacing the flat £/MWh throughput cost
+- Gas price input integration for dynamic CHP marginal cost
 
 ---
 
