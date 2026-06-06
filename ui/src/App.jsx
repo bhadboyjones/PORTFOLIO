@@ -14,6 +14,7 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [runError, setRunError] = useState(null);
   const [csvWarnings, setCsvWarnings] = useState(null);
+  const [dataPeriod, setDataPeriod] = useState(null);
 
   function handleModeChange(m) {
     setMode(m);
@@ -28,7 +29,7 @@ export default function App() {
     setView("progress");
   }
 
-  function handleComplete(payload, warns) {
+  function handleComplete(payload, warns, period) {
     // CSV mode returns { csv_run: [...] } — normalise to archetype-compatible shape
     let norm = payload;
     if (mode === "csv" && payload.csv_run) {
@@ -36,6 +37,7 @@ export default function App() {
     }
     setResults(norm);
     setCsvWarnings(warns && warns.length > 0 ? warns : null);
+    setDataPeriod(period ?? null);
     setView("results");
   }
 
@@ -48,6 +50,7 @@ export default function App() {
     setView("config");
     setRunError(null);
     setCsvWarnings(null);
+    setDataPeriod(null);
   }
 
   if (view === "progress") {
@@ -71,6 +74,7 @@ export default function App() {
           mode={mode}
           onBack={handleBack}
           validationWarnings={csvWarnings}
+          dataPeriod={dataPeriod}
         />
       </Suspense>
     );

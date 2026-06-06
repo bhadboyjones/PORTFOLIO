@@ -273,4 +273,5 @@ def get_run_status(job_id: str):
         error=job["error"],
         mode=job.get("mode"),
         validation_warnings=job.get("validation_warnings"),
+        data_period=job.get("data_period"),
     )

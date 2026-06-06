@@ -59,6 +59,12 @@ function fmt(v, dec = 0) {
   return v.toLocaleString("en-GB", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
+function fmtDate(iso) {
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const [y, m, d] = iso.split("-");
+  return `${parseInt(d)} ${MONTHS[parseInt(m) - 1]} ${y}`;
+}
+
 function BaselineBreakdown({ topScenario }) {
   if (!topScenario) return null;
   const rows = [
@@ -97,7 +103,7 @@ function BaselineBreakdown({ topScenario }) {
   );
 }
 
-export default function ResultsPage({ results, jobId, mode, onBack, validationWarnings }) {
+export default function ResultsPage({ results, jobId, mode, onBack, validationWarnings, dataPeriod }) {
   const archetypeIds   = Object.keys(results);
   const [activeArchetype, setActiveArchetype] = useState(archetypeIds[0]);
   const [chartTab, setChartTab]               = useState(0);
@@ -156,7 +162,7 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
           />
         )}
 
-        {/* Mode badge */}
+        {/* Mode / disclaimer badge */}
         {mode === "archetype" && (
           <div style={{
             marginBottom: "1rem",
@@ -169,6 +175,24 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
             display: "inline-block",
           }}>
             ⓘ Archetype mode — demand profile is representative, not site-specific
+          </div>
+        )}
+        {mode === "csv" && (
+          <div style={{
+            marginBottom: "1rem",
+            fontSize: "0.72rem",
+            color: "#4a6b8c",
+            background: "rgba(0,200,232,0.03)",
+            border: "1px solid rgba(0,200,232,0.1)",
+            borderRadius: 5,
+            padding: "0.4rem 0.75rem",
+            display: "inline-block",
+          }}>
+            ⓘ{" "}
+            {dataPeriod
+              ? `Results cover ${fmtDate(dataPeriod.start)} – ${fmtDate(dataPeriod.end)} (${dataPeriod.n_days} days) · `
+              : ""}
+            Upper-bound estimate — dispatch optimised with perfect price foresight
           </div>
         )}
 

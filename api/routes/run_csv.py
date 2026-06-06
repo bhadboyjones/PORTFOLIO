@@ -183,6 +183,9 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             sp_duration_hrs=sp_duration_hrs,
             n_sps_per_day=n_sps_per_day,
         )
+        data_start = df["startTime"].min().date()
+        data_end   = df["startTime"].max().date()
+        n_days     = (data_end - data_start).days + 1
         del csv_df
 
         # 3. Baseline — uses actual MC directly, returns per-SP DataFrame
@@ -274,6 +277,11 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             results={"csv_run": all_results},
             xlsx_path=xlsx_path,
             mode="csv",
+            data_period={
+                "start": data_start.isoformat(),
+                "end":   data_end.isoformat(),
+                "n_days": n_days,
+            },
         )
 
     except Exception as exc:

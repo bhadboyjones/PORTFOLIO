@@ -53,6 +53,7 @@ class RunStatusResponse(BaseModel):
     error: Optional[str] = None
     mode: Optional[str] = None
     validation_warnings: Optional[list[str]] = None
+    data_period: Optional[dict] = None
 
 
 class CsvRunParams:

@@ -13,7 +13,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         const data = await getRunStatus(jobId);
         if (cancelled) return;
         setStatus(data);
-        if (data.status === "complete") { onComplete(data.results, data.validation_warnings ?? null); return; }
+        if (data.status === "complete") { onComplete(data.results, data.validation_warnings ?? null, data.data_period ?? null); return; }
         if (data.status === "failed")   { onFailed(data.error || "Run failed — unknown error."); return; }
         setTimeout(poll, 3000);
       } catch {
