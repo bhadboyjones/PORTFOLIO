@@ -15,8 +15,14 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
   return (
     <div>
       <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", marginBottom: "1rem" }}>
+        <input
+          type="checkbox"
+          checked={useDefault}
+          onChange={(e) => setUseDefault(e.target.checked)}
+          style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
+        />
         <div
-          onClick={() => setUseDefault((v) => !v)}
+          aria-hidden="true"
           style={{
             width: 36,
             height: 20,
@@ -24,7 +30,6 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
             background: useDefault ? "#00c8e8" : "#1e3352",
             position: "relative",
             transition: "background 0.2s",
-            cursor: "pointer",
             flexShrink: 0,
           }}
         >

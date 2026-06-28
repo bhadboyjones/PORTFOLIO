@@ -5,7 +5,6 @@ import os
 import shutil
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +13,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from api.jobs import create_job, generate_job_id, get_job, update_job
+from api.executor import executor as _executor
 from api.schemas import CsvRunParams
 from src.config import _BESS_BASE
 
 router = APIRouter()
-_executor = ThreadPoolExecutor(max_workers=2)
 
 _PRICE_COLUMNS = {
     "da":        ("da_forecast_gbp",  "da_actual_gbp"),
@@ -43,6 +42,7 @@ def _build_bess_params(
     rte_pct: float,
     max_cycles: float,
     export_limit_mw: float,
+    contracted_kva: float,
     charge_eff_pct: float = None,
     discharge_eff_pct: float = None,
     soc_min_pct: float = 5.0,
@@ -62,6 +62,7 @@ def _build_bess_params(
         "deg_cost_gbp_mwh":     deg_cost_gbp_mwh,
         "max_cycles_per_day":   max_cycles,
         "export_limit_mw":      export_limit_mw,
+        "contracted_kva":       contracted_kva,
     }
 
 
@@ -90,8 +91,10 @@ def _serialise_scenario(settled, scenario_label: str, export_limit_mw: float, sp
         "charge2_cost_gbp", "charge1_opp_cost_gbp", "deg_cost_gbp",
     ]
     ts = settled[timeseries_cols].copy()
+    # Display in UK local time so the dispatch chart lines up with the bill and
+    # the user's local-time CSV (BST shifts UTC-stored SPs by an hour).
     if ts["startTime"].dt.tz is not None:
-        ts["startTime"] = ts["startTime"].dt.tz_localize(None)
+        ts["startTime"] = ts["startTime"].dt.tz_convert("Europe/London").dt.tz_localize(None)
     ts["startTime"] = ts["startTime"].astype(str)
     timeseries = json.loads(ts.to_json(orient="records"))
 
@@ -123,8 +126,8 @@ def _serialise_scenario(settled, scenario_label: str, export_limit_mw: float, sp
 # ---------------------------------------------------------------------------
 
 def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> None:
-    from src.csv_pipeline import load_and_validate_csv, build_csv_optimiser_input, calculate_baseline_csv
-    from src.optimiser import run_optimiser, calculate_settlement
+    from src.csv_pipeline import load_and_validate_csv, build_csv_optimiser_input
+    from src.optimiser import run_optimiser, calculate_settlement, calculate_baseline
     from src.report import build_report
 
     try:
@@ -149,6 +152,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             contracted_kva = float(csv_df["net_demand_mw"].clip(lower=0).max()) * 1000
 
         tmp_dir = tempfile.mkdtemp()
+        update_job(job_id, tmp_dir=tmp_dir)
 
         # Build RAG override dicts from the eight request params.
         # Frontend always sends these pre-populated from DNO defaults,
@@ -169,33 +173,34 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             ),
         }
 
-        # 2. Build full MILP-ready input DataFrame
-        df = build_csv_optimiser_input(
-            csv_df=csv_df,
-            dno_key=params.dno_key,
-            voltage_level=params.voltage_level,
-            contracted_kva=contracted_kva,
-            nec_gbp_mwh=params.nec_gbp_mwh,
-            rate_overrides=params.rate_overrides,
-            force_refresh=False,
-            rag_red_windows=rag_red_windows,
-            rag_amber_windows=rag_amber_windows,
-            sp_duration_hrs=sp_duration_hrs,
-            n_sps_per_day=n_sps_per_day,
-        )
+        # 2. Build full MILP-ready input DataFrame.
+        # Capture warnings.warn() calls (e.g. price-NaN fills) so they surface to
+        # the user alongside the CSV validation warnings rather than being lost.
+        import warnings as _warnings
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            df = build_csv_optimiser_input(
+                csv_df=csv_df,
+                dno_key=params.dno_key,
+                voltage_level=params.voltage_level,
+                contracted_kva=contracted_kva,
+                nec_gbp_mwh=params.nec_gbp_mwh,
+                rate_overrides=params.rate_overrides,
+                force_refresh=False,
+                rag_red_windows=rag_red_windows,
+                rag_amber_windows=rag_amber_windows,
+                sp_duration_hrs=sp_duration_hrs,
+                n_sps_per_day=n_sps_per_day,
+            )
+        warnings.extend(str(w.message) for w in caught)
         data_start = df["startTime"].min().date()
         data_end   = df["startTime"].max().date()
         n_days     = (data_end - data_start).days + 1
         del csv_df
 
-        # 3. Baseline — uses actual MC directly, returns per-SP DataFrame
-        df_baseline = calculate_baseline_csv(
-            df,
-            thermal_mc_gbp_mwh=params.chp_mc_gbp_mwh,
-            actual_price_col=actual_col,
-            sp_duration_hrs=sp_duration_hrs,
-        )
-        del df
+        # Baseline is computed per-scenario inside the loop below because export
+        # revenue depends on the scenario's export limit (surplus above the limit
+        # is curtailed). df holds the export-independent optimiser input.
 
         total_scenarios = len(params.bess_configs) * len(params.export_limits)
         update_job(
@@ -222,11 +227,22 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     params.bess_rte_pct,
                     params.bess_max_cycles,
                     export_lim,
+                    contracted_kva,
                     charge_eff_pct=params.bess_charge_eff_pct,
                     discharge_eff_pct=params.bess_discharge_eff_pct,
                     soc_min_pct=params.bess_soc_min_pct,
                     soc_max_pct=params.bess_soc_max_pct,
                     deg_cost_gbp_mwh=params.bess_deg_cost_gbp_mwh,
+                )
+
+                # Baseline depends on this scenario's export limit (surplus above
+                # the limit is curtailed and earns no export revenue).
+                df_baseline = calculate_baseline(
+                    df,
+                    thermal_mc_gbp_mwh=params.chp_mc_gbp_mwh,
+                    export_limit_mw=export_lim,
+                    actual_price_col=actual_col,
+                    sp_duration_hrs=sp_duration_hrs,
                 )
 
                 results_df = run_optimiser(
@@ -256,11 +272,13 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 pkl_paths.append(pkl_path)
                 del settled
 
+                del df_baseline
+
                 scenario_idx += 1
                 progress = 30 + int(60 * scenario_idx / total_scenarios)
                 update_job(job_id, scenarios_complete=scenario_idx, progress_pct=min(progress, 90))
 
-        del df_baseline
+        del df
 
         # 5. Build XLSX
         xlsx_path = os.path.join(tmp_dir, "bess_csv_results.xlsx")
@@ -281,6 +299,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 "start": data_start.isoformat(),
                 "end":   data_end.isoformat(),
                 "n_days": n_days,
+                "resolution": "hourly" if sp_duration_hrs == 1.0 else "half-hourly",
             },
         )
 

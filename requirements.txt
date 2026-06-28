@@ -15,6 +15,7 @@ pandas==3.0.2
 platformdirs==4.9.6
 PuLP==3.3.1
 pyarrow==23.0.1
+pytest==8.3.4
 pydantic==2.13.4
 pydantic_core==2.46.4
 python-dateutil==2.9.0.post0

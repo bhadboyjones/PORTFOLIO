@@ -1,10 +1,25 @@
 import os
+import shutil
 import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-_jobs: Dict[str, Dict[str, Any]] = {}
+# Bounded, insertion-ordered store. Completed jobs hold full results in memory,
+# so cap the count and evict oldest-first to avoid unbounded growth on a
+# long-lived instance. Restart clears everything — there is no database.
+_jobs: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 _lock = threading.Lock()
+_MAX_JOBS = 20
+
+
+def _evict_oldest_locked() -> None:
+    """Drop oldest jobs beyond the cap and remove their temp dirs. Call under _lock."""
+    while len(_jobs) > _MAX_JOBS:
+        _, evicted = _jobs.popitem(last=False)
+        tmp_dir = evicted.get("tmp_dir")
+        if tmp_dir and os.path.isdir(tmp_dir):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def generate_job_id() -> str:
@@ -32,8 +47,10 @@ def create_job(job_id: str, scenarios_total: int) -> None:
             "current_scenario": None,
             "results": None,
             "xlsx_path": None,    # path to pre-built XLSX temp file
+            "tmp_dir": None,      # working dir; removed when the job is evicted
             "error": None,
         }
+        _evict_oldest_locked()
 
 
 def update_job(job_id: str, **kwargs) -> None:

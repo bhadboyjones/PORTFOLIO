@@ -55,9 +55,9 @@ async function parseCsvMeta(file) {
         if (secondTs) {
           const gapMin = (new Date(secondTs) - new Date(firstTs)) / 60000;
           if (gapMin === 30) {
-            resolution = { label: "30-minute (48 SPs/day)", valid: true };
+            resolution = { label: "30-minute (48 intervals/day)", valid: true };
           } else if (gapMin === 60) {
-            resolution = { label: "Hourly (24 SPs/day)", valid: true };
+            resolution = { label: "Hourly (24 intervals/day)", valid: true };
           } else {
             resolution = { label: `Unsupported interval (${gapMin} min) — flexiq accepts 30-min or hourly only`, valid: false };
           }
@@ -95,6 +95,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const [pendingDnoChange, setPendingDnoChange] = useState(null);
   const [dnoRatesLoading, setDnoRatesLoading]   = useState(false);
   const [ragWarning, setRagWarning]             = useState(null);
+  const [dnoRateError, setDnoRateError]         = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError]     = useState(null);
@@ -117,18 +118,18 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
   // Derived
   const validExportLimits = exportLimits
-    .filter(v => v !== "" && !isNaN(parseFloat(v)) && parseFloat(v) > 0)
+    .filter(v => v !== "" && !isNaN(parseFloat(v)) && parseFloat(v) >= 0)
     .map(v => parseFloat(v));
   const validExportCount = validExportLimits.length;
   const selectedCount    = selectedCells.size;
   const scenarioCount    = selectedCount * validExportCount;
   const thermalGenWarning = thermalGenToggle && parsedMeta?.headers?.length > 0 && !parsedMeta.headers.includes("thermal_gen_mw");
   const resolutionError   = parsedMeta?.resolution?.valid === false;
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
-    const effectiveVoltage = voltage === "unknown" ? "LV" : voltage;
+    const effectiveVoltage = voltage === "unknown" ? "HV" : voltage;
     setDnoRatesLoading(true);
     try {
       const d = await getDnoRates(dno, effectiveVoltage);
@@ -154,8 +155,11 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       }));
       setAdvancedDirty(false);
       setRagWarning(d.rag_warning || null);
+      setDnoRateError(false);
     } catch {
-      // silently fail — user can manually enter rates in Advanced
+      // Surface the failure: without DNO rates the RAG windows fall back to
+      // generic defaults, which silently mis-prices the bands. Block the run.
+      setDnoRateError(true);
     } finally {
       setDnoRatesLoading(false);
     }
@@ -225,7 +229,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("dno_key", dnoKey);
-      fd.append("voltage_level", voltageLevel === "unknown" ? "LV" : voltageLevel);
+      fd.append("voltage_level", voltageLevel === "unknown" ? "HV" : voltageLevel);
       fd.append("bess_configs_json", JSON.stringify(bessConfigs));
       fd.append("export_limits_json", JSON.stringify(validExportLimits));
       fd.append("bess_max_cycles", bessMaxCycles || "1.5");
@@ -344,7 +348,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 {parsedMeta && (
                   <div style={{ marginTop: "0.75rem", display: "flex", gap: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
                     {parsedMeta.rows !== null && (
-                      <Chip label="Settlement periods" value={parsedMeta.rows.toLocaleString()} />
+                      <Chip label="Time intervals" value={parsedMeta.rows.toLocaleString()} />
                     )}
                     {parsedMeta.dateRange && (
                       <Chip label="Date range" value={`${parsedMeta.dateRange.start} → ${parsedMeta.dateRange.end}`} />
@@ -412,6 +416,17 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   Loading DNO rates…
                 </div>
               )}
+              {dnoRateError && (
+                <div style={{
+                  fontSize: "0.72rem", color: "#ff5577", marginTop: "0.3rem",
+                  background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.25)",
+                  borderRadius: 5, padding: "0.4rem 0.6rem",
+                }}>
+                  Couldn’t load DNO rates — band windows would fall back to generic
+                  defaults and mis-price the tariff. Check your connection and reselect
+                  the DNO, or enter rates manually in Advanced settings.
+                </div>
+              )}
             </div>
 
             {/* Voltage */}
@@ -434,7 +449,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               </div>
               {voltageLevel === "unknown" && (
                 <div style={{ marginTop: "0.4rem", fontSize: "0.72rem", color: "#4a6b8c" }}>
-                  Defaults to LV (conservative rates)
+                  Defaults to HV — lower DUoS rates give a conservative savings estimate. Select LV or HV if known.
                 </div>
               )}
             </div>
@@ -594,8 +609,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {exportLimits.map((v, i) => (
                 <SuffixInput
                   key={i}
-                  type="number" min="0.01" step="0.25"
-                  placeholder={i === 0 ? "e.g. 1.0" : "optional"}
+                  type="number" min="0" step="0.25"
+                  placeholder={i === 0 ? "e.g. 1.0 (0 = none)" : "optional"}
                   value={v}
                   onChange={(e) => setExportLimits(prev => {
                     const next = [...prev];
@@ -946,7 +961,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             {resolutionError && <span style={{ color: "#ff5577" }}>{parsedMeta.resolution.label} · </span>}
             {!dnoKey && "Select a DNO · "}
             {selectedCount === 0 && "Select at least one BESS configuration · "}
-            {validExportCount === 0 && "Enter at least one export limit (> 0) · "}
+            {validExportCount === 0 && "Enter at least one export limit (0 or more) · "}
             {scenarioCount > 12 && <span style={{ color: "#ff5577" }}>Reduce scenarios to ≤ 12 (currently {scenarioCount})</span>}
           </div>
         )}

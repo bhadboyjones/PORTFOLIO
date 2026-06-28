@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 
@@ -6,6 +8,8 @@ from .prices import build_price_df
 from .generation import build_generation_df
 from .config import NETWORK_CONFIG_NEC_HV, TOTAL_IMPORT_LEVIES_GBP_PER_MWH
 from .duos_rates import get_duos_rates, duos_rates_to_charges_config
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -101,7 +105,7 @@ def build_optimiser_input(
 
         missing = df["net_demand_mw"].isna().sum()
         if missing > 0:
-            print(f"Warning: {missing} SPs missing site load")
+            logger.warning("%s SPs missing site load", missing)
 
     # ================================================================
     # 4. SITE TAG
@@ -129,7 +133,7 @@ def build_optimiser_input(
     else:
         df["da_forecast_gbp"] = pd.NA
         df["imb_forecast_gbp"] = pd.NA
-        print("Warning: No forecasts provided")
+        logger.warning("No forecasts provided")
 
     # ================================================================
     # 8. CLEANUP
@@ -140,18 +144,10 @@ def build_optimiser_input(
     # ================================================================
     # 9. SUMMARY
     # ================================================================
-    print(f"\nOptimiser input ready: {len(df):,} SPs")
-    print(f"  Window: {df['startTime'].min()} → {df['startTime'].max()}")
-
-    if df["da_actual_gbp"].notna().any():
-        print(f"  DA range: £{df['da_actual_gbp'].min():.2f} → £{df['da_actual_gbp'].max():.2f}/MWh")
-
+    logger.info("Optimiser input ready: %d SPs (%s → %s)",
+                len(df), df["startTime"].min(), df["startTime"].max())
     if site_params is not None:
-        print(f"  Net demand: {df['net_demand_mw'].min():.2f} → {df['net_demand_mw'].max():.2f} MW")
-
-    if site_name:
-        print(f"  Site: {site_name}")
-
-    print("  Pricing model: UNBUNDLED (no baked-in rates)")
+        logger.info("Net demand range: %.2f → %.2f MW",
+                    df["net_demand_mw"].min(), df["net_demand_mw"].max())
 
     return df

@@ -15,7 +15,7 @@ Expected CSV columns:
 Call order for CSV mode:
     load_and_validate_csv()        validate and clean the uploaded file
     build_csv_optimiser_input()    join prices + DUoS, produce MILP-ready DataFrame
-    calculate_baseline_csv()       per-SP baseline cost without BESS
+    calculate_baseline()           per-SP baseline cost without BESS (optimiser.py)
     run_optimiser()                MILP dispatch (unchanged from archetype mode)
     calculate_settlement()         BESS P&L (unchanged from archetype mode)
 """
@@ -28,7 +28,7 @@ import pandas as pd
 
 from .duos_rates import get_duos_rates, convert_rates_to_model_units
 from .prices import build_price_df
-from .config import TOTAL_IMPORT_LEVIES_GBP_PER_MWH
+from .config import TOTAL_IMPORT_LEVIES_GBP_PER_MWH, UK_BANK_HOLIDAYS
 
 
 # ---------------------------------------------------------------------------
@@ -94,24 +94,70 @@ def load_and_validate_csv(
         )
 
     # --- Parse timestamp ---
+    # Try ISO-8601 first; fall back to day-first (UK meter exports are usually
+    # DD/MM/YYYY). Never let pandas silently guess month-first on UK data.
     try:
-        ts = pd.to_datetime(raw["timestamp"], utc=False)
-    except Exception as e:
-        raise ValueError(f"Could not parse 'timestamp' column: {e}")
+        ts = pd.to_datetime(raw["timestamp"], format="ISO8601", utc=False)
+    except (ValueError, TypeError):
+        try:
+            ts = pd.to_datetime(raw["timestamp"], dayfirst=True, utc=False)
+            warns.append(
+                "timestamp parsed as day-first (DD/MM/YYYY). If your data is "
+                "month-first, re-export in ISO format (YYYY-MM-DD) and re-upload."
+            )
+        except Exception as e:
+            raise ValueError(f"Could not parse 'timestamp' column: {e}")
 
-    # Localise to Europe/London if naive, then convert to UTC
+    # Localise to Europe/London if naive, then convert to UTC. DST-invalid and
+    # ambiguous local times become NaT (dropped below) instead of being shifted
+    # onto a neighbouring SP, which would manufacture duplicate periods.
     if ts.dt.tz is None:
-        ts = ts.dt.tz_localize("Europe/London", ambiguous="infer", nonexistent="shift_forward")
+        ts = ts.dt.tz_localize("Europe/London", ambiguous="NaT", nonexistent="NaT")
     ts = ts.dt.tz_convert("UTC")
 
-    df = pd.DataFrame({"timestamp": ts})
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    # --- Build frame with all columns aligned to the source rows ---
+    # ts, net_demand, thermal all carry raw's index, so they stay row-aligned
+    # through the sort/dedup below (assigning net_demand after a sort would not).
+    # Strip thousands separators before coercion so "1,234.5" doesn't silently
+    # become NaN (which would otherwise be filled as 0.0 demand).
+    nd = pd.to_numeric(
+        raw["net_demand_mw"].astype(str).str.replace(",", "", regex=False).str.strip(),
+        errors="coerce",
+    )
+    df = pd.DataFrame({"timestamp": ts, "net_demand_mw": nd})
+    if chp_toggle:
+        df["thermal_gen_mw"] = pd.to_numeric(
+            raw["thermal_gen_mw"].astype(str).str.replace(",", "", regex=False).str.strip(),
+            errors="coerce",
+        )
+    else:
+        df["thermal_gen_mw"] = 0.0
+
+    # --- Drop DST-invalid / unparseable timestamps ---
+    n_bad_ts = int(df["timestamp"].isna().sum())
+    if n_bad_ts > 0:
+        warns.append(
+            f"{n_bad_ts} rows had invalid or ambiguous timestamps "
+            f"(e.g. the DST clock-change hour) and were dropped."
+        )
+        df = df[df["timestamp"].notna()]
+
+    # --- Sort, then drop duplicate timestamps (keep first occurrence) ---
+    df = df.sort_values("timestamp")
+    dup = df["timestamp"].duplicated()
+    if dup.any():
+        warns.append(
+            f"{int(dup.sum())} duplicate timestamps removed "
+            f"(kept the first occurrence of each time interval)."
+        )
+        df = df[~dup]
+    df = df.reset_index(drop=True)
 
     # --- Resolution detection ---
     if len(df) < 2:
         raise ValueError(
             "Too few rows to detect data resolution. "
-            "Please provide at least 2 settlement periods."
+            "Please provide at least 2 time intervals."
         )
     median_gap = df["timestamp"].diff().dropna().median()
     if median_gap == pd.Timedelta("30min"):
@@ -136,20 +182,25 @@ def load_and_validate_csv(
             f"(expected {expected_gap} spacing). Results may be affected."
         )
 
-    # --- net_demand_mw ---
-    df["net_demand_mw"] = pd.to_numeric(raw["net_demand_mw"], errors="coerce")
-
-    nan_count = df["net_demand_mw"].isna().sum()
+    # --- net_demand_mw NaN handling ---
+    nan_count = int(df["net_demand_mw"].isna().sum())
     if nan_count == len(df):
         raise ValueError("'net_demand_mw' column contains no valid numeric values.")
     if nan_count > 0:
         warns.append(f"{nan_count} NaN values in net_demand_mw filled with 0.0.")
         df["net_demand_mw"] = df["net_demand_mw"].fillna(0.0)
 
-    # --- thermal_gen_mw ---
+    # --- Unit-magnitude sanity check ---
+    p99 = df["net_demand_mw"].abs().quantile(0.99)
+    if p99 > 50:
+        warns.append(
+            f"net_demand_mw 99th percentile is {p99:.1f} MW — values may be in kW "
+            f"rather than MW. If so, divide by 1000 before uploading."
+        )
+
+    # --- thermal_gen_mw NaN / negative handling ---
     if chp_toggle:
-        df["thermal_gen_mw"] = pd.to_numeric(raw["thermal_gen_mw"], errors="coerce")
-        thm_nan = df["thermal_gen_mw"].isna().sum()
+        thm_nan = int(df["thermal_gen_mw"].isna().sum())
         if thm_nan > 0:
             warns.append(f"{thm_nan} NaN values in thermal_gen_mw filled with 0.0.")
             df["thermal_gen_mw"] = df["thermal_gen_mw"].fillna(0.0)
@@ -158,10 +209,20 @@ def load_and_validate_csv(
                 "thermal_gen_mw contains negative values — these have been clipped to 0.0."
             )
             df["thermal_gen_mw"] = df["thermal_gen_mw"].clip(lower=0.0)
-    else:
-        df["thermal_gen_mw"] = 0.0
 
-    # --- Check for gaps in the SP sequence ---
+    # Remind the user that net_demand_mw must already be net of thermal output.
+    # (The column is always present — set to 0.0 when thermal is disabled — so a
+    # non-zero sum is the real signal that thermal data was supplied and used.)
+    if df["thermal_gen_mw"].abs().sum() > 0:
+        warns.append(
+            "thermal_gen_mw detected — net_demand_mw is treated as the metered "
+            "boundary flow, so on-site thermal generation must already be reflected "
+            "in it. flexiq uses thermal_gen_mw only for baseline fuel cost, never to "
+            "adjust net demand. If thermal output was not subtracted when preparing "
+            "net_demand_mw, results will be incorrect."
+        )
+
+    # --- Check for gaps in the interval sequence ---
     if len(df) > 1:
         full_range = pd.date_range(
             df["timestamp"].iloc[0],
@@ -173,9 +234,9 @@ def load_and_validate_csv(
         n_actual   = len(df)
         if n_actual < n_expected:
             warns.append(
-                f"{n_expected - n_actual} settlement periods missing from upload "
+                f"{n_expected - n_actual} time intervals missing from upload "
                 f"(expected {n_expected}, got {n_actual}). "
-                f"Missing SPs are excluded from the optimisation."
+                f"Missing intervals are excluded from the optimisation."
             )
 
     return df, warns, sp_duration_hrs, n_sps_per_day
@@ -189,6 +250,23 @@ def _parse_hhmm(s: str) -> int:
     """Convert 'HH:MM' string to minutes from midnight."""
     h, m = s.split(":")
     return int(h) * 60 + int(m)
+
+
+def _bank_holiday_dates(years) -> set:
+    """Return the set of England & Wales bank-holiday `date` objects for given years."""
+    out = set()
+    for y in years:
+        for d in UK_BANK_HOLIDAYS.get(y, []):
+            out.add(pd.Timestamp(d).date())
+    return out
+
+
+def _window_mask(mins: pd.Series, s: int, e: int) -> pd.Series:
+    """Boolean mask for minutes inside [s, e); handles windows that cross midnight (s > e)."""
+    if s < e:
+        return (mins >= s) & (mins < e)
+    # crosses midnight, e.g. 22:00–02:00
+    return (mins >= s) | (mins < e)
 
 
 def map_rag_bands(
@@ -207,8 +285,11 @@ def map_rag_bands(
 
     Handles:
     - Europe/London timezone (DST-safe via tz_convert)
-    - Separate weekday and weekend windows per band
-    - DNOs with no weekend Red or no weekend Amber (pass empty list for those)
+    - Separate weekday and weekend windows per band (e.g. SPEN weekend Red,
+      SSEN weekend Amber)
+    - Windows that cross midnight (start > end)
+    - England & Wales bank holidays — charged Green (off-peak), overriding both
+      weekday and weekend bands
 
     Returns:
         pd.Series of "red"/"amber"/"green" aligned to df.index.
@@ -217,28 +298,30 @@ def map_rag_bands(
     if ts.dt.tz is None:
         raise ValueError("timestamp column must be timezone-aware (UTC expected).")
 
-    local = ts.dt.tz_convert("Europe/London")
-    mins = local.dt.hour * 60 + local.dt.minute
+    local      = ts.dt.tz_convert("Europe/London")
+    mins       = local.dt.hour * 60 + local.dt.minute
     is_weekend = local.dt.dayofweek >= 5  # 5=Sat, 6=Sun
 
-    def _in_windows(mins_series: pd.Series, is_wknd: pd.Series, windows: dict) -> pd.Series:
-        """Return boolean mask: True where SP falls inside any window for its day type."""
-        mask = pd.Series(False, index=mins_series.index)
+    # Bank holidays → forced Green. (Years absent from UK_BANK_HOLIDAYS are simply
+    # not flagged — band assignment still proceeds on weekday/weekend rules.)
+    hols       = _bank_holiday_dates(local.dt.year.unique().tolist())
+    is_holiday = (
+        local.dt.date.isin(hols) if hols else pd.Series(False, index=df.index)
+    )
 
-        weekday_wins = windows.get("weekday", [])
-        for start_str, end_str in weekday_wins:
+    def _in_windows(windows: dict) -> pd.Series:
+        """True where SP falls inside any window for its day type."""
+        mask = pd.Series(False, index=df.index)
+        for start_str, end_str in windows.get("weekday", []):
             s, e = _parse_hhmm(start_str), _parse_hhmm(end_str)
-            mask |= (~is_wknd) & (mins_series >= s) & (mins_series < e)
-
-        weekend_wins = windows.get("weekend", [])
-        for start_str, end_str in weekend_wins:
+            mask |= (~is_weekend) & _window_mask(mins, s, e)
+        for start_str, end_str in windows.get("weekend", []):
             s, e = _parse_hhmm(start_str), _parse_hhmm(end_str)
-            mask |= is_wknd & (mins_series >= s) & (mins_series < e)
-
+            mask |= is_weekend & _window_mask(mins, s, e)
         return mask
 
-    red_mask   = _in_windows(mins, is_weekend, red_windows)
-    amber_mask = _in_windows(mins, is_weekend, amber_windows)
+    red_mask   = (~is_holiday) & _in_windows(red_windows)
+    amber_mask = (~is_holiday) & _in_windows(amber_windows)
 
     # Red takes priority over amber where windows overlap
     return pd.Series(
@@ -287,7 +370,7 @@ def build_csv_optimiser_input(
         force_refresh   : bypass Elexon price cache
         rag_red_windows / rag_amber_windows : optional RAG band overrides
         sp_duration_hrs : SP duration in hours (0.5 for HH, 1.0 for hourly)
-        n_sps_per_day   : settlement periods per day (48 for HH, 24 for hourly)
+        n_sps_per_day   : time intervals per day (48 for HH, 24 for hourly)
     """
     if nec_gbp_mwh is None:
         nec_gbp_mwh = TOTAL_IMPORT_LEVIES_GBP_PER_MWH
@@ -297,6 +380,19 @@ def build_csv_optimiser_input(
     rates = convert_rates_to_model_units(raw_rates)
     if rate_overrides:
         rates.update(rate_overrides)
+
+    # Guard against rate inversion (export rate exceeding import rate), which would
+    # let the optimiser "buy and sell" within a single SP. Inversion is a property
+    # of the rates, not the price level, so a reference price suffices.
+    _ref_price = 100.0
+    for band in ("red", "amber", "green"):
+        import_rate = _ref_price + rates[f"duos_{band}_gbp_mwh"] + nec_gbp_mwh
+        export_rate = _ref_price - rates[f"gduos_{band}_gbp_mwh"]
+        if export_rate > import_rate:
+            raise ValueError(
+                f"Rate inversion in {band} band: export £{export_rate:.2f} > import "
+                f"£{import_rate:.2f}/MWh. Check the DUoS/GDUoS rate overrides."
+            )
 
     rag_schedule = rates["rag_schedule"]
 
@@ -309,11 +405,23 @@ def build_csv_optimiser_input(
         )
 
     # --- Map RAG bands ---
+    # Weekday windows respect UI overrides (pre-populated from DNO, editable);
+    # weekend windows always come from the canonical DNO schedule unless the UI
+    # explicitly supplies a non-empty weekend window. This keeps DNO-specific
+    # weekend bands (e.g. SPEN weekend Red 16:00–20:00) from being silently lost.
+    def _merge_windows(ui_windows, canonical):
+        if ui_windows is None:
+            return canonical
+        return {
+            "weekday": ui_windows.get("weekday") or canonical.get("weekday", []),
+            "weekend": ui_windows["weekend"] if ui_windows.get("weekend") else canonical.get("weekend", []),
+        }
+
     df = csv_df.copy().rename(columns={"timestamp": "startTime"})
     df["rag_band"] = map_rag_bands(
         df,
-        red_windows=rag_red_windows if rag_red_windows is not None else rag_schedule["red"],
-        amber_windows=rag_amber_windows if rag_amber_windows is not None else rag_schedule["amber"],
+        red_windows=_merge_windows(rag_red_windows, rag_schedule["red"]),
+        amber_windows=_merge_windows(rag_amber_windows, rag_schedule["amber"]),
         timestamp_col="startTime",
     )
 
@@ -351,28 +459,39 @@ def build_csv_optimiser_input(
         force_refresh=force_refresh,
     )
 
+    # Hourly data: average the two half-hourly prices within each hour so the
+    # full hour isn't settled at the on-the-hour price (the HH:30 price would
+    # otherwise be silently discarded by the left-join below).
+    if sp_duration_hrs == 1.0:
+        df_prices = (
+            df_prices.set_index("startTime")
+            .resample("1h").mean()
+            .reset_index()
+        )
+
     # Left join: keep only SPs present in the CSV
     df = pd.merge(df, df_prices, on="startTime", how="left")
 
-    # Fill any price NaNs (very rare — Elexon gaps) with 0 and warn
-    price_nan_da  = df["da_price_gbp"].isna().sum()
-    price_nan_imb = df["imb_price_gbp"].isna().sum()
-    if price_nan_da > 0:
+    # Price NaNs (Elexon gaps). Above a small threshold, refuse to run rather than
+    # silently settle a chunk of the period against £0; below it, fill and warn.
+    n_rows = len(df)
+    for col, label in [("da_price_gbp", "DA"), ("imb_price_gbp", "imbalance")]:
+        nan_count = int(df[col].isna().sum())
+        if nan_count == 0:
+            continue
+        if n_rows and nan_count / n_rows > 0.05:
+            raise ValueError(
+                f"{nan_count} of {n_rows} intervals ({nan_count / n_rows:.0%}) have no "
+                f"{label} price — too many to fill safely. Check Elexon data "
+                "coverage for the selected date range."
+            )
         warnings.warn(
-            f"{price_nan_da} NaN values in DA price filled with 0.0 — "
+            f"{nan_count} NaN values in {label} price filled with 0.0 — "
             "check Elexon data coverage for the selected date range.",
             UserWarning,
             stacklevel=2,
         )
-        df["da_price_gbp"] = df["da_price_gbp"].fillna(0.0)
-    if price_nan_imb > 0:
-        warnings.warn(
-            f"{price_nan_imb} NaN values in imbalance price filled with 0.0 — "
-            "check Elexon data coverage for the selected date range.",
-            UserWarning,
-            stacklevel=2,
-        )
-        df["imb_price_gbp"] = df["imb_price_gbp"].fillna(0.0)
+        df[col] = df[col].fillna(0.0)
 
     # Rename to model column names and create forecast = actual (perfect foresight)
     df = df.rename(columns={
@@ -385,84 +504,14 @@ def build_csv_optimiser_input(
     df = df.drop(columns=["rag_band"], errors="ignore")
     df = df.sort_values("startTime").reset_index(drop=True)
 
-    return df
-
-
-# ---------------------------------------------------------------------------
-# Baseline cost (CSV mode) — returns per-SP DataFrame, not a dict
-# ---------------------------------------------------------------------------
-
-def calculate_baseline_csv(
-    df: pd.DataFrame,
-    thermal_mc_gbp_mwh: float,
-    actual_price_col: str = "da_actual_gbp",
-    sp_duration_hrs: float = 0.5,
-) -> pd.DataFrame:
-    """
-    Calculate per-SP baseline site cost without any BESS dispatch.
-
-    Must be called on the raw output of build_csv_optimiser_input().
-
-    Appends four per-SP columns to df and returns the modified DataFrame.
-    Standing charges (dduos_fixed_gbp_per_sp, gduos_fixed_gbp_per_sp) are
-    already on df and accumulate correctly via calculate_settlement() — not
-    recomputed here.
-
-    Args:
-        df                 : output of build_csv_optimiser_input()
-        thermal_mc_gbp_mwh : marginal fuel cost for on-site thermal generation (£/MWh)
-        actual_price_col   : price column to use for import/export rates
-        sp_duration_hrs    : SP duration in hours (0.5 for HH, 1.0 for hourly)
-
-    Returns:
-        df with baseline columns appended:
-            baseline_import_cost_gbp    import cost per SP
-            baseline_export_rev_gbp     export revenue per SP
-            baseline_thermal_cost_gbp   thermal fuel cost per SP
-            baseline_net_gbp            net baseline cost per SP
-                                        = import_cost + thermal_cost - export_rev
-    """
-    required = [
-        "net_demand_mwh",
-        "thermal_gen_mw",
-        "duos_gbp_mwh",
-        "gduos_gbp_mwh",
-        "nec_gbp_mwh",
-        actual_price_col,
-    ]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(
-            f"calculate_baseline_csv() missing columns: {missing}. "
-            "Ensure build_csv_optimiser_input() was called first."
-        )
-
-    df = df.copy()
-    price = df[actual_price_col]
-
-    # Import rate: price + DUoS + NEC (£/MWh, positive)
-    import_rate = price + df["duos_gbp_mwh"] + df["nec_gbp_mwh"]
-
-    # Export rate: price - GDUoS (GDUoS stored negative — subtract adds credit)
-    # e.g. price=50, gduos=-88 → export_rate = 138 £/MWh
-    export_rate = price - df["gduos_gbp_mwh"]
-
-    # Import cost — only where site is net importing (net_demand_mwh > 0)
-    df["baseline_import_cost_gbp"] = df["net_demand_mwh"].clip(lower=0) * import_rate
-
-    # Export revenue — only where site has surplus (net_demand_mwh < 0)
-    df["baseline_export_rev_gbp"] = df["net_demand_mwh"].clip(upper=0).abs() * export_rate
-
-    # Thermal generation fuel cost — thermal_gen_mw × duration × MC
-    df["baseline_thermal_cost_gbp"] = (
-        df["thermal_gen_mw"] * sp_duration_hrs * thermal_mc_gbp_mwh
-    )
-
-    # Net baseline cost per SP
-    df["baseline_net_gbp"] = (
-        df["baseline_import_cost_gbp"]
-        + df["baseline_thermal_cost_gbp"]
-        - df["baseline_export_rev_gbp"]
-    )
+    # Tag contiguity groups: a new group starts wherever there's a gap larger
+    # than 1.5× the expected spacing. run_optimiser resets SOC at each group so
+    # state never carries across a multi-hour/day hole as if it were one SP.
+    expected_delta = pd.Timedelta(hours=sp_duration_hrs)
+    df["chunk_group"] = (df["startTime"].diff() > expected_delta * 1.5).cumsum()
 
     return df
+
+
+# Baseline cost is computed by the single shared engine optimiser.calculate_baseline()
+# for both archetype and CSV modes — see src/optimiser.py.

@@ -20,12 +20,17 @@ export default function App() {
     setMode(m);
     setResults(null);
     setRunError(null);
+    setJobId(null);
+    setCsvWarnings(null);
+    setDataPeriod(null);
   }
 
   function handleRunStarted(id) {
     setJobId(id);
     setResults(null);
     setRunError(null);
+    setCsvWarnings(null);
+    setDataPeriod(null);
     setView("progress");
   }
 

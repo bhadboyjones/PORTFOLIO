@@ -7,17 +7,26 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
 
   useEffect(() => {
     let cancelled = false;
+    let failures = 0;
+    const MAX_FAILURES = 5;  // tolerate transient blips before giving up
 
     async function poll() {
       try {
         const data = await getRunStatus(jobId);
         if (cancelled) return;
+        failures = 0;
         setStatus(data);
         if (data.status === "complete") { onComplete(data.results, data.validation_warnings ?? null, data.data_period ?? null); return; }
         if (data.status === "failed")   { onFailed(data.error || "Run failed — unknown error."); return; }
         setTimeout(poll, 3000);
       } catch {
-        if (!cancelled) onFailed("Lost connection to API server.");
+        if (cancelled) return;
+        failures += 1;
+        if (failures >= MAX_FAILURES) {
+          onFailed(`Lost connection to API server after ${MAX_FAILURES} attempts. The job may still be running — job ID: ${jobId}`);
+        } else {
+          setTimeout(poll, 3000);  // keep polling; the job runs server-side
+        }
       }
     }
 

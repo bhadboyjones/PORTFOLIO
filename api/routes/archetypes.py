@@ -8,12 +8,6 @@ from src.config import SITE_ARCHETYPES, NETWORK_CONFIG_NEC_HV
 
 router = APIRouter()
 
-_DISPLAY_NAMES = {
-    "small_office":       "Small Commercial",
-    "medium_industrial":  "Mid-Size Industrial",
-    "large_industrial":   "Large Industrial",
-}
-
 _ARCHETYPE_ORDER = ["small_office", "medium_industrial", "large_industrial"]
 
 
@@ -24,7 +18,7 @@ def get_archetypes():
         params = SITE_ARCHETYPES[archetype_id]
         result.append(ArchetypeResponse(
             id=archetype_id,
-            display_name=_DISPLAY_NAMES[archetype_id],
+            display_name=params["display_name"],
             description=params["description"],
             peak_mw=params["peak_mw"],
             base_mw=params["base_mw"],

@@ -65,6 +65,7 @@ bess_params keys (all required — no defaults)
     deg_cost_gbp_mwh     float  degradation cost per MWh of throughput
     export_limit_mw      float  scenario export cap (0.0 = BTM only)
     max_cycles_per_day   float  throughput cap in full cycles per day (e.g. 1.5)
+    contracted_kva       float  site contracted capacity (kVA); caps battery grid import
 """
 
 import logging
@@ -76,14 +77,12 @@ import pulp
 
 logger = logging.getLogger(__name__)
 
-from .config import NETWORK_CONFIG_NEC_HV, TOTAL_IMPORT_LEVIES_GBP_PER_MWH, CHP_MARGINAL_COST_GBP_PER_MWH
-
 # ---------------------------------------------------------------------------
 # Module constants
 # ---------------------------------------------------------------------------
 CHUNK_DAYS: int    = 3
 SPS_PER_DAY: int   = 48
-SPS_PER_CHUNK: int = CHUNK_DAYS * SPS_PER_DAY  # 48
+SPS_PER_CHUNK: int = CHUNK_DAYS * SPS_PER_DAY  # 144
 
 # Columns always required regardless of price signal chosen
 _REQUIRED_BASE_COLS: List[str] = [
@@ -107,6 +106,7 @@ _REQUIRED_BESS_KEYS: List[str] = [
     "deg_cost_gbp_mwh",
     "export_limit_mw",
     "max_cycles_per_day",
+    "contracted_kva",
 ]
 
 
@@ -172,8 +172,8 @@ def _solve_chunk(
     """
     Solve a single 3-day MILP chunk and return it with dispatch columns appended.
 
-    Each call creates a completely fresh docplex Model — no variable leakage
-    between chunks (avoids the "Cannot mix objects from different models" error).
+    Each call creates a completely fresh PuLP model — no variable leakage
+    between chunks.
 
     Args:
         chunk              : row-slice of the full input df (up to 144 rows)
@@ -202,6 +202,7 @@ def _solve_chunk(
     soc_tol_mwh        = 0.10 * capacity_mwh
     n_days             = n / n_sps_per_day
     max_throughput_mwh = max_cycles * capacity_mwh * n_days * 2
+    import_cap_mw      = float(bess_params["contracted_kva"]) / 1000.0
 
     nd_mw = chunk["net_demand_mw"].values  # negative = on-site surplus
 
@@ -210,27 +211,48 @@ def _solve_chunk(
     # -----------------------------------------------------------------------
     prob = pulp.LpProblem(name=f"BESS_chunk_{chunk_idx}", sense=pulp.LpMaximize)
 
-    chr1, chr2, dis1, dis2, soc_var = {}, {}, {}, {}, {}
+    chr1, chr2, dis1, dis2, spill, opp = {}, {}, {}, {}, {}, {}
+    soc = {}  # SOC at the START of each period — n+1 nodes, soc[0]..soc[n]
 
     for i in range(n):
+        surplus_i = float(max(-nd_mw[i], 0.0))
+        demand_i  = float(max(nd_mw[i],  0.0))
+
         # charge1: absorb on-site surplus — zero when site is net importing
-        ub_chr1 = min(float(max(-nd_mw[i], 0.0)), power_mw)
+        ub_chr1 = min(surplus_i, power_mw)
         chr1[i] = pulp.LpVariable(f"chr1_{i}", lowBound=0.0, upBound=ub_chr1)
 
-        # charge2: import from grid — headroom left after chr1
-        ub_chr2 = power_mw - ub_chr1
+        # charge2: import from grid — headroom after chr1, further capped so the
+        # battery's grid draw never pushes total import past contracted capacity.
+        # (Exogenous site demand may itself exceed capacity; we only bound the
+        # controllable part, so this never makes the model infeasible.)
+        import_headroom = max(import_cap_mw - demand_i, 0.0)
+        ub_chr2 = min(power_mw - ub_chr1, import_headroom)
         chr2[i] = pulp.LpVariable(f"chr2_{i}", lowBound=0.0, upBound=ub_chr2)
 
         # dis1: offset site demand — zero when site has surplus
-        ub_dis1 = min(float(max(nd_mw[i], 0.0)), power_mw)
+        ub_dis1 = min(demand_i, power_mw)
         dis1[i] = pulp.LpVariable(f"dis1_{i}", lowBound=0.0, upBound=ub_dis1)
 
         # dis2: export to grid — headroom left after dis1 capped at export limit
         ub_dis2 = min(export_limit_mw, power_mw - ub_dis1)
         dis2[i] = pulp.LpVariable(f"dis2_{i}", lowBound=0.0, upBound=ub_dis2)
 
-        # SOC at each period (end-of-period state)
-        soc_var[i] = pulp.LpVariable(f"soc_{i}", lowBound=soc_min_mwh, upBound=soc_max_mwh)
+        # spill: curtailed on-site surplus — lets the export cap bind without
+        # forcing surplus into the battery (which would be infeasible when
+        # surplus exceeds BESS power). Carries no cost in the objective.
+        spill[i] = pulp.LpVariable(f"spill_{i}", lowBound=0.0, upBound=surplus_i)
+
+        # opp: portion of chr1 that carries a foregone-export opportunity cost.
+        # Only surplus above the curtailable excess (surplus − export_limit) could
+        # actually have been exported. Constrained below; penalised in the
+        # objective so it settles at max(chr1 − curtailable, 0). At export_limit=0
+        # the whole surplus is curtailable, so charging from it costs nothing.
+        opp[i] = pulp.LpVariable(f"opp_{i}", lowBound=0.0)
+
+    # SOC nodes: soc[i] is the state of charge entering period i (n+1 nodes)
+    for i in range(n + 1):
+        soc[i] = pulp.LpVariable(f"soc_{i}", lowBound=soc_min_mwh, upBound=soc_max_mwh)
 
     def total_chr(i): return chr1[i] + chr2[i]
     def total_dis(i): return dis1[i] + dis2[i]
@@ -240,15 +262,16 @@ def _solve_chunk(
     # -----------------------------------------------------------------------
 
     # C1: Opening SOC pinned to carried-in value
-    prob += (soc_var[0] == soc_start_mwh, "soc_init")
+    prob += (soc[0] == soc_start_mwh, "soc_init")
 
-    # C2: SOC balance — MWh = MW × sp_duration_hrs × efficiency
-    for i in range(1, n):
+    # C2: SOC balance — every period's dispatch updates SOC, including the last.
+    # soc[i+1] = soc[i] + charge*eta_c - discharge/eta_d (all × sp_duration_hrs)
+    for i in range(n):
         prob += (
-            soc_var[i]
-            == soc_var[i - 1]
-            + total_chr(i - 1) * sp_duration_hrs * eta_c
-            - total_dis(i - 1) * sp_duration_hrs / eta_d,
+            soc[i + 1]
+            == soc[i]
+            + total_chr(i) * sp_duration_hrs * eta_c
+            - total_dis(i) * sp_duration_hrs / eta_d,
             f"soc_bal_{i}",
         )
 
@@ -256,9 +279,22 @@ def _solve_chunk(
     for i in range(n):
         prob += (total_chr(i) + total_dis(i) <= power_mw, f"pwr_{i}")
 
+    # C3b: Export boundary cap — site surplus net of on-site charge and spill,
+    # plus battery export, must stay within the export connection limit.
+    # C3c: opportunity-cost basis — opp >= chr1 − curtailable, so only the
+    # exportable part of charge1 is penalised in the objective.
+    for i in range(n):
+        surplus_i     = float(max(-nd_mw[i], 0.0))
+        curtailable_i = max(surplus_i - export_limit_mw, 0.0)
+        prob += (
+            surplus_i - chr1[i] - spill[i] + dis2[i] <= export_limit_mw,
+            f"exp_cap_{i}",
+        )
+        prob += (opp[i] >= chr1[i] - curtailable_i, f"opp_def_{i}")
+
     # C4: End-of-chunk SOC target (±10% of capacity)
-    prob += (soc_var[n - 1] >= soc_target_mwh - soc_tol_mwh, "soc_end_lo")
-    prob += (soc_var[n - 1] <= soc_target_mwh + soc_tol_mwh, "soc_end_hi")
+    prob += (soc[n] >= soc_target_mwh - soc_tol_mwh, "soc_end_lo")
+    prob += (soc[n] <= soc_target_mwh + soc_tol_mwh, "soc_end_hi")
 
     # C5: Throughput cap
     prob += (
@@ -283,7 +319,9 @@ def _solve_chunk(
         terms.append( import_rate * dis1[i] * sp_duration_hrs)
         terms.append( export_rate * dis2[i] * sp_duration_hrs)
         terms.append(-import_rate * chr2[i] * sp_duration_hrs)
-        terms.append(-export_rate * chr1[i] * sp_duration_hrs)
+        # Opportunity cost applies only to the exportable part of chr1 (opp),
+        # not all of it — surplus that could not be exported is free to absorb.
+        terms.append(-export_rate * opp[i] * sp_duration_hrs)
         terms.append(-deg_cost * (total_chr(i) + total_dis(i)) * sp_duration_hrs)
 
     prob += pulp.lpSum(terms)
@@ -312,11 +350,12 @@ def _solve_chunk(
             return 0.0
         return round(v, 6)
 
-    chunk["charge1_mw"] = [_sv(chr1,    i) for i in range(n)]
-    chunk["charge2_mw"] = [_sv(chr2,    i) for i in range(n)]
-    chunk["dis1_mw"]    = [_sv(dis1,    i) for i in range(n)]
-    chunk["dis2_mw"]    = [_sv(dis2,    i) for i in range(n)]
-    chunk["soc_mwh"]    = [_sv(soc_var, i) for i in range(n)]
+    chunk["charge1_mw"] = [_sv(chr1, i)     for i in range(n)]
+    chunk["charge2_mw"] = [_sv(chr2, i)     for i in range(n)]
+    chunk["dis1_mw"]    = [_sv(dis1, i)     for i in range(n)]
+    chunk["dis2_mw"]    = [_sv(dis2, i)     for i in range(n)]
+    # Report end-of-period SOC for each row (soc[i+1] is the state leaving period i)
+    chunk["soc_mwh"]    = [_sv(soc,  i + 1) for i in range(n)]
 
     logger.info(
         "Chunk %d solved — objective £%.2f, end SOC %.3f MWh",
@@ -334,83 +373,81 @@ def _solve_chunk(
 
 def calculate_baseline(
     df: pd.DataFrame,
+    thermal_mc_gbp_mwh: float,
+    export_limit_mw: float,
     actual_price_col: str = "da_actual_gbp",
+    sp_duration_hrs: float = 0.5,
 ) -> pd.DataFrame:
     """
     Calculate per-SP baseline site cost without any BESS dispatch.
 
-    Must be called on the raw output of data_builder.build_optimiser_input()
-    before run_optimiser() is called — uses net_demand_mw as-is with no
-    BESS influence.
+    Single baseline engine for both archetype and CSV modes — call on the raw
+    output of build_optimiser_input() (archetype) or build_csv_optimiser_input()
+    (CSV) before run_optimiser(). Uses net_demand as-is with no BESS influence.
 
     Baseline cost model:
-        import cost  : where net_demand_mw > 0 → net_demand_mwh × (price + DUoS + NEC)
-        export rev   : where net_demand_mw < 0 → abs(net_demand_mwh) × (price - GDUoS)
-        CHP fuel cost: chp_gen_mwh × CHP_MARGINAL_COST_GBP_PER_MWH
-        PV           : free — already embedded in net_demand_mw, no cost applied
+        import cost   : net_demand_mwh.clip(lower=0) × (price + DUoS + NEC)
+        export rev    : min(surplus, export_limit) × (price - GDUoS)
+        thermal cost  : thermal_gen_mw × sp_duration_hrs × thermal_mc_gbp_mwh
+        PV            : free — already embedded in net_demand, no cost applied
 
-    Assumptions:
-        CHP_MARGINAL_COST_GBP_PER_MWH = £70/MWh (config.py benchmark)
-        In production replace with actual gas price + heat rate per site.
+    Export revenue is capped at the connection export limit: surplus beyond the
+    limit is curtailed and earns nothing. This makes the baseline depend on
+    export_limit_mw, so it must be recomputed per export scenario.
 
     Args:
-        df               : output of data_builder.build_optimiser_input()
-        actual_price_col : price column to use for import/export cost calculation
-                           default "da_actual_gbp"
+        df                 : build_optimiser_input() / build_csv_optimiser_input() output
+        thermal_mc_gbp_mwh : marginal fuel cost for on-site thermal generation (£/MWh)
+        export_limit_mw    : connection export cap (MW); surplus above this is curtailed
+        actual_price_col   : price column for import/export rates (default "da_actual_gbp")
+        sp_duration_hrs    : SP duration in hours (0.5 HH, 1.0 hourly)
 
     Returns:
         df with baseline columns appended:
-            baseline_import_cost_gbp   import cost per SP (zero where net_demand_mw <= 0)
-            baseline_export_rev_gbp    export revenue per SP (zero where net_demand_mw >= 0)
-            baseline_chp_cost_gbp      CHP fuel cost per SP
-            baseline_net_gbp           net baseline cost per SP
-                                       = import_cost + chp_cost - export_rev
+            baseline_import_cost_gbp   import cost per SP
+            baseline_export_rev_gbp    export revenue per SP (capped at export limit)
+            baseline_thermal_cost_gbp  thermal fuel cost per SP
+            baseline_net_gbp           = import_cost + thermal_cost − export_rev
     """
     required = [
-        "net_demand_mw",
         "net_demand_mwh",
         "thermal_gen_mw",
         "duos_gbp_mwh",
         "gduos_gbp_mwh",
         "nec_gbp_mwh",
+        actual_price_col,
     ]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(
             f"calculate_baseline() missing required columns: {missing}\n"
-            "Ensure site_params was passed to build_optimiser_input()."
-        )
-
-    if actual_price_col not in df.columns:
-        raise ValueError(
-            f"Price column '{actual_price_col}' not found.\n"
-            f"Available columns: {list(df.columns)}"
+            "Ensure build_optimiser_input()/build_csv_optimiser_input() ran first."
         )
 
     df = df.copy()
+    price = df[actual_price_col]
 
     # Import rate and export rate — same convention as calculate_settlement()
-    import_rate = df[actual_price_col] + df["duos_gbp_mwh"] + df["nec_gbp_mwh"]
-    export_rate = df[actual_price_col] - df["gduos_gbp_mwh"]
+    import_rate = price + df["duos_gbp_mwh"] + df["nec_gbp_mwh"]
+    export_rate = price - df["gduos_gbp_mwh"]
 
-    # Import cost — only where site is net importing (net_demand_mw > 0)
-    df["baseline_import_cost_gbp"] = (
-        df["net_demand_mwh"].clip(lower=0) * import_rate
+    # Import cost — only where site is net importing (net_demand_mwh > 0)
+    df["baseline_import_cost_gbp"] = df["net_demand_mwh"].clip(lower=0) * import_rate
+
+    # Export revenue — surplus exportable only up to the connection limit
+    exportable_mwh = (
+        df["net_demand_mwh"].clip(upper=0).abs()
+        .clip(upper=export_limit_mw * sp_duration_hrs)
     )
+    df["baseline_export_rev_gbp"] = exportable_mwh * export_rate
 
-    # Export revenue — only where site has surplus (net_demand_mw < 0)
-    # net_demand_mwh is negative in surplus periods — abs() gives positive MWh
-    df["baseline_export_rev_gbp"] = (
-        df["net_demand_mwh"].clip(upper=0).abs() * export_rate
-    )
-
-    # Thermal generation fuel cost — all SPs where thermal gen is running
+    # Thermal generation fuel cost
     df["baseline_thermal_cost_gbp"] = (
-        df["thermal_gen_mw"] * 0.5 * CHP_MARGINAL_COST_GBP_PER_MWH
+        df["thermal_gen_mw"] * sp_duration_hrs * thermal_mc_gbp_mwh
     )
 
     # Net baseline cost per SP
-    # Positive = net cost, negative = net earner (site exporting more than it imports)
+    # Positive = net cost, negative = net earner (site exporting more than importing)
     df["baseline_net_gbp"] = (
         df["baseline_import_cost_gbp"]
         + df["baseline_thermal_cost_gbp"]
@@ -457,31 +494,43 @@ def run_optimiser(
 
     df = df.copy().reset_index(drop=True)
 
-    n_rows        = len(df)
-    sps_per_chunk = CHUNK_DAYS * n_sps_per_day
-    n_chunks      = math.ceil(n_rows / sps_per_chunk)
-    soc_carry     = float(bess_params["soc_initial"]) * float(bess_params["capacity_mwh"])
+    sps_per_chunk   = CHUNK_DAYS * n_sps_per_day
+    soc_initial_mwh = float(bess_params["soc_initial"]) * float(bess_params["capacity_mwh"])
+
+    # Contiguity groups — SOC must not carry across a gap in the SP sequence.
+    # CSV mode tags these via chunk_group; archetype mode has none → one group.
+    if "chunk_group" in df.columns:
+        groups = [g for _, g in df.groupby("chunk_group", sort=True)]
+    else:
+        groups = [df]
 
     chunks_solved: List[pd.DataFrame] = []
+    chunk_counter = 0
 
-    for idx in range(n_chunks):
-        start = idx * sps_per_chunk
-        end   = min(start + sps_per_chunk, n_rows)
+    for group in groups:
+        group     = group.reset_index(drop=True)
+        soc_carry = soc_initial_mwh   # reset SOC at the start of each contiguous segment
+        n_rows    = len(group)
+        n_chunks  = math.ceil(n_rows / sps_per_chunk)
 
-        solved = _solve_chunk(
-            chunk=df.iloc[start:end].copy(),
-            bess_params=bess_params,
-            forecast_price_col=forecast_price_col,
-            soc_start_mwh=soc_carry,
-            chunk_idx=idx + 1,
-            sp_duration_hrs=sp_duration_hrs,
-            n_sps_per_day=n_sps_per_day,
-        )
+        for idx in range(n_chunks):
+            start = idx * sps_per_chunk
+            end   = min(start + sps_per_chunk, n_rows)
+            chunk_counter += 1
 
-        chunks_solved.append(solved)
-        soc_carry = float(solved["soc_mwh"].iloc[-1])
+            solved = _solve_chunk(
+                # _solve_chunk copies internally before mutating — no copy here.
+                chunk=group.iloc[start:end],
+                bess_params=bess_params,
+                forecast_price_col=forecast_price_col,
+                soc_start_mwh=soc_carry,
+                chunk_idx=chunk_counter,
+                sp_duration_hrs=sp_duration_hrs,
+                n_sps_per_day=n_sps_per_day,
+            )
 
-        print(f"Completed chunk {idx + 1}/{n_chunks}")
+            chunks_solved.append(solved)
+            soc_carry = float(solved["soc_mwh"].iloc[-1])
 
     out = pd.concat(chunks_solved, ignore_index=True)
 
@@ -589,7 +638,8 @@ def calculate_settlement(
         )
 
     df = df.copy()
-    deg = float(bess_params["deg_cost_gbp_mwh"])
+    deg             = float(bess_params["deg_cost_gbp_mwh"])
+    export_limit_mw = float(bess_params["export_limit_mw"])
 
     # ------------------------------------------------------------------
     # BESS P&L — dispatch driven
@@ -613,7 +663,14 @@ def calculate_settlement(
     df["dis1_saving_gbp"]      = df["dis1_mw"]    * sp_duration_hrs * df["import_rate_gbp"]
     df["dis2_revenue_gbp"]     = df["dis2_mw"]    * sp_duration_hrs * df["export_rate_gbp"]
     df["charge2_cost_gbp"]     = df["charge2_mw"] * sp_duration_hrs * df["import_rate_gbp"]
-    df["charge1_opp_cost_gbp"] = df["charge1_mw"] * sp_duration_hrs * df["export_rate_gbp"]
+
+    # charge1 opportunity cost applies only to surplus that could actually have
+    # been exported (above the curtailable excess). At export_limit=0 the whole
+    # surplus is curtailable, so absorbing it carries no foregone-export cost.
+    surplus_mw     = (-df["net_demand_mw"]).clip(lower=0)
+    curtailable_mw = (surplus_mw - export_limit_mw).clip(lower=0)
+    opp_cost_mw    = (df["charge1_mw"] - curtailable_mw).clip(lower=0)
+    df["charge1_opp_cost_gbp"] = opp_cost_mw * sp_duration_hrs * df["export_rate_gbp"]
     df["deg_cost_gbp"]         = (
         (df["charge1_mw"] + df["charge2_mw"] + df["dis1_mw"] + df["dis2_mw"])
         * sp_duration_hrs

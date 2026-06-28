@@ -89,7 +89,7 @@ class CsvRunParams:
         voltage_level: str = Form("LV", description="'LV' or 'HV'. Defaults to LV."),
         # --- BESS matrix (multi-scenario) ---
         bess_configs_json: str = Form(..., description="JSON array of {power_mw, capacity_mwh} objects"),
-        export_limits_json: str = Form(..., description="JSON array of export limit values (MW, must be > 0)"),
+        export_limits_json: str = Form(..., description="JSON array of export limit values (MW, >= 0; 0 = no export)"),
         bess_rte_pct: float = Form(90.0, description="Round-trip efficiency (%) — fallback if charge/discharge eff not provided"),
         bess_max_cycles: float = Form(1.5, description="Max charge+discharge cycles per day"),
         bess_charge_eff_pct: Optional[float] = Form(None, description="One-way charge efficiency (%). Defaults to sqrt(RTE)."),
@@ -141,6 +141,30 @@ class CsvRunParams:
                 status_code=422,
                 detail="price_exposure must be 'da' or 'imbalance'.",
             )
+        # --- Validate RAG band time windows (HH:MM, 00:00–23:59; blank allowed) ---
+        def _check_hhmm(label: str, v):
+            if v in (None, ""):
+                return
+            try:
+                h, m = str(v).split(":")
+                if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59):
+                    raise ValueError
+            except Exception:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid time '{v}' for {label} — expected HH:MM (00:00–23:59).",
+                )
+
+        for _lbl, _val in [
+            ("rag_red_start", rag_red_start), ("rag_red_end", rag_red_end),
+            ("rag_amber_morning_start", rag_amber_morning_start),
+            ("rag_amber_morning_end", rag_amber_morning_end),
+            ("rag_amber_evening_start", rag_amber_evening_start),
+            ("rag_amber_evening_end", rag_amber_evening_end),
+            ("rag_weekend_amber_start", rag_weekend_amber_start),
+            ("rag_weekend_amber_end", rag_weekend_amber_end),
+        ]:
+            _check_hhmm(_lbl, _val)
         # --- Validate BESS configs ---
         try:
             raw_configs = _json.loads(bess_configs_json)
@@ -171,8 +195,8 @@ class CsvRunParams:
         parsed_limits: list[float] = []
         for v in raw_limits:
             fv = float(v)
-            if fv <= 0:
-                raise HTTPException(status_code=422, detail=f"All export limits must be > 0, got {fv}.")
+            if fv < 0:
+                raise HTTPException(status_code=422, detail=f"Export limits must be >= 0, got {fv}.")
             parsed_limits.append(fv)
         total_scenarios = len(raw_configs) * len(parsed_limits)
         if total_scenarios > 12:

@@ -187,7 +187,7 @@ _DETAIL_COLS = [
 
 
 def _write_detail_sheet(wb, scenario):
-    """Stream one SP-level detail sheet per scenario using ws.append()."""
+    """Stream one interval-level detail sheet per scenario using ws.append()."""
     label        = scenario["scenario_label"].iloc[0]
     export_limit = scenario["export_limit_mw"].iloc[0]
     site         = scenario["site_name"].iloc[0] if "site_name" in scenario.columns else ""
@@ -195,7 +195,11 @@ def _write_detail_sheet(wb, scenario):
     sheet_name   = "".join("-" if c in _EXCEL_ILLEGAL else c for c in raw).replace(".", "p").replace(" ", "")[:31]
 
     scenario = scenario.copy()
-    scenario["startTime"] = pd.to_datetime(scenario["startTime"]).dt.tz_localize(None)
+    # Excel rows in UK local time so they align with the user's bill/CSV.
+    _st = pd.to_datetime(scenario["startTime"])
+    if _st.dt.tz is not None:
+        _st = _st.dt.tz_convert("Europe/London").dt.tz_localize(None)
+    scenario["startTime"] = _st
 
     ws   = wb.create_sheet(title=sheet_name)
     ws.sheet_format.defaultColWidth = 26
@@ -229,7 +233,7 @@ def build_report(all_results, output_path, job_id=None):
 
     Uses openpyxl write_only mode — each row is streamed to disk as it is
     appended, so the workbook never holds more than one row's worth of data
-    in memory regardless of how many scenarios or SP rows are written.
+    in memory regardless of how many scenarios or interval rows are written.
 
     Args:
         all_results  : list of scenario DataFrames or pickle file paths (str).
@@ -248,7 +252,7 @@ def build_report(all_results, output_path, job_id=None):
     Output sheets (in order):
         Metadata     : job_id + generated timestamp (only when job_id provided)
         Summary      : one row per scenario, full P&L stack, sorted by net benefit
-        <scenario>   : one SP-level detail sheet per scenario
+        <scenario>   : one interval-level detail sheet per scenario
     """
     if not all_results:
         raise ValueError("all_results is empty — nothing to report.")

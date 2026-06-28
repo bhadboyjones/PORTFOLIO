@@ -54,8 +54,12 @@ def pull_system_prices(start_date=None, end_date=None, months_back=12, force_ref
     else:
         start, end = get_trailing_date_range(months_back)
     
+    # Treat a cache whose end date is within 2 days of today as stale — Elexon may
+    # not have published all SPs when it was first written, and a gap would
+    # otherwise be frozen in permanently.
+    stale = end >= (date.today() - timedelta(days=2))
     cache_file = CACHE_DIR / f"system_prices_{start}_{end}.parquet"
-    if cache_file.exists() and not force_refresh:
+    if cache_file.exists() and not force_refresh and not stale:
         print(f"Loading cached: {cache_file.name}")
         return pd.read_parquet(cache_file)
     
@@ -118,8 +122,10 @@ def pull_mid_prices(start_date=None, end_date=None, months_back=12, force_refres
     else:
         start, end = get_trailing_date_range(months_back)
     
+    # Treat a near-current cache as stale (see pull_system_prices for rationale).
+    stale = end >= (date.today() - timedelta(days=2))
     cache_file = CACHE_DIR / f"mid_prices_{start}_{end}.parquet"
-    if cache_file.exists() and not force_refresh:
+    if cache_file.exists() and not force_refresh and not stale:
         print(f"Loading cached: {cache_file.name}")
         return pd.read_parquet(cache_file)
     
@@ -277,6 +283,13 @@ def build_price_df(start_date=None, end_date=None, force_refresh=False):
         - da_price_gbp: MID day-ahead price (£/MWh)
         - imb_price_gbp: System sell price (£/MWh)
     """
+    # A single-day CSV gives start == end; the MID stream loop (while current < final)
+    # would never run and return an empty frame. Extend the end by one day so the
+    # day's SPs are fetched — the later left-join drops the surplus day.
+    if start_date is not None and end_date is not None:
+        if pd.Timestamp(start_date).date() == pd.Timestamp(end_date).date():
+            end_date = pd.Timestamp(end_date).date() + timedelta(days=1)
+
     # Pull both series
     df_da = pull_mid_prices(
         start_date=start_date,

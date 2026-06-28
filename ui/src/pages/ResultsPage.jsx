@@ -178,21 +178,31 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
           </div>
         )}
         {mode === "csv" && (
-          <div style={{
-            marginBottom: "1rem",
-            fontSize: "0.72rem",
-            color: "#4a6b8c",
-            background: "rgba(0,200,232,0.03)",
-            border: "1px solid rgba(0,200,232,0.1)",
-            borderRadius: 5,
-            padding: "0.4rem 0.75rem",
-            display: "inline-block",
-          }}>
-            ⓘ{" "}
-            {dataPeriod
-              ? `Results cover ${fmtDate(dataPeriod.start)} – ${fmtDate(dataPeriod.end)} (${dataPeriod.n_days} days) · `
-              : ""}
-            Upper-bound estimate — dispatch optimised with perfect price foresight
+          <div style={{ marginBottom: "1rem" }}>
+            <div style={{
+              fontSize: "0.72rem",
+              color: "#4a6b8c",
+              background: "rgba(0,200,232,0.03)",
+              border: "1px solid rgba(0,200,232,0.1)",
+              borderRadius: 5,
+              padding: "0.4rem 0.75rem",
+              display: "inline-block",
+            }}>
+              ⓘ{" "}
+              {dataPeriod
+                ? `Results cover ${fmtDate(dataPeriod.start)} – ${fmtDate(dataPeriod.end)} (${dataPeriod.n_days} days) · `
+                : ""}
+              Upper-bound estimate — dispatch optimised with perfect price foresight
+            </div>
+            <div style={{ fontSize: "0.7rem", color: "#2a4772", marginTop: "0.4rem", lineHeight: 1.6 }}>
+              net_demand_mw is treated as metered boundary flow — on-site generation is already reflected.
+              {dataPeriod?.resolution === "hourly" && (
+                <>
+                  {" "}For hourly data, the DUoS band is assigned by start-of-hour timestamp
+                  (e.g. 16:00 → Red, 19:00 → Amber evening); no intra-hour band splitting is applied.
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -219,8 +229,8 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
         {/* KPI cards */}
         <KpiCards topScenario={topScenario} />
 
-        {/* Baseline breakdown — CSV mode only */}
-        {mode === "csv" && <BaselineBreakdown topScenario={topScenario} />}
+        {/* Baseline breakdown — shown in both modes (both serialisers emit the fields) */}
+        <BaselineBreakdown topScenario={topScenario} />
 
         {/* Scenario table */}
         <div style={{ marginBottom: "2rem" }}>

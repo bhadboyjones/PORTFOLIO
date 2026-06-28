@@ -1,4 +1,7 @@
-const API_BASE_URL = "https://flexiq-5eo2.onrender.com";
+// Override per-environment with VITE_API_BASE_URL (e.g. http://localhost:8000
+// for local dev). Falls back to the Render deployment.
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://flexiq-5eo2.onrender.com";
 
 export async function getArchetypes() {
   const res = await fetch(`${API_BASE_URL}/archetypes`);

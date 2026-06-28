@@ -58,7 +58,7 @@ export default function KpiCards({ topScenario }) {
       <Card title="Best Net Benefit"    value={`£${fmt(topScenario.net_benefit_gbp)}`}       sub={label}                        accent />
       <Card title="Site Cost (no BESS)" value={`£${fmt(topScenario.site_cost_wo_bess_gbp)}`} sub="top scenario" />
       <Card title="Site Cost (w/ BESS)" value={`£${fmt(topScenario.site_cost_w_bess_gbp)}`}  sub="vs no BESS" />
-      <Card title="Net Benefit"         value={`£${fmt(topScenario.net_benefit_gbp)}`}       sub="BESS dispatch contribution" />
+      <Card title="Value / kWh Cycled"  value={`£${fmt(topScenario.gbp_per_kwh, 3)}`}        sub="net benefit ÷ throughput" />
       <Card title="Total Throughput"    value={`${fmt(topScenario.total_throughput_mwh)} MWh`} sub="top scenario" />
       <Card title="Peak Dispatch"       value={`${topScenario.peak_dispatch_mw} MW`}          sub="top scenario" />
     </div>
