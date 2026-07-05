@@ -4,20 +4,22 @@ import { DEFAULT_WEEKDAY_BANDS } from "./dayTapeBands";
 
 const pad = (n) => String(n).padStart(2, "0");
 
-function slotLabel(i, band) {
-  const h0 = Math.floor(i / 2);
-  const m0 = i % 2 ? 30 : 0;
-  const h1 = Math.floor((i + 1) / 2) % 24;
-  const m1 = (i + 1) % 2 ? 30 : 0;
+// Segment tooltip: a time-of-day slot and its DUoS band. The number of
+// segments is visual resolution, not a settlement-period claim.
+function slotLabel(i, n, band) {
+  const perHour = n / 24;
+  const startMin = (i / perHour) * 60;
+  const endMin = ((i + 1) / perHour) * 60;
+  const fmt = (mins) => `${pad(Math.floor(mins / 60) % 24)}:${pad(Math.round(mins % 60))}`;
   const bandName = band.charAt(0).toUpperCase() + band.slice(1);
-  return `SP ${i + 1} · ${pad(h0)}:${pad(m0)}–${pad(h1)}:${pad(m1)} · ${bandName}`;
+  return `${fmt(startMin)}–${fmt(endMin)} · ${bandName}`;
 }
 
 export default function DayTape({
   bands = DEFAULT_WEEKDAY_BANDS,
   variant = "divider",
   showTicks = false,
-  ariaLabel = "One day of settlement periods coloured by DUoS band — Red 16:00–19:00",
+  ariaLabel = "A representative DUoS day — charge in green overnight, discharge into the red peak",
 }) {
   const hero = variant === "hero";
   return (
@@ -33,7 +35,7 @@ export default function DayTape({
             key={i}
             className="day-tape__seg is-filled"
             data-band={band}
-            title={hero ? slotLabel(i, band) : undefined}
+            title={hero ? slotLabel(i, bands.length, band) : undefined}
           />
         ))}
         {hero && <div className="day-tape__wave" aria-hidden="true" />}
