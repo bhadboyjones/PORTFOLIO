@@ -1,23 +1,76 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* ════════════════════════════════════════════════════════════════
+   flexiq — "Night Grid" design tokens
+   Canonical tokens first; legacy aliases keep older inline styles
+   working. Chart colours mirrored in components/chartTheme.js —
+   keep in sync.
+   ════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg-base:        #080e1a;
-  --bg-surface:     #0f1928;
-  --bg-card:        #152236;
-  --bg-card-hover:  #1a2a42;
-  --border:         #1e3352;
-  --border-bright:  #2a4772;
-  --text-pri:       #e0eaf8;
-  --text-sec:       #7ba0c8;
-  --text-dim:       #4a6b8c;
-  --accent:         #00c8e8;
-  --accent-hover:   #00b8d4;
-  --accent-dim:     rgba(0, 200, 232, 0.10);
-  --accent-glow:    rgba(0, 200, 232, 0.22);
-  --positive:       #00e5a0;
-  --negative:       #ff5577;
-  --amber:          #ff9f40;
+  /* ── canonical ─────────────────────────────────────────────── */
+  --void:      #0A0F1C;   /* page background */
+  --panel:     #121C30;   /* cards / surfaces */
+  --grid-line: #24344F;   /* borders, hairlines */
+  --paper:     #E6EEF8;   /* primary text */
+  --signal:    #00C8E8;   /* cyan — discharge / action / CTA */
+  --charge:    #FFB03A;   /* amber — charge / energy-in */
+  --positive:  #00E5A0;
+  --negative:  #FF5577;
+
+  /* DUoS band triad — tariff-band contexts only (Day Tape, rates) */
+  --band-red:   var(--negative);
+  --band-amber: var(--charge);
+  --band-green: var(--positive);
+
+  /* alpha steps — inline styles can't derive alphas from tokens */
+  --signal-a05: rgba(0, 200, 232, 0.05);
+  --signal-a08: rgba(0, 200, 232, 0.08);
+  --signal-a10: rgba(0, 200, 232, 0.10);
+  --signal-a15: rgba(0, 200, 232, 0.15);
+  --signal-a25: rgba(0, 200, 232, 0.25);
+  --signal-a40: rgba(0, 200, 232, 0.40);
+  --charge-a15:   rgba(255, 176, 58, 0.15);
+  --negative-a10: rgba(255, 85, 119, 0.10);
+  --negative-a30: rgba(255, 85, 119, 0.30);
+  --positive-a12: rgba(0, 229, 160, 0.12);
+
+  /* ── legacy aliases (pre-overhaul names) ───────────────────── */
+  --bg-base:       var(--void);
+  --bg-surface:    #0E1726;
+  --bg-card:       var(--panel);
+  --bg-card-hover: #17233C;
+  --border:        var(--grid-line);
+  --border-bright: #2E4266;
+  --text-pri:      var(--paper);
+  --text-sec:      #8FA9C9;
+  --text-dim:      #4A6B8C;
+  --accent:        var(--signal);
+  --accent-hover:  #00B4D2;
+  --accent-dim:    var(--signal-a10);
+  --accent-glow:   var(--signal-a25);
+  --amber:         var(--charge);
+  --warn:          var(--charge);
+
+  /* ── motion ────────────────────────────────────────────────── */
+  --ease-flex: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 150ms;
+  --dur-med:  300ms;
+  --dur-slow: 500ms;
+
+  /* ── type ──────────────────────────────────────────────────── */
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0.01ms; --dur-med: 0.01ms; --dur-slow: 0.01ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── base ─────────────────────────────────────────────────────── */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -25,7 +78,7 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg-base);
   color: var(--text-pri);
   -webkit-font-smoothing: antialiased;
@@ -49,24 +102,157 @@ select {
 ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-/* Animations */
+/* ── focus ────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+input:focus-visible + .toggle-track {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+.recharts-wrapper:focus-visible { outline-offset: -2px; }
+
+/* ── utilities ────────────────────────────────────────────────── */
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.lift {
+  transition:
+    transform    var(--dur-fast) var(--ease-flex),
+    border-color var(--dur-fast) var(--ease-flex),
+    box-shadow   var(--dur-fast) var(--ease-flex),
+    background   var(--dur-fast) var(--ease-flex);
+}
+.lift:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--border-bright);
+}
+.lift-glow:hover:not(:disabled) {
+  box-shadow: 0 0 20px var(--signal-a15);
+}
+
+/* view transitions — keyed wrapper in App.jsx re-mounts per view */
+.view-enter {
+  animation: view-enter var(--dur-med) var(--ease-flex) both;
+}
+@keyframes view-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* staggered KPI entrance — delay set inline per card */
+.kpi-enter {
+  animation: view-enter var(--dur-slow) var(--ease-flex) both;
+}
+
+/* ── responsive grids (media queries need stylesheet classes) ─── */
+
+.bess-matrix-scroll { overflow-x: auto; }
+.bess-matrix-scroll > div { min-width: 460px; }
+
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.adv-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.adv-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+
+.tab-bar {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+
+@media (max-width: 640px) {
+  .export-grid { grid-template-columns: repeat(2, 1fr); }
+  .adv-grid-3  { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .adv-grid-2, .adv-grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ── Day Tape — 48 settlement periods, coloured by DUoS band ──── */
+
+.day-tape {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+.day-tape--hero    { height: 36px; }
+.day-tape--divider { height: 6px; opacity: 0.55; }
+
+.day-tape__seg {
+  flex: 1;
+  border-radius: 1px;
+  background: var(--seg-color);
+  opacity: 0.32;
+  transition: opacity var(--dur-med) var(--ease-flex);
+}
+.day-tape__seg[data-band="red"]   { --seg-color: var(--band-red); }
+.day-tape__seg[data-band="amber"] { --seg-color: var(--band-amber); }
+.day-tape__seg[data-band="green"] { --seg-color: var(--band-green); }
+.day-tape__seg.is-filled { opacity: 1; }
+
+.day-tape__wave {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--signal-a25) 40%,
+    var(--charge-a15) 70%,
+    transparent
+  );
+  animation: tape-wave 8s linear infinite;
+}
+@keyframes tape-wave {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(433%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .day-tape__wave { display: none; }
+}
+
+/* ── Charging SLD (progress screen) ───────────────────────────── */
+
+.sld-flow {
+  stroke-dasharray: 6 8;
+  animation: sld-dash 1.2s linear infinite;
+}
+@keyframes sld-dash {
+  to { stroke-dashoffset: -14; }
+}
+.sld-complete {
+  animation: sld-pulse 600ms var(--ease-flex) both;
+}
+@keyframes sld-pulse {
+  0%   { filter: drop-shadow(0 0 0 transparent); }
+  50%  { filter: drop-shadow(0 0 14px var(--signal-a40)); }
+  100% { filter: drop-shadow(0 0 0 transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sld-flow { animation: none; }
+}
+
+/* ── animations (legacy) ──────────────────────────────────────── */
+
 @keyframes pulse-dot {
   0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 var(--accent-glow); }
   50%       { transform: scale(1.15); opacity: 0.85; box-shadow: 0 0 0 8px transparent; }
 }
 
-@keyframes progress-shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
-}
-
 .pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
-}
-
-.progress-fill {
-  background: linear-gradient(90deg, var(--accent) 0%, #00e5ff 50%, var(--accent) 100%);
-  background-size: 200% auto;
-  animation: progress-shimmer 2.5s linear infinite;
-  transition: width 0.5s ease;
 }

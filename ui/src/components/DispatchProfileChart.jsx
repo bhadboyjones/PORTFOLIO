@@ -3,32 +3,11 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
   Legend, ReferenceLine, CartesianGrid, ResponsiveContainer,
 } from "recharts";
-
-const tooltipStyle = {
-  contentStyle: { background: "#152236", border: "1px solid #1e3352", borderRadius: 6, color: "#e0eaf8", fontSize: "0.82rem" },
-  labelStyle:   { color: "#7ba0c8", marginBottom: 4 },
-  itemStyle:    { color: "#e0eaf8" },
-};
-
-const selectStyle = {
-  padding: "0.35rem 0.6rem",
-  border: "1px solid #1e3352",
-  borderRadius: 5,
-  fontSize: "0.82rem",
-  background: "#0f1928",
-  color: "#e0eaf8",
-  outline: "none",
-};
-
-const inputStyle = {
-  padding: "0.35rem 0.6rem",
-  border: "1px solid #1e3352",
-  borderRadius: 5,
-  fontSize: "0.82rem",
-  background: "#0f1928",
-  color: "#e0eaf8",
-  outline: "none",
-};
+import useReducedMotion from "../hooks/useReducedMotion";
+import {
+  CHART_COLORS, tooltipProps, axisTick, axisLineProps,
+  gridProps, legendStyle, seriesAnimation, controlStyles,
+} from "./chartTheme";
 
 function fmtTime(dateStr) {
   if (!dateStr) return "";
@@ -45,9 +24,8 @@ function addDays(dateStr, n) {
   return d.toISOString().slice(0, 10);
 }
 
-const fieldLabel = { fontSize: "0.72rem", fontWeight: 700, color: "#4a6b8c", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 6 };
-
 export default function DispatchProfileChart({ rankedScenarios }) {
+  const reduced = useReducedMotion();
   const [scenarioIdx, setScenarioIdx] = useState(0);
   const scenario = rankedScenarios[scenarioIdx];
   const ts       = scenario?.dispatch_timeseries ?? [];
@@ -74,42 +52,43 @@ export default function DispatchProfileChart({ rankedScenarios }) {
     })), [scenario, effectiveStart, effectiveEnd]);
 
   const tickInterval = Math.max(1, Math.floor(chartData.length / 8));
+  const anim = seriesAnimation(reduced);
 
   return (
     <div>
       <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginBottom: "1rem", alignItems: "flex-end" }}>
         <label>
-          <span style={fieldLabel}>Scenario</span>
-          <select value={scenarioIdx} onChange={(e) => setScenarioIdx(Number(e.target.value))} style={selectStyle}>
+          <span style={controlStyles.fieldLabel}>Scenario</span>
+          <select value={scenarioIdx} onChange={(e) => setScenarioIdx(Number(e.target.value))} style={controlStyles.select}>
             {rankedScenarios.map((s, i) => (
               <option key={i} value={i}>{s.scenario_label} | {s.export_limit_mw} MW export</option>
             ))}
           </select>
         </label>
         <label>
-          <span style={fieldLabel}>From</span>
-          <input type="date" value={windowStart || fullStart} min={fullStart} max={fullEnd} onChange={(e) => setWindowStart(e.target.value)} style={inputStyle} />
+          <span style={controlStyles.fieldLabel}>From</span>
+          <input type="date" value={windowStart || fullStart} min={fullStart} max={fullEnd} onChange={(e) => setWindowStart(e.target.value)} style={controlStyles.input} />
         </label>
         <label>
-          <span style={fieldLabel}>To</span>
-          <input type="date" value={windowEnd || defaultEnd} min={fullStart} max={fullEnd} onChange={(e) => setWindowEnd(e.target.value)} style={inputStyle} />
+          <span style={controlStyles.fieldLabel}>To</span>
+          <input type="date" value={windowEnd || defaultEnd} min={fullStart} max={fullEnd} onChange={(e) => setWindowEnd(e.target.value)} style={controlStyles.input} />
         </label>
       </div>
 
       <ResponsiveContainer width="100%" height={340}>
         <ComposedChart data={chartData} margin={{ top: 8, right: 60, left: 10, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e3352" />
-          <XAxis dataKey="time" tickFormatter={fmtTime} tick={{ fill: "#7ba0c8", fontSize: 10 }} interval={tickInterval} axisLine={{ stroke: "#1e3352" }} tickLine={false} />
-          <YAxis yAxisId="mw"  tickFormatter={(v) => `${v} MW`}  tick={{ fill: "#7ba0c8", fontSize: 11 }} width={58}  axisLine={false} tickLine={false} />
-          <YAxis yAxisId="mwh" orientation="right" tickFormatter={(v) => `${v} MWh`} tick={{ fill: "#7ba0c8", fontSize: 11 }} width={62} axisLine={false} tickLine={false} />
-          <Tooltip formatter={(v, name) => name === "soc_mwh" ? fmtMwh(v) : fmtMw(v)} labelFormatter={fmtTime} {...tooltipStyle} />
-          <Legend wrapperStyle={{ fontSize: 12, color: "#7ba0c8" }} />
-          <ReferenceLine yAxisId="mw" y={0} stroke="#2a4772" />
-          <Bar yAxisId="mw" dataKey="dis1_mw"    stackId="a" fill="#00c8e8" name="Discharge (demand)" />
-          <Bar yAxisId="mw" dataKey="dis2_mw"    stackId="a" fill="#00e5a0" name="Discharge (export)" />
-          <Bar yAxisId="mw" dataKey="charge1_mw" stackId="a" fill="#ff9f40" name="Charge (surplus)" />
-          <Bar yAxisId="mw" dataKey="charge2_mw" stackId="a" fill="#ff5577" name="Charge (grid)" />
-          <Line yAxisId="mwh" dataKey="soc_mwh" stroke="#b48efe" dot={false} strokeWidth={2} name="SOC (MWh)" />
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="time" tickFormatter={fmtTime} tick={{ ...axisTick, fontSize: 10 }} interval={tickInterval} axisLine={axisLineProps} tickLine={false} />
+          <YAxis yAxisId="mw"  tickFormatter={(v) => `${v} MW`}  tick={axisTick} width={58}  axisLine={false} tickLine={false} />
+          <YAxis yAxisId="mwh" orientation="right" tickFormatter={(v) => `${v} MWh`} tick={axisTick} width={62} axisLine={false} tickLine={false} />
+          <Tooltip formatter={(v, name) => name === "SOC (MWh)" ? fmtMwh(v) : fmtMw(v)} labelFormatter={fmtTime} {...tooltipProps} />
+          <Legend wrapperStyle={legendStyle} />
+          <ReferenceLine yAxisId="mw" y={0} stroke={CHART_COLORS.refLine} />
+          <Bar yAxisId="mw" dataKey="dis1_mw"    stackId="a" fill={CHART_COLORS.signal}   name="Discharge (demand)" {...anim} />
+          <Bar yAxisId="mw" dataKey="dis2_mw"    stackId="a" fill={CHART_COLORS.positive} name="Discharge (export)" {...anim} />
+          <Bar yAxisId="mw" dataKey="charge1_mw" stackId="a" fill={CHART_COLORS.charge}   name="Charge (surplus)"   {...anim} />
+          <Bar yAxisId="mw" dataKey="charge2_mw" stackId="a" fill={CHART_COLORS.negative} name="Charge (grid)"      {...anim} />
+          <Line yAxisId="mwh" dataKey="soc_mwh" stroke={CHART_COLORS.soc} dot={false} strokeWidth={2} name="SOC (MWh)" {...anim} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

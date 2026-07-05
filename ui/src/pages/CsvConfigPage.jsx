@@ -278,39 +278,39 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080e1a" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
 
       {/* Hero */}
       <div style={{
-        background: "#0f1928",
+        background: "var(--bg-surface)",
         backgroundImage: `
           linear-gradient(rgba(0,200,232,0.04) 1px, transparent 1px),
           linear-gradient(90deg, rgba(0,200,232,0.04) 1px, transparent 1px)
         `,
         backgroundSize: "48px 48px",
-        borderBottom: "1px solid #1e3352",
+        borderBottom: "1px solid var(--border)",
         padding: "2.5rem 1.5rem 2rem",
       }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem" }}>
-            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.025em" }}>
-              flex<span style={{ color: "#00c8e8" }}>iq</span>
+            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.02em" }}>
+              flex<span style={{ color: "var(--accent)" }}>iq</span>
             </h1>
             <span style={{
-              fontSize: "0.62rem", fontWeight: 700, color: "#00c8e8",
-              background: "rgba(0,200,232,0.1)", border: "1px solid rgba(0,200,232,0.25)",
+              fontSize: "0.62rem", fontWeight: 700, color: "var(--accent)",
+              background: "var(--signal-a10)", border: "1px solid var(--signal-a25)",
               borderRadius: 3, padding: "0.12rem 0.4rem", letterSpacing: "0.1em", textTransform: "uppercase",
             }}>BETA</span>
           </div>
-          <p style={{ margin: "0 0 1rem", color: "#7ba0c8", fontSize: "0.9rem" }}>
+          <p style={{ margin: "0 0 1rem", color: "var(--text-sec)", fontSize: "0.9rem" }}>
             BTM BESS optimisation — site meter data upload
           </p>
           <p style={{
-            margin: 0, color: "#4a6b8c", fontSize: "0.8rem",
-            background: "rgba(0,200,232,0.05)", border: "1px solid rgba(0,200,232,0.12)",
+            margin: 0, color: "var(--text-dim)", fontSize: "0.8rem",
+            background: "var(--signal-a05)", border: "1px solid rgba(0,200,232,0.12)",
             borderRadius: 5, padding: "0.45rem 0.85rem", display: "inline-block",
           }}>
-            Upload your half-hourly meter data. flexiq will optimise dispatch against real market prices and your DNO tariff.
+            Upload your half-hourly or hourly meter data. flexiq will optimise dispatch against real market prices and your DNO tariff.
           </p>
         </div>
       </div>
@@ -321,18 +321,24 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
         {/* ── File Upload ─────────────────────────────── */}
         <Card label="Meter Data">
           <div
+            className="lift"
+            role="button"
+            tabIndex={0}
+            aria-label={file ? `Replace uploaded file ${file.name}` : "Upload meter data — CSV or XLSX"}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); }
+            }}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer?.files?.[0]; if (f) handleFileChange(f); }}
             onClick={() => fileInputRef.current?.click()}
             style={{
-              border: dragOver ? "1.5px dashed #00c8e8" : file ? "1.5px dashed rgba(0,200,232,0.4)" : "1.5px dashed #1e3352",
+              border: dragOver ? "1.5px dashed var(--accent)" : file ? "1.5px dashed var(--signal-a40)" : "1.5px dashed var(--border)",
               borderRadius: 8,
               padding: "1.75rem 1.5rem",
               textAlign: "center",
               cursor: "pointer",
-              background: dragOver ? "rgba(0,200,232,0.05)" : file ? "rgba(0,200,232,0.03)" : "#0f1928",
-              transition: "all 0.15s",
+              background: dragOver ? "var(--signal-a05)" : file ? "rgba(0,200,232,0.03)" : "var(--bg-surface)",
             }}
           >
             <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls"
@@ -341,8 +347,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             {file ? (
               <div>
                 <div style={{ fontSize: "1.1rem", marginBottom: "0.35rem" }}>📄</div>
-                <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "#e0eaf8" }}>{file.name}</div>
-                <div style={{ fontSize: "0.75rem", color: "#4a6b8c", marginTop: "0.25rem" }}>
+                <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-pri)" }}>{file.name}</div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>
                   {(file.size / 1024).toFixed(0)} KB · click to replace
                 </div>
                 {parsedMeta && (
@@ -366,30 +372,30 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   </div>
                 )}
                 {thermalGenWarning && (
-                  <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "#f59e0b",
-                    background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)",
+                  <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "var(--warn)",
+                    background: "rgba(255,176,58,0.08)", border: "1px solid rgba(255,176,58,0.2)",
                     borderRadius: 5, padding: "0.4rem 0.75rem", display: "inline-block" }}>
-                    Thermal generation is enabled but <code style={{ color: "#f59e0b" }}>thermal_gen_mw</code> column not found in this CSV
+                    Thermal generation is enabled but <code style={{ color: "var(--warn)" }}>thermal_gen_mw</code> column not found in this CSV
                   </div>
                 )}
               </div>
             ) : (
               <div>
-                <div style={{ fontSize: "1.4rem", marginBottom: "0.5rem", color: "#4a6b8c" }}>↑</div>
-                <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "#7ba0c8" }}>
+                <div style={{ fontSize: "1.4rem", marginBottom: "0.5rem", color: "var(--text-dim)" }}>↑</div>
+                <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-sec)" }}>
                   Drop CSV or XLSX here, or click to browse
                 </div>
-                <div style={{ fontSize: "0.75rem", color: "#4a6b8c", marginTop: "0.35rem" }}>
-                  Required: <code style={{ color: "#00c8e8" }}>timestamp</code>,{" "}
-                  <code style={{ color: "#00c8e8" }}>net_demand_mw</code>
-                  {" "}· Optional: <code style={{ color: "#00c8e8" }}>thermal_gen_mw</code>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+                  Required: <code style={{ color: "var(--accent)" }}>timestamp</code>,{" "}
+                  <code style={{ color: "var(--accent)" }}>net_demand_mw</code>
+                  {" "}· Optional: <code style={{ color: "var(--accent)" }}>thermal_gen_mw</code>
                 </div>
-                <div style={{ fontSize: "0.72rem", color: "#2a4772", marginTop: "0.4rem", lineHeight: 1.7 }}>
-                  <code style={{ color: "#4a6b8c" }}>net_demand_mw</code> is your boundary/grid meter reading – positive when the site is importing from the grid, negative when exporting.
+                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.4rem", lineHeight: 1.7 }}>
+                  <code style={{ color: "var(--text-dim)" }}>net_demand_mw</code> is your boundary/grid meter reading – positive when the site is importing from the grid, negative when exporting.
                   {" "}If your metering records grid flow directly, use that column as-is. If you only have submetered data, calculate it as:
                   <br />
-                  <code style={{ color: "#4a6b8c" }}>net_demand_mw = site_load_mw − (all other BTM generation)</code>
-                  {" "}e.g. <code style={{ color: "#4a6b8c" }}>pv_gen_mw</code>, <code style={{ color: "#4a6b8c" }}>wind_gen_mw</code>, <code style={{ color: "#4a6b8c" }}>thermal_gen_mw</code>
+                  <code style={{ color: "var(--text-dim)" }}>net_demand_mw = site_load_mw − (all other BTM generation)</code>
+                  {" "}e.g. <code style={{ color: "var(--text-dim)" }}>pv_gen_mw</code>, <code style={{ color: "var(--text-dim)" }}>wind_gen_mw</code>, <code style={{ color: "var(--text-dim)" }}>thermal_gen_mw</code>
                   <br />
                   PV, wind, and thermal generation must all be subtracted before uploading.
                 </div>
@@ -400,7 +406,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Site Configuration ──────────────────────── */}
         <Card label="Site Configuration">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div className="adv-grid-2" style={{ gap: "1rem" }}>
 
             {/* DNO */}
             <div style={{ gridColumn: "1 / -1" }}>
@@ -412,13 +418,13 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 ))}
               </select>
               {dnoRatesLoading && (
-                <div style={{ fontSize: "0.72rem", color: "#4a6b8c", marginTop: "0.3rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
                   Loading DNO rates…
                 </div>
               )}
               {dnoRateError && (
                 <div style={{
-                  fontSize: "0.72rem", color: "#ff5577", marginTop: "0.3rem",
+                  fontSize: "0.72rem", color: "var(--negative)", marginTop: "0.3rem",
                   background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.25)",
                   borderRadius: 5, padding: "0.4rem 0.6rem",
                 }}>
@@ -436,19 +442,19 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 {[{ value: "LV", label: "LV" }, { value: "HV", label: "HV" }, { value: "unknown", label: "Not sure" }].map(({ value, label }) => {
                   const active = voltageLevel === value;
                   return (
-                    <button key={value} onClick={() => handleVoltageChange(value)} style={{
+                    <button key={value} className="lift" aria-pressed={active} onClick={() => handleVoltageChange(value)} style={{
                       flex: 1, padding: "0.5rem",
-                      border: active ? "1px solid #00c8e8" : "1px solid #1e3352",
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
                       borderRadius: 6,
-                      background: active ? "rgba(0,200,232,0.1)" : "#0f1928",
-                      color: active ? "#00c8e8" : "#4a6b8c",
-                      cursor: "pointer", fontSize: "0.82rem", fontWeight: active ? 700 : 500, transition: "all 0.15s",
+                      background: active ? "var(--signal-a10)" : "var(--bg-surface)",
+                      color: active ? "var(--accent)" : "var(--text-dim)",
+                      cursor: "pointer", fontSize: "0.82rem", fontWeight: active ? 700 : 500,
                     }}>{label}</button>
                   );
                 })}
               </div>
               {voltageLevel === "unknown" && (
-                <div style={{ marginTop: "0.4rem", fontSize: "0.72rem", color: "#4a6b8c" }}>
+                <div style={{ marginTop: "0.4rem", fontSize: "0.72rem", color: "var(--text-dim)" }}>
                   Defaults to HV — lower DUoS rates give a conservative savings estimate. Select LV or HV if known.
                 </div>
               )}
@@ -461,13 +467,13 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 {[{ value: false, label: "No" }, { value: true, label: "Yes" }].map(({ value, label }) => {
                   const active = thermalGenToggle === value;
                   return (
-                    <button key={String(value)} onClick={() => setThermalGenToggle(value)} style={{
+                    <button key={String(value)} className="lift" aria-pressed={active} onClick={() => setThermalGenToggle(value)} style={{
                       flex: 1, padding: "0.5rem",
-                      border: active ? "1px solid #00c8e8" : "1px solid #1e3352",
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
                       borderRadius: 6,
-                      background: active ? "rgba(0,200,232,0.1)" : "#0f1928",
-                      color: active ? "#00c8e8" : "#4a6b8c",
-                      cursor: "pointer", fontSize: "0.82rem", fontWeight: active ? 700 : 500, transition: "all 0.15s",
+                      background: active ? "var(--signal-a10)" : "var(--bg-surface)",
+                      color: active ? "var(--accent)" : "var(--text-dim)",
+                      cursor: "pointer", fontSize: "0.82rem", fontWeight: active ? 700 : 500,
                     }}>{label}</button>
                   );
                 })}
@@ -486,9 +492,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   <div style={{
                     marginTop: "0.75rem",
                     fontSize: "0.72rem",
-                    color: "#4a6b8c",
-                    background: "rgba(245,158,11,0.05)",
-                    border: "1px solid rgba(245,158,11,0.15)",
+                    color: "var(--text-dim)",
+                    background: "rgba(255,176,58,0.05)",
+                    border: "1px solid rgba(255,176,58,0.15)",
                     borderRadius: 5,
                     padding: "0.5rem 0.75rem",
                     lineHeight: 1.6,
@@ -507,14 +513,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
         <Card label="BESS Configuration">
 
           {/* 3×3 power × capacity matrix */}
-          <div style={{ marginBottom: "1rem" }}>
+          <div className="bess-matrix-scroll" style={{ marginBottom: "1rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "112px repeat(3, 1fr)", gap: "0.4rem" }}>
 
               {/* Top-left corner */}
               <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "0.3rem" }}>
                 <span
                   title="Power (MW): max rate the battery can charge or discharge&#10;Capacity (MWh): total energy the battery can store"
-                  style={{ fontSize: "0.62rem", color: "#2a4772", lineHeight: 1.4, cursor: "help", borderBottom: "1px dotted #2a4772" }}
+                  style={{ fontSize: "0.62rem", color: "var(--text-dim)", lineHeight: 1.4, cursor: "help", borderBottom: "1px dotted var(--border-bright)" }}
                 >
                   Power ↓<br />Capacity →
                 </span>
@@ -558,6 +564,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   return (
                     <button
                       key={key}
+                      className="lift"
+                      aria-pressed={isSelected}
                       onClick={() => {
                         if (!cellValid) return;
                         setSelectedCells(prev => {
@@ -568,16 +576,15 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       }}
                       style={{
                         padding: "0.55rem 0.25rem",
-                        border: isSelected ? "1px solid #00c8e8" : "1px solid #1e3352",
+                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
                         borderRadius: 6,
-                        background: !cellValid ? "#0a111e" : isSelected ? "rgba(0,200,232,0.1)" : "#0f1928",
-                        color: !cellValid ? "#1e3352" : isSelected ? "#00c8e8" : "#4a6b8c",
+                        background: !cellValid ? "var(--bg-base)" : isSelected ? "var(--signal-a10)" : "var(--bg-surface)",
+                        color: !cellValid ? "var(--border)" : isSelected ? "var(--accent)" : "var(--text-dim)",
                         cursor: cellValid ? "pointer" : "not-allowed",
                         fontSize: "0.8rem",
                         fontWeight: isSelected ? 700 : 500,
                         textAlign: "center",
                         width: "100%",
-                        transition: "all 0.12s",
                       }}
                     >
                       {cellValid && dur !== null ? `${dur.toFixed(1)}h` : dur !== null && dur < 0.5 ? "< 0.5h" : dur !== null && dur > 6.0 ? "> 6h" : "—"}
@@ -586,7 +593,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 }),
               ])}
             </div>
-            <div style={{ fontSize: "0.7rem", color: "#2a4772", marginTop: "0.4rem" }}>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.4rem" }}>
               Click cells to select/deselect. Grey cells have duration outside 0.5–6 h.
             </div>
           </div>
@@ -603,9 +610,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
           </div>
 
           {/* Export limits */}
-          <div style={{ borderTop: "1px solid #1e3352", paddingTop: "1rem" }}>
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
             <FieldLabel>Export limits — up to 4 scenarios</FieldLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem" }}>
+            <div className="export-grid">
               {exportLimits.map((v, i) => (
                 <SuffixInput
                   key={i}
@@ -629,19 +636,19 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             fontSize: "0.82rem",
             padding: "0.45rem 0.85rem",
             background: "rgba(0,200,232,0.03)",
-            border: `1px solid ${scenarioCount > 12 ? "rgba(255,85,119,0.3)" : "#1e3352"}`,
+            border: `1px solid ${scenarioCount > 12 ? "var(--negative-a30)" : "var(--border)"}`,
             borderRadius: 5,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
           }}>
-            <span style={{ color: scenarioCount > 12 ? "#ff5577" : scenarioCount > 0 ? "#7ba0c8" : "#4a6b8c" }}>
-              <strong style={{ color: scenarioCount > 12 ? "#ff5577" : "#00c8e8" }}>{scenarioCount}</strong>
+            <span style={{ color: scenarioCount > 12 ? "var(--negative)" : scenarioCount > 0 ? "var(--text-sec)" : "var(--text-dim)" }}>
+              <strong className="tnum" style={{ color: scenarioCount > 12 ? "var(--negative)" : "var(--accent)" }}>{scenarioCount}</strong>
               {" "}scenario{scenarioCount !== 1 ? "s" : ""}
               {" "}({selectedCount} config{selectedCount !== 1 ? "s" : ""} × {validExportCount} export limit{validExportCount !== 1 ? "s" : ""})
             </span>
             {scenarioCount > 12 && (
-              <span style={{ fontSize: "0.72rem", color: "#ff5577" }}>max 12 — deselect some configs</span>
+              <span style={{ fontSize: "0.72rem", color: "var(--negative)" }}>max 12 — deselect some configs</span>
             )}
           </div>
 
@@ -649,26 +656,25 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Price Exposure ──────────────────────────── */}
         <Card label="Price Exposure">
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             {[
               { value: "da",        label: "Day-Ahead (DA)",     desc: "Settled against day-ahead market price" },
               { value: "imbalance", label: "Imbalance (System)", desc: "Settled against system imbalance price" },
             ].map(({ value, label, desc }) => {
               const active = priceExposure === value;
               return (
-                <button key={value} onClick={() => setPriceExposure(value)} style={{
-                  flex: 1, padding: "0.85rem 1rem",
-                  border: active ? "1px solid #00c8e8" : "1px solid #1e3352",
+                <button key={value} className="lift" aria-pressed={active} onClick={() => setPriceExposure(value)} style={{
+                  flex: 1, minWidth: 220, padding: "0.85rem 1rem",
+                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
                   borderRadius: 7,
-                  background: active ? "rgba(0,200,232,0.08)" : "#0f1928",
+                  background: active ? "var(--signal-a08)" : "var(--bg-surface)",
                   cursor: "pointer", textAlign: "left",
-                  boxShadow: active ? "0 0 16px rgba(0,200,232,0.1)" : "none",
-                  transition: "all 0.15s",
+                  boxShadow: active ? "0 0 16px var(--signal-a10)" : "none",
                 }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "#00c8e8" : "#7ba0c8", marginBottom: "0.25rem" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "var(--accent)" : "var(--text-sec)", marginBottom: "0.25rem" }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "#4a6b8c" }}>{desc}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{desc}</div>
                 </button>
               );
             })}
@@ -678,13 +684,15 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
         {/* ── Advanced ────────────────────────────────── */}
         <div style={{ marginBottom: "1rem" }}>
           <button
+            className="lift"
             onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
             style={{
               background: "none",
-              border: "1px solid #1e3352",
+              border: "1px solid var(--border)",
               borderRadius: 6,
               padding: "0.5rem 1rem",
-              color: advancedDirty ? "#00c8e8" : "#4a6b8c",
+              color: advancedDirty ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
               fontSize: "0.8rem",
               fontWeight: 600,
@@ -696,14 +704,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             }}
           >
             <span>⚙ Advanced settings{advancedDirty ? " (edited)" : ""}</span>
-            <span style={{ color: "#2a4772" }}>{showAdvanced ? "▲" : "▼"}</span>
+            <span style={{ color: "var(--text-dim)" }}>{showAdvanced ? "▲" : "▼"}</span>
           </button>
 
           {showAdvanced && (
             <div style={{
               marginTop: "0.5rem",
-              background: "#152236",
-              border: "1px solid #1e3352",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
               borderRadius: 10,
               padding: "1.5rem",
             }}>
@@ -713,8 +721,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 <div style={{
                   marginBottom: "1.25rem",
                   padding: "0.85rem 1rem",
-                  background: "rgba(245,158,11,0.08)",
-                  border: "1px solid rgba(245,158,11,0.3)",
+                  background: "rgba(255,176,58,0.08)",
+                  border: "1px solid rgba(255,176,58,0.3)",
                   borderRadius: 7,
                   display: "flex",
                   alignItems: "center",
@@ -722,14 +730,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   gap: "1rem",
                   flexWrap: "wrap",
                 }}>
-                  <span style={{ fontSize: "0.82rem", color: "#f59e0b" }}>
+                  <span style={{ fontSize: "0.82rem", color: "var(--warn)" }}>
                     DNO changed to <strong>{pendingDnoChange.dno}</strong>. Reset rates to new DNO defaults?
                   </span>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button onClick={confirmDnoReset} style={{ ...smallBtn, borderColor: "#f59e0b", color: "#f59e0b", background: "rgba(245,158,11,0.1)" }}>
+                    <button onClick={confirmDnoReset} style={{ ...smallBtn, borderColor: "var(--warn)", color: "var(--warn)", background: "rgba(255,176,58,0.1)" }}>
                       Yes, reset
                     </button>
-                    <button onClick={keepCurrentRates} style={{ ...smallBtn, borderColor: "#1e3352", color: "#4a6b8c" }}>
+                    <button onClick={keepCurrentRates} style={{ ...smallBtn, borderColor: "var(--border)", color: "var(--text-dim)" }}>
                       Keep current
                     </button>
                   </div>
@@ -737,8 +745,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               )}
 
               {ragWarning && (
-                <div style={{ marginBottom: "1rem", fontSize: "0.75rem", color: "#f59e0b",
-                  background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.2)",
+                <div style={{ marginBottom: "1rem", fontSize: "0.75rem", color: "var(--warn)",
+                  background: "rgba(255,176,58,0.06)", border: "1px solid rgba(255,176,58,0.2)",
                   borderRadius: 5, padding: "0.4rem 0.75rem" }}>
                   {ragWarning}
                 </div>
@@ -746,14 +754,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {/* Site assumptions */}
               <AdvancedSection label="Site Assumptions">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="adv-grid-2">
                   <div>
                     <FieldLabel>Non-energy charges</FieldLabel>
                     <SuffixInput type="number" step="0.01" min="0"
                       value={advanced.necGbpMwh}
                       onChange={(e) => updateAdv("necGbpMwh", e.target.value)}
                       suffix="£/MWh" />
-                    <div style={{ fontSize: "0.7rem", color: "#2a4772", marginTop: "0.2rem" }}>EII-exempt sites: 43.75</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>EII-exempt sites: 43.75</div>
                   </div>
                   <div>
                     <FieldLabel>Contracted capacity</FieldLabel>
@@ -768,7 +776,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {/* DUoS rates */}
               <AdvancedSection label="DUoS Import Rates">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                <div className="adv-grid-3">
                   {[["Red", "duosRed"], ["Amber", "duosAmber"], ["Green", "duosGreen"]].map(([band, key]) => (
                     <div key={key}>
                       <FieldLabel>{band}</FieldLabel>
@@ -783,7 +791,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {/* GDUoS credits */}
               <AdvancedSection label="GDUoS Export Credits (enter as positive)">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                <div className="adv-grid-3">
                   {[["Red", "gduosRed"], ["Amber", "gduosAmber"], ["Green", "gduosGreen"]].map(([band, key]) => (
                     <div key={key}>
                       <FieldLabel>{band}</FieldLabel>
@@ -798,7 +806,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {/* Standing charges */}
               <AdvancedSection label="Standing Charges">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                <div className="adv-grid-3">
                   <div>
                     <FieldLabel>DUoS fixed</FieldLabel>
                     <SuffixInput type="number" step="0.01" min="0"
@@ -825,13 +833,13 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {/* RAG band time windows */}
               <AdvancedSection label="DUoS Time Band Windows (HH:MM)">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div className="adv-grid-2" style={{ gap: "1rem" }}>
 
                   <div>
-                    <FieldLabel style={{ color: "#ef4444" }}>Red band (weekday)</FieldLabel>
+                    <FieldLabel style={{ color: "var(--negative)" }}>Red band (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput value={advanced.ragRedStart} onChange={(v) => updateAdv("ragRedStart", v)} />
-                      <span style={{ color: "#2a4772", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
                       <TimeInput value={advanced.ragRedEnd} onChange={(v) => updateAdv("ragRedEnd", v)} />
                     </div>
                   </div>
@@ -840,7 +848,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     <FieldLabel>Amber band — morning (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput value={advanced.ragAmberMorningStart} onChange={(v) => updateAdv("ragAmberMorningStart", v)} />
-                      <span style={{ color: "#2a4772", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
                       <TimeInput value={advanced.ragAmberMorningEnd} onChange={(v) => updateAdv("ragAmberMorningEnd", v)} />
                     </div>
                   </div>
@@ -849,7 +857,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     <FieldLabel>Amber band — evening (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput value={advanced.ragAmberEveningStart} onChange={(v) => updateAdv("ragAmberEveningStart", v)} />
-                      <span style={{ color: "#2a4772", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
                       <TimeInput value={advanced.ragAmberEveningEnd} onChange={(v) => updateAdv("ragAmberEveningEnd", v)} />
                     </div>
                   </div>
@@ -862,7 +870,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                         onChange={(v) => updateAdv("ragWeekendAmberStart", v)}
                         placeholder="—"
                       />
-                      <span style={{ color: "#2a4772", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
                       <TimeInput
                         value={advanced.ragWeekendAmberEnd}
                         onChange={(v) => updateAdv("ragWeekendAmberEnd", v)}
@@ -876,7 +884,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {/* BESS Technical Parameters */}
               <AdvancedSection label="BESS Technical Parameters">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                <div className="adv-grid-3" style={{ marginBottom: "0.75rem" }}>
                   <div>
                     <FieldLabel>Charge efficiency</FieldLabel>
                     <SuffixInput type="number" step="0.5" min="50" max="100"
@@ -901,7 +909,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       suffix="£/MWh" />
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="adv-grid-2">
                   <div>
                     <FieldLabel>Minimum SOC</FieldLabel>
                     <SuffixInput type="number" step="1" min="0" max="50"
@@ -933,36 +941,36 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Run button ──────────────────────────────── */}
         <button
+          className="lift lift-glow"
           onClick={handleRun}
           disabled={!canRun}
           style={{
             width: "100%",
             padding: "0.9rem",
-            border: canRun ? "1px solid #00c8e8" : "1px solid #1e3352",
+            border: canRun ? "1px solid var(--accent)" : "1px solid var(--border)",
             borderRadius: 8,
             background: canRun
-              ? "linear-gradient(135deg, rgba(0,200,232,0.15), rgba(0,200,232,0.08))"
-              : "#0f1928",
-            color: canRun ? "#00c8e8" : "#2a4772",
+              ? "linear-gradient(135deg, var(--signal-a15), var(--signal-a08))"
+              : "var(--bg-surface)",
+            color: canRun ? "var(--accent)" : "var(--text-dim)",
             fontSize: "0.95rem",
             fontWeight: 700,
             cursor: canRun ? "pointer" : "not-allowed",
             letterSpacing: "0.03em",
             boxShadow: canRun ? "0 0 24px rgba(0,200,232,0.12)" : "none",
-            transition: "all 0.15s",
           }}
         >
           {submitting ? "Submitting…" : "Run Optimisation"}
         </button>
 
         {!canRun && !submitting && (
-          <div style={{ marginTop: "0.6rem", fontSize: "0.75rem", color: "#2a4772", textAlign: "center" }}>
+          <div style={{ marginTop: "0.6rem", fontSize: "0.75rem", color: "var(--text-dim)", textAlign: "center" }}>
             {!file && "Upload a CSV or XLSX · "}
-            {resolutionError && <span style={{ color: "#ff5577" }}>{parsedMeta.resolution.label} · </span>}
+            {resolutionError && <span style={{ color: "var(--negative)" }}>{parsedMeta.resolution.label} · </span>}
             {!dnoKey && "Select a DNO · "}
             {selectedCount === 0 && "Select at least one BESS configuration · "}
             {validExportCount === 0 && "Enter at least one export limit (0 or more) · "}
-            {scenarioCount > 12 && <span style={{ color: "#ff5577" }}>Reduce scenarios to ≤ 12 (currently {scenarioCount})</span>}
+            {scenarioCount > 12 && <span style={{ color: "var(--negative)" }}>Reduce scenarios to ≤ 12 (currently {scenarioCount})</span>}
           </div>
         )}
 
@@ -977,14 +985,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 function Card({ label, children }) {
   return (
     <div style={{
-      background: "#152236",
-      border: "1px solid #1e3352",
+      background: "var(--bg-card)",
+      border: "1px solid var(--border)",
       borderRadius: 10,
       padding: "1.5rem",
       marginBottom: "1rem",
     }}>
       <div style={{
-        fontSize: "0.68rem", fontWeight: 700, color: "#4a6b8c",
+        fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)",
         textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.1rem",
       }}>
         {label}
@@ -997,7 +1005,7 @@ function Card({ label, children }) {
 function AdvancedSection({ label, children }) {
   return (
     <div style={{ marginBottom: "1.25rem" }}>
-      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#2a4772", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
         {label}
       </div>
       {children}
@@ -1007,7 +1015,7 @@ function AdvancedSection({ label, children }) {
 
 function FieldLabel({ children }) {
   return (
-    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#4a6b8c", marginBottom: "0.35rem" }}>
+    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "0.35rem" }}>
       {children}
     </div>
   );
@@ -1027,7 +1035,7 @@ function SuffixInput({ suffix, ...props }) {
         position: "absolute",
         right: "0.65rem",
         fontSize: "0.72rem",
-        color: "#2a4772",
+        color: "var(--text-dim)",
         pointerEvents: "none",
         userSelect: "none",
         whiteSpace: "nowrap",
@@ -1054,10 +1062,10 @@ function TimeInput({ value, onChange, placeholder = "HH:MM" }) {
 function Chip({ label, value, mono, error }) {
   return (
     <div style={{ textAlign: "left" }}>
-      <div style={{ fontSize: "0.65rem", color: "#2a4772", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>
+      <div style={{ fontSize: "0.65rem", color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>
         {label}
       </div>
-      <div style={{ fontSize: "0.75rem", color: error ? "#ff5577" : "#7ba0c8", fontFamily: mono ? "monospace" : undefined }}>
+      <div style={{ fontSize: "0.75rem", color: error ? "var(--negative)" : "var(--text-sec)", fontFamily: mono ? "monospace" : undefined }}>
         {value}
       </div>
     </div>
@@ -1068,25 +1076,23 @@ function selectStyle(hasValue) {
   return {
     width: "100%",
     padding: "0.55rem 0.75rem",
-    background: "#0f1928",
-    border: hasValue ? "1px solid rgba(0,200,232,0.3)" : "1px solid #1e3352",
+    background: "var(--bg-surface)",
+    border: hasValue ? "1px solid rgba(0,200,232,0.3)" : "1px solid var(--border)",
     borderRadius: 6,
-    color: hasValue ? "#e0eaf8" : "#4a6b8c",
+    color: hasValue ? "var(--text-pri)" : "var(--text-dim)",
     fontSize: "0.875rem",
     cursor: "pointer",
-    outline: "none",
   };
 }
 
 const inputStyle = {
   width: "100%",
   padding: "0.55rem 0.75rem",
-  background: "#0f1928",
-  border: "1px solid #1e3352",
+  background: "var(--bg-surface)",
+  border: "1px solid var(--border)",
   borderRadius: 6,
-  color: "#e0eaf8",
+  color: "var(--text-pri)",
   fontSize: "0.875rem",
-  outline: "none",
   boxSizing: "border-box",
 };
 
@@ -1094,9 +1100,9 @@ const errorBox = {
   marginBottom: "1rem",
   padding: "0.75rem 1rem",
   background: "rgba(255,85,119,0.08)",
-  border: "1px solid rgba(255,85,119,0.3)",
+  border: "1px solid var(--negative-a30)",
   borderRadius: 6,
-  color: "#ff5577",
+  color: "var(--negative)",
   fontSize: "0.875rem",
 };
 

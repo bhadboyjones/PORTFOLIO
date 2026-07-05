@@ -3,12 +3,11 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   Legend, CartesianGrid, ResponsiveContainer,
 } from "recharts";
-
-const tooltipStyle = {
-  contentStyle: { background: "#152236", border: "1px solid #1e3352", borderRadius: 6, color: "#e0eaf8", fontSize: "0.82rem" },
-  labelStyle:   { color: "#7ba0c8", marginBottom: 4 },
-  itemStyle:    { color: "#e0eaf8" },
-};
+import useReducedMotion from "../hooks/useReducedMotion";
+import {
+  CHART_COLORS, tooltipProps, axisTick, axisLineProps,
+  gridProps, legendStyle, seriesAnimation,
+} from "./chartTheme";
 
 function fmtGbp(v) {
   if (v == null) return "";
@@ -16,6 +15,7 @@ function fmtGbp(v) {
 }
 
 export default function BaselineComparisonChart({ rankedScenarios }) {
+  const reduced = useReducedMotion();
   const top3 = rankedScenarios.slice(0, 3);
   const chartData = useMemo(
     () => top3.map((s) => ({
@@ -25,17 +25,18 @@ export default function BaselineComparisonChart({ rankedScenarios }) {
     })),
     [rankedScenarios],
   );
+  const anim = seriesAnimation(reduced);
 
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={chartData} margin={{ top: 8, right: 20, left: 10, bottom: 5 }} barCategoryGap="30%">
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e3352" vertical={false} />
-        <XAxis dataKey="name" tick={{ fill: "#7ba0c8", fontSize: 11 }} axisLine={{ stroke: "#1e3352" }} tickLine={false} />
-        <YAxis tickFormatter={fmtGbp} tick={{ fill: "#7ba0c8", fontSize: 11 }} width={62} axisLine={false} tickLine={false} />
-        <Tooltip formatter={(v) => fmtGbp(v)} {...tooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: 12, color: "#7ba0c8" }} />
-        <Bar dataKey="No BESS"   fill="#1e3352"  radius={[4, 4, 0, 0]} />
-        <Bar dataKey="With BESS" fill="#00c8e8"  radius={[4, 4, 0, 0]} />
+        <CartesianGrid {...gridProps} vertical={false} />
+        <XAxis dataKey="name" tick={axisTick} axisLine={axisLineProps} tickLine={false} />
+        <YAxis tickFormatter={fmtGbp} tick={axisTick} width={62} axisLine={false} tickLine={false} />
+        <Tooltip formatter={(v) => fmtGbp(v)} {...tooltipProps} />
+        <Legend wrapperStyle={legendStyle} />
+        <Bar dataKey="No BESS"   fill={CHART_COLORS.grid}   radius={[4, 4, 0, 0]} {...anim} />
+        <Bar dataKey="With BESS" fill={CHART_COLORS.signal} radius={[4, 4, 0, 0]} {...anim} />
       </BarChart>
     </ResponsiveContainer>
   );

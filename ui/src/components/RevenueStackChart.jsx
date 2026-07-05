@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
+  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
   Legend, ReferenceLine, CartesianGrid, ResponsiveContainer,
 } from "recharts";
+import useReducedMotion from "../hooks/useReducedMotion";
+import {
+  CHART_COLORS, tooltipProps, axisTick, axisLineProps,
+  gridProps, legendStyle, seriesAnimation, controlStyles,
+} from "./chartTheme";
 
-const tooltipStyle = {
-  contentStyle: { background: "#152236", border: "1px solid #1e3352", borderRadius: 6, color: "#e0eaf8", fontSize: "0.82rem" },
-  labelStyle:   { color: "#7ba0c8", marginBottom: 4 },
-  itemStyle:    { color: "#e0eaf8" },
-};
-
+// Daily revenue stack: value components above zero, cost components below,
+// with a net line — the standard BESS revenue-stack presentation.
 function aggregateDaily(timeseries) {
   const byDate = {};
   for (const row of timeseries) {
@@ -23,7 +24,12 @@ function aggregateDaily(timeseries) {
     d.charge1_opp_cost_gbp -= row.charge1_opp_cost_gbp ?? 0;
     d.deg_cost_gbp         -= row.deg_cost_gbp         ?? 0;
   }
-  return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+  return Object.values(byDate)
+    .map((d) => ({
+      ...d,
+      net_gbp: d.dis1_saving_gbp + d.dis2_revenue_gbp + d.charge2_cost_gbp + d.charge1_opp_cost_gbp + d.deg_cost_gbp,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function fmtDate(dateStr) {
@@ -36,49 +42,42 @@ function fmtGbp(v) {
   return Math.abs(v) >= 1 ? `£${Number(v).toFixed(0)}` : `£${Number(v).toFixed(2)}`;
 }
 
-const selectStyle = {
-  padding: "0.35rem 0.6rem",
-  border: "1px solid #1e3352",
-  borderRadius: 5,
-  fontSize: "0.82rem",
-  background: "#0f1928",
-  color: "#e0eaf8",
-  outline: "none",
-};
-
 export default function RevenueStackChart({ rankedScenarios }) {
+  const reduced = useReducedMotion();
   const [scenarioIdx, setScenarioIdx] = useState(0);
   const scenario  = rankedScenarios[scenarioIdx];
   const chartData = useMemo(() => aggregateDaily(scenario?.dispatch_timeseries ?? []), [scenario]);
   const tickInterval = Math.max(1, Math.floor(chartData.length / 8));
+  const anim = seriesAnimation(reduced);
 
   return (
     <div>
       <div style={{ marginBottom: "1rem" }}>
-        <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "#4a6b8c", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>
-          Scenario
+        <label>
+          <span style={controlStyles.fieldLabel}>Scenario</span>
+          <select value={scenarioIdx} onChange={(e) => setScenarioIdx(Number(e.target.value))} style={controlStyles.select}>
+            {rankedScenarios.map((s, i) => (
+              <option key={i} value={i}>{s.scenario_label} | {s.export_limit_mw} MW export</option>
+            ))}
+          </select>
         </label>
-        <select value={scenarioIdx} onChange={(e) => setScenarioIdx(Number(e.target.value))} style={selectStyle}>
-          {rankedScenarios.map((s, i) => (
-            <option key={i} value={i}>{s.scenario_label} | {s.export_limit_mw} MW export</option>
-          ))}
-        </select>
       </div>
 
       <ResponsiveContainer width="100%" height={320}>
-        <AreaChart data={chartData} margin={{ top: 8, right: 20, left: 10, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e3352" />
-          <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "#7ba0c8", fontSize: 11 }} interval={tickInterval} axisLine={{ stroke: "#1e3352" }} tickLine={false} />
-          <YAxis tickFormatter={fmtGbp} tick={{ fill: "#7ba0c8", fontSize: 11 }} width={56} axisLine={false} tickLine={false} />
-          <Tooltip formatter={(v) => fmtGbp(v)} labelFormatter={fmtDate} {...tooltipStyle} />
-          <Legend wrapperStyle={{ fontSize: 12, color: "#7ba0c8" }} />
-          <ReferenceLine y={0} stroke="#2a4772" strokeDasharray="3 3" />
-          <Area stackId="s" dataKey="dis1_saving_gbp"      stroke="#00c8e8" fill="rgba(0,200,232,0.25)"  name="Demand saving" />
-          <Area stackId="s" dataKey="dis2_revenue_gbp"     stroke="#00e5a0" fill="rgba(0,229,160,0.25)"  name="Export revenue" />
-          <Area stackId="s" dataKey="charge2_cost_gbp"     stroke="#ff5577" fill="rgba(255,85,119,0.2)"  name="Grid charge cost" />
-          <Area stackId="s" dataKey="charge1_opp_cost_gbp" stroke="#ff9f40" fill="rgba(255,159,64,0.2)"  name="Opp. cost (surplus)" />
-          <Area stackId="s" dataKey="deg_cost_gbp"         stroke="#4a6b8c" fill="rgba(74,107,140,0.2)"  name="Degradation" />
-        </AreaChart>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 20, left: 10, bottom: 5 }} stackOffset="sign">
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="date" tickFormatter={fmtDate} tick={axisTick} interval={tickInterval} axisLine={axisLineProps} tickLine={false} />
+          <YAxis tickFormatter={fmtGbp} tick={axisTick} width={56} axisLine={false} tickLine={false} />
+          <Tooltip formatter={(v) => fmtGbp(v)} labelFormatter={fmtDate} {...tooltipProps} />
+          <Legend wrapperStyle={legendStyle} />
+          <ReferenceLine y={0} stroke={CHART_COLORS.refLine} />
+          <Bar stackId="s" dataKey="dis1_saving_gbp"      fill={CHART_COLORS.signal}   fillOpacity={0.85} name="Demand saving"      {...anim} />
+          <Bar stackId="s" dataKey="dis2_revenue_gbp"     fill={CHART_COLORS.positive} fillOpacity={0.85} name="Export revenue"     {...anim} />
+          <Bar stackId="s" dataKey="charge2_cost_gbp"     fill={CHART_COLORS.negative} fillOpacity={0.75} name="Grid charge cost"   {...anim} />
+          <Bar stackId="s" dataKey="charge1_opp_cost_gbp" fill={CHART_COLORS.charge}   fillOpacity={0.75} name="Opp. cost (surplus)" {...anim} />
+          <Bar stackId="s" dataKey="deg_cost_gbp"         fill={CHART_COLORS.muted}    fillOpacity={0.75} name="Degradation"        {...anim} />
+          <Line dataKey="net_gbp" stroke={CHART_COLORS.paper} strokeWidth={1.5} dot={false} name="Net daily value" {...anim} />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

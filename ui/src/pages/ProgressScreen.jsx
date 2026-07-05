@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { getRunStatus } from "../api/client";
 import ProgressBar from "../components/ProgressBar";
+import useReducedMotion from "../hooks/useReducedMotion";
 
 export default function ProgressScreen({ jobId, onComplete, onFailed }) {
   const [status, setStatus] = useState(null);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -16,7 +18,14 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         if (cancelled) return;
         failures = 0;
         setStatus(data);
-        if (data.status === "complete") { onComplete(data.results, data.validation_warnings ?? null, data.data_period ?? null); return; }
+        if (data.status === "complete") {
+          // hold at 100% so the battery-full pulse is visible before results
+          setStatus({ ...data, progress_pct: 100 });
+          setTimeout(() => {
+            if (!cancelled) onComplete(data.results, data.validation_warnings ?? null, data.data_period ?? null);
+          }, reduced ? 0 : 700);
+          return;
+        }
         if (data.status === "failed")   { onFailed(data.error || "Run failed — unknown error."); return; }
         setTimeout(poll, 3000);
       } catch {
@@ -49,16 +58,16 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
       alignItems: "center",
       justifyContent: "center",
       padding: "2rem",
-      background: "#080e1a",
+      background: "var(--bg-base)",
     }}>
       <div style={{ width: "100%", maxWidth: 520 }}>
 
         {/* Brand */}
         <div style={{ textAlign: "center", marginBottom: "3rem" }}>
-          <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.02em", marginBottom: "0.25rem" }}>
-            flex<span style={{ color: "#00c8e8" }}>iq</span>
+          <div style={{ fontSize: "1.4rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.02em", marginBottom: "0.25rem" }}>
+            flex<span style={{ color: "var(--accent)" }}>iq</span>
           </div>
-          <div style={{ fontSize: "0.8rem", color: "#4a6b8c", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
             BTM BESS Optimiser
           </div>
         </div>
@@ -69,12 +78,12 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
             className="pulse-dot"
             style={{
               width: 10, height: 10, borderRadius: "50%",
-              background: "#00c8e8",
+              background: "var(--accent)",
               boxShadow: "0 0 10px rgba(0,200,232,0.5)",
               flexShrink: 0,
             }}
           />
-          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#e0eaf8" }}>
+          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-pri)" }}>
             {isBuilding ? "Building report…" : "Running optimisation…"}
           </h2>
         </div>
@@ -82,13 +91,13 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         <ProgressBar pct={pct} />
 
         <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <p style={{ margin: 0, color: "#7ba0c8", fontSize: "0.875rem" }}>
+          <p style={{ margin: 0, color: "var(--text-sec)", fontSize: "0.875rem" }}>
             {total > 0
               ? `${complete} of ${total} scenario${total !== 1 ? "s" : ""} complete`
               : "Initialising…"}
           </p>
           {isBuilding && (
-            <span style={{ fontSize: "0.78rem", color: "#4a6b8c" }}>Writing XLSX…</span>
+            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Writing XLSX…</span>
           )}
         </div>
 
@@ -96,11 +105,11 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
           <div style={{
             marginTop: "1rem",
             padding: "0.6rem 0.9rem",
-            background: "#0f1928",
-            border: "1px solid #1e3352",
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border)",
             borderRadius: 6,
             fontSize: "0.78rem",
-            color: "#4a6b8c",
+            color: "var(--text-dim)",
             fontFamily: "monospace",
           }}>
             {current}
@@ -111,15 +120,15 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
           <div style={{
             marginTop: "1.25rem",
             padding: "0.75rem 1rem",
-            background: "rgba(245,158,11,0.07)",
-            border: "1px solid rgba(245,158,11,0.25)",
+            background: "rgba(255,176,58,0.07)",
+            border: "1px solid rgba(255,176,58,0.25)",
             borderRadius: 6,
           }}>
-            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--warn)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
               Validation warnings
             </div>
             {csvWarns.map((w, i) => (
-              <div key={i} style={{ fontSize: "0.78rem", color: "#d97706", marginTop: i > 0 ? "0.25rem" : 0 }}>
+              <div key={i} style={{ fontSize: "0.78rem", color: "var(--warn)", marginTop: i > 0 ? "0.25rem" : 0 }}>
                 {w}
               </div>
             ))}
