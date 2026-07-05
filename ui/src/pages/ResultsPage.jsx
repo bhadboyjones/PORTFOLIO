@@ -6,6 +6,7 @@ import CumulativePnlChart from "../components/CumulativePnlChart";
 import DispatchProfileChart from "../components/DispatchProfileChart";
 import RevenueStackChart from "../components/RevenueStackChart";
 import BaselineComparisonChart from "../components/BaselineComparisonChart";
+import DayTape from "../components/DayTape";
 
 const DISPLAY_NAMES = {
   small_office:      "Small Commercial",
@@ -23,10 +24,10 @@ function rankScenarios(scenarios) {
 
 function TabBar({ tabs, active, onSelect, small }) {
   return (
-    <div style={{
+    <div className="tab-bar" style={{
       display: "flex",
       gap: 0,
-      borderBottom: "1px solid #1e3352",
+      borderBottom: "1px solid var(--border)",
       marginBottom: small ? "1.25rem" : "1.5rem",
     }}>
       {tabs.map((tab, i) => (
@@ -36,12 +37,12 @@ function TabBar({ tabs, active, onSelect, small }) {
           style={{
             padding: small ? "0.45rem 1rem" : "0.6rem 1.25rem",
             border: "none",
-            borderBottom: active === i ? "2px solid #00c8e8" : "2px solid transparent",
+            borderBottom: active === i ? "2px solid var(--accent)" : "2px solid transparent",
             marginBottom: -1,
             background: "none",
             cursor: "pointer",
             fontWeight: active === i ? 700 : 500,
-            color: active === i ? "#00c8e8" : "#4a6b8c",
+            color: active === i ? "var(--accent)" : "var(--text-dim)",
             fontSize: small ? "0.82rem" : "0.875rem",
             whiteSpace: "nowrap",
             transition: "color 0.15s",
@@ -76,22 +77,22 @@ function BaselineBreakdown({ topScenario }) {
   ];
   return (
     <div style={{
-      background: "#152236",
-      border: "1px solid #1e3352",
+      background: "var(--bg-card)",
+      border: "1px solid var(--border)",
       borderRadius: 10,
       padding: "1.25rem 1.5rem",
       marginBottom: "1.5rem",
     }}>
-      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#4a6b8c", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
+      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
         Baseline Site Cost (without BESS)
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
         {rows.map(({ label, value, sign, bold }) => {
           const display = value != null ? `£${fmt(value, 0)}` : "—";
-          const color = bold ? "#e0eaf8" : sign < 0 ? "#00e5a0" : "#7ba0c8";
+          const color = bold ? "var(--text-pri)" : sign < 0 ? "var(--positive)" : "var(--text-sec)";
           return (
-            <div key={label} style={{ paddingBottom: bold ? "0" : "0", borderTop: bold ? "1px solid #1e3352" : "none", paddingTop: bold ? "0.6rem" : "0" }}>
-              <div style={{ fontSize: "0.7rem", color: "#4a6b8c", marginBottom: "0.2rem" }}>{label}</div>
+            <div key={label} style={{ paddingBottom: bold ? "0" : "0", borderTop: bold ? "1px solid var(--border)" : "none", paddingTop: bold ? "0.6rem" : "0" }}>
+              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>{label}</div>
               <div style={{ fontSize: bold ? "1rem" : "0.9rem", fontWeight: bold ? 700 : 600, color }}>
                 {display}
               </div>
@@ -117,12 +118,12 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080e1a" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
 
       {/* Top bar */}
       <div style={{
-        background: "#0f1928",
-        borderBottom: "1px solid #1e3352",
+        background: "var(--bg-surface)",
+        borderBottom: "1px solid var(--border)",
         padding: "0.9rem 1.5rem",
         display: "flex",
         alignItems: "center",
@@ -132,22 +133,22 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
           onClick={onBack}
           style={{
             padding: "0.35rem 0.85rem",
-            border: "1px solid #1e3352",
+            border: "1px solid var(--border)",
             borderRadius: 5,
             background: "transparent",
             cursor: "pointer",
             fontSize: "0.82rem",
-            color: "#7ba0c8",
+            color: "var(--text-sec)",
             transition: "border-color 0.15s",
           }}
         >
           ← New run
         </button>
         <div>
-          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.01em" }}>
-            flex<span style={{ color: "#00c8e8" }}>iq</span>
+          <span style={{ fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.01em" }}>
+            flex<span style={{ color: "var(--accent)" }}>iq</span>
           </span>
-          <span style={{ marginLeft: "0.75rem", fontSize: "0.8rem", color: "#4a6b8c" }}>Results</span>
+          <span style={{ marginLeft: "0.75rem", fontSize: "0.8rem", color: "var(--text-dim)" }}>Results</span>
         </div>
       </div>
 
@@ -167,9 +168,9 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
           <div style={{
             marginBottom: "1rem",
             fontSize: "0.72rem",
-            color: "#4a6b8c",
+            color: "var(--text-dim)",
             background: "rgba(0,200,232,0.03)",
-            border: "1px solid rgba(0,200,232,0.1)",
+            border: "1px solid var(--signal-a10)",
             borderRadius: 5,
             padding: "0.4rem 0.75rem",
             display: "inline-block",
@@ -181,9 +182,9 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
           <div style={{ marginBottom: "1rem" }}>
             <div style={{
               fontSize: "0.72rem",
-              color: "#4a6b8c",
+              color: "var(--text-dim)",
               background: "rgba(0,200,232,0.03)",
-              border: "1px solid rgba(0,200,232,0.1)",
+              border: "1px solid var(--signal-a10)",
               borderRadius: 5,
               padding: "0.4rem 0.75rem",
               display: "inline-block",
@@ -194,7 +195,7 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
                 : ""}
               Upper-bound estimate — dispatch optimised with perfect price foresight
             </div>
-            <div style={{ fontSize: "0.7rem", color: "#2a4772", marginTop: "0.4rem", lineHeight: 1.6 }}>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.4rem", lineHeight: 1.6 }}>
               net_demand_mw is treated as metered boundary flow — on-site generation is already reflected.
               {dataPeriod?.resolution === "hourly" && (
                 <>
@@ -211,15 +212,15 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
           <div style={{
             marginBottom: "1.25rem",
             padding: "0.75rem 1rem",
-            background: "rgba(245,158,11,0.07)",
-            border: "1px solid rgba(245,158,11,0.25)",
+            background: "rgba(255,176,58,0.07)",
+            border: "1px solid rgba(255,176,58,0.25)",
             borderRadius: 6,
           }}>
-            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--warn)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
               Data warnings
             </div>
             {validationWarnings.map((w, i) => (
-              <div key={i} style={{ fontSize: "0.78rem", color: "#d97706", marginTop: i > 0 ? "0.25rem" : 0 }}>
+              <div key={i} style={{ fontSize: "0.78rem", color: "var(--warn)", marginTop: i > 0 ? "0.25rem" : 0 }}>
                 {w}
               </div>
             ))}
@@ -228,6 +229,11 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
 
         {/* KPI cards */}
         <KpiCards topScenario={topScenario} />
+
+        {/* settlement-day motif */}
+        <div style={{ margin: "0 0 1.75rem" }}>
+          <DayTape variant="divider" />
+        </div>
 
         {/* Baseline breakdown — shown in both modes (both serialisers emit the fields) */}
         <BaselineBreakdown topScenario={topScenario} />
@@ -239,8 +245,8 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
 
         {/* Charts */}
         <div style={{
-          background: "#152236",
-          border: "1px solid #1e3352",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: 10,
           padding: "1.5rem",
           marginBottom: "1.5rem",

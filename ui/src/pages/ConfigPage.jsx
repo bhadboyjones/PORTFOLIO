@@ -78,10 +78,10 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
   if (loadError) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080e1a" }}>
-        <div style={{ padding: "1.5rem 2rem", background: "#152236", border: "1px solid rgba(255,85,119,0.3)", borderRadius: 10, color: "#ff5577", maxWidth: 480 }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
+        <div style={{ padding: "1.5rem 2rem", background: "var(--bg-card)", border: "1px solid var(--negative-a30)", borderRadius: 10, color: "var(--negative)", maxWidth: 480 }}>
           <strong>Failed to load configuration</strong>
-          <p style={{ margin: "0.5rem 0 0", fontSize: "0.875rem", color: "#7ba0c8" }}>
+          <p style={{ margin: "0.5rem 0 0", fontSize: "0.875rem", color: "var(--text-sec)" }}>
             {loadError}. Is the API server running?
           </p>
         </div>
@@ -91,9 +91,9 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
   if (!scenarioOptions) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080e1a" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "#4a6b8c" }}>
-          <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#00c8e8", boxShadow: "0 0 8px rgba(0,200,232,0.5)", flexShrink: 0 }} />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--text-dim)" }}>
+          <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 8px rgba(0,200,232,0.5)", flexShrink: 0 }} />
           <span style={{ fontSize: "0.875rem" }}>Loading configuration…</span>
         </div>
       </div>
@@ -101,38 +101,38 @@ export default function ConfigPage({ onRunStarted, jobError }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080e1a" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
 
       {/* Hero */}
       <div style={{
-        background: "#0f1928",
+        background: "var(--bg-surface)",
         backgroundImage: `
           linear-gradient(rgba(0,200,232,0.04) 1px, transparent 1px),
           linear-gradient(90deg, rgba(0,200,232,0.04) 1px, transparent 1px)
         `,
         backgroundSize: "48px 48px",
-        borderBottom: "1px solid #1e3352",
+        borderBottom: "1px solid var(--border)",
         padding: "2.5rem 1.5rem 2rem",
       }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem" }}>
-            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 800, color: "#e0eaf8", letterSpacing: "-0.025em" }}>
-              flex<span style={{ color: "#00c8e8" }}>iq</span>
+            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.02em" }}>
+              flex<span style={{ color: "var(--accent)" }}>iq</span>
             </h1>
             <span style={{
-              fontSize: "0.62rem", fontWeight: 700, color: "#00c8e8",
-              background: "rgba(0,200,232,0.1)", border: "1px solid rgba(0,200,232,0.25)",
+              fontSize: "0.62rem", fontWeight: 700, color: "var(--accent)",
+              background: "var(--signal-a10)", border: "1px solid var(--signal-a25)",
               borderRadius: 3, padding: "0.12rem 0.4rem", letterSpacing: "0.1em", textTransform: "uppercase",
             }}>
               BETA
             </span>
           </div>
-          <p style={{ margin: "0 0 1rem", color: "#7ba0c8", fontSize: "0.9rem" }}>
+          <p style={{ margin: "0 0 1rem", color: "var(--text-sec)", fontSize: "0.9rem" }}>
             BTM BESS optimisation
           </p>
           <p style={{
-            margin: 0, color: "#4a6b8c", fontSize: "0.8rem",
-            background: "rgba(0,200,232,0.05)", border: "1px solid rgba(0,200,232,0.12)",
+            margin: 0, color: "var(--text-dim)", fontSize: "0.8rem",
+            background: "var(--signal-a05)", border: "1px solid rgba(0,200,232,0.12)",
             borderRadius: 5, padding: "0.45rem 0.85rem", display: "inline-block",
           }}>
             Select 1 site archetype, up to 3 BESS configurations and up to 4 export limits (max 12 scenarios).
@@ -182,7 +182,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
         {/* Price Exposure */}
         <Card label="Price Exposure">
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             {[
               { value: "da",        label: "Day-Ahead (DA)",     desc: "Settled against day-ahead market price" },
               { value: "imbalance", label: "Imbalance (System)", desc: "Settled against system imbalance price" },
@@ -191,23 +191,25 @@ export default function ConfigPage({ onRunStarted, jobError }) {
               return (
                 <button
                   key={value}
+                  className="lift"
                   onClick={() => setPriceExposure(value)}
+                  aria-pressed={active}
                   style={{
                     flex: 1,
+                    minWidth: 220,
                     padding: "0.85rem 1rem",
-                    border: active ? "1px solid #00c8e8" : "1px solid #1e3352",
+                    border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
                     borderRadius: 7,
-                    background: active ? "rgba(0,200,232,0.08)" : "#0f1928",
+                    background: active ? "var(--signal-a08)" : "var(--bg-surface)",
                     cursor: "pointer",
                     textAlign: "left",
-                    boxShadow: active ? "0 0 16px rgba(0,200,232,0.1)" : "none",
-                    transition: "all 0.15s",
+                    boxShadow: active ? "0 0 16px var(--signal-a10)" : "none",
                   }}
                 >
-                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "#00c8e8" : "#7ba0c8", marginBottom: "0.25rem" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "var(--accent)" : "var(--text-sec)", marginBottom: "0.25rem" }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "#4a6b8c" }}>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
                     {desc}
                   </div>
                 </button>
@@ -218,21 +220,21 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
         {/* Errors */}
         {jobError && (
-          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.3)", borderRadius: 6, color: "#ff5577", fontSize: "0.875rem" }}>
+          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
             Run failed: {jobError}
           </div>
         )}
         {runError && (
-          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.3)", borderRadius: 6, color: "#ff5577", fontSize: "0.875rem" }}>
+          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
             {runError}
           </div>
         )}
 
         <div style={{
           fontSize: "0.75rem",
-          color: "#2a4772",
+          color: "var(--text-dim)",
           background: "rgba(0,200,232,0.03)",
-          border: "1px solid rgba(0,200,232,0.1)",
+          border: "1px solid var(--signal-a10)",
           borderRadius: 6,
           padding: "0.5rem 0.85rem",
           marginBottom: "0.75rem",
@@ -249,14 +251,14 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 function Card({ label, children }) {
   return (
     <div style={{
-      background: "#152236",
-      border: "1px solid #1e3352",
+      background: "var(--bg-card)",
+      border: "1px solid var(--border)",
       borderRadius: 10,
       padding: "1.5rem",
       marginBottom: "1rem",
     }}>
       <div style={{
-        fontSize: "0.68rem", fontWeight: 700, color: "#4a6b8c",
+        fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)",
         textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.1rem",
       }}>
         {label}

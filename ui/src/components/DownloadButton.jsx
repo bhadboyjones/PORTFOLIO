@@ -3,6 +3,7 @@ import { getExportUrl } from "../api/client";
 
 export default function DownloadButton({ jobId }) {
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
 
   async function handleDownload() {
@@ -24,6 +25,8 @@ export default function DownloadButton({ jobId }) {
       a.click();
       a.remove();
       URL.revokeObjectURL(objectUrl);
+      setDone(true);
+      setTimeout(() => setDone(false), 2500);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -34,6 +37,7 @@ export default function DownloadButton({ jobId }) {
   return (
     <div>
       <button
+        className="lift"
         onClick={handleDownload}
         disabled={loading}
         style={{
@@ -41,21 +45,20 @@ export default function DownloadButton({ jobId }) {
           fontSize: "0.85rem",
           fontWeight: 700,
           letterSpacing: "0.05em",
-          border: loading ? "1px solid #1e3352" : "1px solid rgba(0,229,160,0.4)",
+          border: loading ? "1px solid var(--border)" : "1px solid rgba(0,229,160,0.4)",
           borderRadius: 6,
           cursor: loading ? "not-allowed" : "pointer",
           background: loading
-            ? "#0f1928"
-            : "linear-gradient(135deg, #00e5a0 0%, #00c896 100%)",
-          color: loading ? "#4a6b8c" : "#080e1a",
+            ? "var(--bg-surface)"
+            : "linear-gradient(135deg, var(--positive) 0%, #00c896 100%)",
+          color: loading ? "var(--text-dim)" : "var(--bg-base)",
           boxShadow: loading ? "none" : "0 0 16px rgba(0,229,160,0.2)",
-          transition: "all 0.2s ease",
         }}
       >
-        {loading ? "Generating…" : "Download Report (XLSX)"}
+        {loading ? "Generating…" : done ? "✓ Report downloaded" : "Download Report (XLSX)"}
       </button>
       {error && (
-        <div style={{ marginTop: "0.5rem", color: "#ff5577", fontSize: "0.8rem" }}>
+        <div style={{ marginTop: "0.5rem", color: "var(--negative)", fontSize: "0.8rem" }}>
           {error}
         </div>
       )}

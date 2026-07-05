@@ -3,10 +3,10 @@ import { useState } from "react";
 const COLUMNS = [
   { key: "rank",                  label: "Rank",              align: "center" },
   { key: "scenario_label",        label: "Scenario",          align: "left"   },
-  { key: "export_limit_mw",       label: "Export",            align: "right"  },
-  { key: "site_cost_wo_bess_gbp", label: "No BESS (£)",       align: "right"  },
-  { key: "site_cost_w_bess_gbp",  label: "With BESS (£)",     align: "right"  },
-  { key: "net_benefit_gbp",       label: "Net Benefit (£)",   align: "right"  },
+  { key: "export_limit_mw",       label: "Export",            align: "right", numeric: true },
+  { key: "site_cost_wo_bess_gbp", label: "No BESS (£)",       align: "right", numeric: true },
+  { key: "site_cost_w_bess_gbp",  label: "With BESS (£)",     align: "right", numeric: true },
+  { key: "net_benefit_gbp",       label: "Net Benefit (£)",   align: "right", numeric: true },
 ];
 
 function fmt(key, value) {
@@ -48,23 +48,29 @@ export default function ScenarioTable({ rankedScenarios }) {
 
   return (
     <div style={{ marginBottom: "0.5rem" }}>
-      <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.72rem", fontWeight: 700, color: "#4a6b8c", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+      <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
         Scenario Rankings
       </h3>
-      <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid #1e3352" }}>
+      <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--border)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem" }}>
           <thead>
-            <tr style={{ background: "#0f1928", borderBottom: "1px solid #1e3352" }}>
+            <tr style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--border)" }}>
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
                   onClick={() => handleSort(col.key)}
+                  tabIndex={col.key === "rank" ? undefined : 0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort(col.key); }
+                  }}
+                  aria-sort={sortKey === col.key ? (sortDir === "asc" ? "ascending" : "descending") : undefined}
                   style={{
                     padding: "0.65rem 1rem",
                     textAlign: col.align,
                     fontWeight: 700,
                     fontSize: "0.75rem",
-                    color: sortKey === col.key ? "#00c8e8" : "#7ba0c8",
+                    color: sortKey === col.key ? "var(--accent)" : "var(--text-sec)",
                     cursor: col.key === "rank" ? "default" : "pointer",
                     whiteSpace: "nowrap",
                     userSelect: "none",
@@ -73,7 +79,7 @@ export default function ScenarioTable({ rankedScenarios }) {
                 >
                   {col.label}
                   {sortKey === col.key && (
-                    <span style={{ marginLeft: 4, color: "#00c8e8" }}>
+                    <span style={{ marginLeft: 4, color: "var(--accent)" }}>
                       {sortDir === "asc" ? "↑" : "↓"}
                     </span>
                   )}
@@ -86,23 +92,24 @@ export default function ScenarioTable({ rankedScenarios }) {
               <tr
                 key={`${row.scenario_label}-${row.export_limit_mw}`}
                 style={{
-                  borderBottom: i < displayRows.length - 1 ? "1px solid #1e3352" : "none",
+                  borderBottom: i < displayRows.length - 1 ? "1px solid var(--border)" : "none",
                   background: row.rank === 1
-                    ? "rgba(0,200,232,0.05)"
-                    : i % 2 === 0 ? "#152236" : "#0f1928",
+                    ? "var(--signal-a05)"
+                    : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-surface)",
                 }}
               >
                 {COLUMNS.map((col) => (
                   <td
                     key={col.key}
+                    className={col.numeric ? "tnum" : undefined}
                     style={{
                       padding: "0.6rem 1rem",
                       textAlign: col.align,
                       color: col.key === "net_benefit_gbp"
-                        ? "#00e5a0"
+                        ? "var(--positive)"
                         : col.key === "rank" && row.rank === 1
-                          ? "#00c8e8"
-                          : "#e0eaf8",
+                          ? "var(--accent)"
+                          : "var(--text-pri)",
                       fontWeight: col.key === "rank" && row.rank === 1 ? 700 : 400,
                       fontSize: "0.83rem",
                     }}
@@ -123,7 +130,7 @@ export default function ScenarioTable({ rankedScenarios }) {
             marginTop: "0.6rem",
             background: "none",
             border: "none",
-            color: "#00c8e8",
+            color: "var(--accent)",
             cursor: "pointer",
             fontSize: "0.8rem",
             fontWeight: 600,

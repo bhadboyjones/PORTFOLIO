@@ -22,14 +22,15 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
           style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
         />
         <div
+          className="toggle-track"
           aria-hidden="true"
           style={{
             width: 36,
             height: 20,
             borderRadius: 999,
-            background: useDefault ? "#00c8e8" : "#1e3352",
+            background: useDefault ? "var(--accent)" : "var(--border)",
             position: "relative",
-            transition: "background 0.2s",
+            transition: "background var(--dur-fast) var(--ease-flex)",
             flexShrink: 0,
           }}
         >
@@ -40,11 +41,11 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
             width: 16,
             height: 16,
             borderRadius: "50%",
-            background: useDefault ? "#080e1a" : "#4a6b8c",
-            transition: "left 0.2s",
+            background: useDefault ? "var(--bg-base)" : "var(--text-dim)",
+            transition: "left var(--dur-fast) var(--ease-flex)",
           }} />
         </div>
-        <span style={{ fontSize: "0.85rem", color: "#7ba0c8", userSelect: "none" }}>
+        <span style={{ fontSize: "0.85rem", color: "var(--text-sec)", userSelect: "none" }}>
           Use last 12 months
         </span>
       </label>
@@ -55,7 +56,7 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
           { label: "To",   value: endDate,   onChange: (v) => onChange(startDate, v) },
         ].map(({ label, value, onChange: handleChange }) => (
           <label key={label} style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#4a6b8c", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               {label}
             </span>
             <input
@@ -66,12 +67,11 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
               style={{
                 padding: "0.45rem 0.65rem",
                 border: "1px solid",
-                borderColor: useDefault ? "#1e3352" : "#2a4772",
+                borderColor: useDefault ? "var(--border)" : "var(--border-bright)",
                 borderRadius: 6,
                 fontSize: "0.85rem",
-                color: useDefault ? "#4a6b8c" : "#e0eaf8",
-                background: useDefault ? "#0a1422" : "#0f1928",
-                outline: "none",
+                color: useDefault ? "var(--text-dim)" : "var(--text-pri)",
+                background: useDefault ? "var(--bg-base)" : "var(--bg-surface)",
                 cursor: useDefault ? "not-allowed" : "text",
               }}
             />
@@ -81,12 +81,3 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
     </div>
   );
 }
-
-const sectionLabel = {
-  margin: "0 0 1rem",
-  fontSize: "0.72rem",
-  fontWeight: 700,
-  color: "#4a6b8c",
-  textTransform: "uppercase",
-  letterSpacing: "0.1em",
-};
