@@ -33,7 +33,7 @@ export default function LandingPage({ onSelectMode }) {
           margin: "0 0 2.25rem", color: "var(--text-dim)", fontSize: "0.68rem",
           letterSpacing: "0.08em", textTransform: "uppercase", textAlign: "left",
         }}>
-          One day · 48 settlement periods · DUoS red 16:00–19:00
+          Charge green · discharge red · a representative DUoS day
         </p>
 
         <p style={{ margin: "0 0 1.5rem", color: "var(--text-sec)", fontSize: "1.05rem", fontWeight: 600 }}>

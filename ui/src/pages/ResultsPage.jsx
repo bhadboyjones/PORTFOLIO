@@ -104,7 +104,7 @@ function BaselineBreakdown({ topScenario }) {
   );
 }
 
-export default function ResultsPage({ results, jobId, mode, onBack, validationWarnings, dataPeriod }) {
+export default function ResultsPage({ results, jobId, mode, onBack, validationWarnings, dataPeriod, bands }) {
   const archetypeIds   = Object.keys(results);
   const [activeArchetype, setActiveArchetype] = useState(archetypeIds[0]);
   const [chartTab, setChartTab]               = useState(0);
@@ -230,9 +230,17 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
         {/* KPI cards */}
         <KpiCards topScenario={topScenario} />
 
-        {/* settlement-day motif */}
+        {/* DUoS-band motif — reflects the tariff actually used in CSV mode */}
         <div style={{ margin: "0 0 1.75rem" }}>
-          <DayTape variant="divider" />
+          <DayTape variant="divider" bands={bands || undefined} />
+          {mode === "csv" && bands && (
+            <div style={{
+              marginTop: "0.4rem", fontSize: "0.65rem", color: "var(--text-dim)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>
+              Your DUoS band day · charge green · discharge red
+            </div>
+          )}
         </div>
 
         {/* Baseline breakdown — shown in both modes (both serialisers emit the fields) */}

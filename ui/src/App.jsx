@@ -16,6 +16,7 @@ export default function App() {
   const [runError, setRunError] = useState(null);
   const [csvWarnings, setCsvWarnings] = useState(null);
   const [dataPeriod, setDataPeriod] = useState(null);
+  const [csvBands, setCsvBands] = useState(null);
 
   function handleModeChange(m) {
     setMode(m);
@@ -24,14 +25,16 @@ export default function App() {
     setJobId(null);
     setCsvWarnings(null);
     setDataPeriod(null);
+    setCsvBands(null);
   }
 
-  function handleRunStarted(id) {
+  function handleRunStarted(id, bands) {
     setJobId(id);
     setResults(null);
     setRunError(null);
     setCsvWarnings(null);
     setDataPeriod(null);
+    setCsvBands(bands ?? null);
     setView("progress");
   }
 
@@ -117,6 +120,7 @@ export default function App() {
         onBack={handleBack}
         validationWarnings={csvWarnings}
         dataPeriod={dataPeriod}
+        bands={csvBands}
       />
     );
   } else if (mode === null) {

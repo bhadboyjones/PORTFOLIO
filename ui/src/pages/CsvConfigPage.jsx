@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
+import { bandsFromWindows } from "../components/dayTapeBands";
 
 const DNO_OPTIONS = [
   { key: "UKPN", label: "UK Power Networks (SE / East / London)" },
@@ -268,8 +269,18 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       fd.append("bess_soc_max_pct",      advanced.socMaxPct    || "95");
       fd.append("bess_deg_cost_gbp_mwh", advanced.degCostGbpMwh || "8");
 
+      // Weekday DUoS band shape actually used — drives the results-page tape
+      const tapeBands = bandsFromWindows({
+        redStart:          advanced.ragRedStart          || "16:00",
+        redEnd:            advanced.ragRedEnd            || "19:00",
+        amberMorningStart: advanced.ragAmberMorningStart || "07:00",
+        amberMorningEnd:   advanced.ragAmberMorningEnd   || "16:00",
+        amberEveningStart: advanced.ragAmberEveningStart || "19:00",
+        amberEveningEnd:   advanced.ragAmberEveningEnd   || "23:00",
+      });
+
       const { job_id } = await postRunCsv(fd);
-      onRunStarted(job_id);
+      onRunStarted(job_id, tapeBands);
     } catch (e) {
       setRunError(e.message);
     } finally {

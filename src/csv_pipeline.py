@@ -215,11 +215,9 @@ def load_and_validate_csv(
     # non-zero sum is the real signal that thermal data was supplied and used.)
     if df["thermal_gen_mw"].abs().sum() > 0:
         warns.append(
-            "thermal_gen_mw detected — net_demand_mw is treated as the metered "
-            "boundary flow, so on-site thermal generation must already be reflected "
-            "in it. flexiq uses thermal_gen_mw only for baseline fuel cost, never to "
-            "adjust net demand. If thermal output was not subtracted when preparing "
-            "net_demand_mw, results will be incorrect."
+            "thermal_gen_mw detected — used for baseline fuel cost only, never to "
+            "adjust net demand. Make sure thermal output was already subtracted when "
+            "you built net_demand_mw, or savings will be overstated."
         )
 
     # --- Check for gaps in the interval sequence ---
