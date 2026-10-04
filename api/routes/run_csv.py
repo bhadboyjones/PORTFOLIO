@@ -66,7 +66,14 @@ def _build_bess_params(
     }
 
 
-def _serialise_scenario(settled, scenario_label: str, export_limit_mw: float, sp_duration_hrs: float = 0.5) -> dict:
+def _serialise_scenario(
+    settled,
+    scenario_label: str,
+    export_limit_mw: float,
+    sp_duration_hrs: float = 0.5,
+    power_mw: float = None,
+    capacity_mwh: float = None,
+) -> dict:
     """Build summary stats and SP-level timeseries for one settled scenario."""
     net_benefit_gbp      = float(settled["net_settlement_gbp"].sum())
     baseline_net_gbp     = float(settled["baseline_net_gbp"].sum())
@@ -101,6 +108,8 @@ def _serialise_scenario(settled, scenario_label: str, export_limit_mw: float, sp
     return {
         "scenario_label":        scenario_label,
         "export_limit_mw":       export_limit_mw,
+        "power_mw":              power_mw,
+        "capacity_mwh":          capacity_mwh,
         "net_benefit_gbp":       _f(net_benefit_gbp, 2),
         "baseline_net_gbp":      _f(baseline_net_gbp, 2),
         "baseline_import_cost_gbp": _f(float(settled["baseline_import_cost_gbp"].sum()), 2),
@@ -137,7 +146,9 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
 
         # 1. Load and validate CSV — unlink temp file immediately after reading
         try:
-            csv_df, warnings, sp_duration_hrs, n_sps_per_day = load_and_validate_csv(csv_path, chp_toggle=params.chp_toggle)
+            csv_df, warnings, sp_duration_hrs, n_sps_per_day = load_and_validate_csv(
+                csv_path, chp_toggle=params.chp_toggle, input_unit=params.input_unit,
+            )
             for w in warnings:
                 logger.warning("[job %s] CSV validation: %s", job_id, w)
         finally:
@@ -196,6 +207,11 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
         data_start = df["startTime"].min().date()
         data_end   = df["startTime"].max().date()
         n_days     = (data_end - data_start).days + 1
+        # Calendar span (n_days) is for display. Annualisation must divide by the
+        # days actually covered: on a CSV with gaps the span overstates coverage
+        # and understates annual benefit. Rows × interval length is coverage
+        # (the price join is a left join and NaNs are filled, so rows = intervals).
+        coverage_days = len(df) * sp_duration_hrs / 24
         del csv_df
 
         # Baseline is computed per-scenario inside the loop below because export
@@ -265,7 +281,12 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 settled["scenario_label"]  = label
                 settled["export_limit_mw"] = export_lim
 
-                all_results.append(_serialise_scenario(settled, label, export_lim, sp_duration_hrs=sp_duration_hrs))
+                all_results.append(_serialise_scenario(
+                    settled, label, export_lim,
+                    sp_duration_hrs=sp_duration_hrs,
+                    power_mw=bess_cfg["power_mw"],
+                    capacity_mwh=bess_cfg["capacity_mwh"],
+                ))
 
                 pkl_path = os.path.join(tmp_dir, f"scenario_{scenario_idx}.pkl")
                 settled.to_pickle(pkl_path)
@@ -299,6 +320,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 "start": data_start.isoformat(),
                 "end":   data_end.isoformat(),
                 "n_days": n_days,
+                "coverage_days": round(coverage_days, 4),
                 "resolution": "hourly" if sp_duration_hrs == 1.0 else "half-hourly",
             },
         )

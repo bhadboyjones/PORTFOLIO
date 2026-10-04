@@ -6,6 +6,7 @@ import CumulativePnlChart from "../components/CumulativePnlChart";
 import DispatchProfileChart from "../components/DispatchProfileChart";
 import RevenueStackChart from "../components/RevenueStackChart";
 import BaselineComparisonChart from "../components/BaselineComparisonChart";
+import InvestmentCard from "../components/InvestmentCard";
 import DayTape from "../components/DayTape";
 
 const DISPLAY_NAMES = {
@@ -250,6 +251,11 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
         <div style={{ marginBottom: "2rem" }}>
           <ScenarioTable rankedScenarios={rankedScenarios} />
         </div>
+
+        {/* Investment case — lifetime NPV/IRR view of the same scenarios.
+            Annualises by days of data actually covered (not calendar span),
+            so CSV mode only. */}
+        <InvestmentCard rankedScenarios={rankedScenarios} nDays={dataPeriod?.coverage_days ?? dataPeriod?.n_days} />
 
         {/* Charts */}
         <div style={{

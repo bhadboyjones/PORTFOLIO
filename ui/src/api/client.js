@@ -53,3 +53,17 @@ export async function getDnoRates(dno, voltage) {
 export function getExportUrl(jobId) {
   return `${API_BASE_URL}/export/${jobId}`;
 }
+
+export async function postInvestmentEvaluate(payload) {
+  const res = await fetch(`${API_BASE_URL}/investment/evaluate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = "Failed to evaluate investment case";
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(typeof detail === "string" ? detail : "Invalid investment inputs");
+  }
+  return res.json();
+}

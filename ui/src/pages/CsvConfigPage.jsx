@@ -71,6 +71,14 @@ async function parseCsvMeta(file) {
   }
 }
 
+// Mirrors src/csv_pipeline.py INPUT_UNITS.
+const INPUT_UNIT_OPTIONS = [
+  { value: "mw",  label: "MW — average power per interval" },
+  { value: "kw",  label: "kW — average power per interval" },
+  { value: "mwh", label: "MWh per interval (energy)" },
+  { value: "kwh", label: "kWh per interval (energy)" },
+];
+
 export default function CsvConfigPage({ onRunStarted, jobError }) {
   const fileInputRef = useRef(null);
 
@@ -82,6 +90,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const [voltageLevel, setVoltageLevel]   = useState("LV");
   const [priceExposure, setPriceExposure] = useState("da");
   const [thermalGenToggle, setThermalGenToggle] = useState(false);
+  const [inputUnit, setInputUnit] = useState("mw");
   const [thermalMcGbpMwh, setThermalMcGbpMwh] = useState("70");
 
   const [powers, setPowers]           = useState(["1", "2", "3"]);
@@ -235,6 +244,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       fd.append("export_limits_json", JSON.stringify(validExportLimits));
       fd.append("bess_max_cycles", bessMaxCycles || "1.5");
       fd.append("chp_toggle", String(thermalGenToggle));
+      fd.append("input_unit", inputUnit);
       fd.append("price_exposure", priceExposure);
       fd.append("nec_gbp_mwh", advanced.necGbpMwh || "103.75");
       fd.append("chp_mc_gbp_mwh", thermalMcGbpMwh || "70");
@@ -412,6 +422,21 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Units — meters usually export energy per interval, but the model works
+              in average MW. Picking the wrong unit halves (or 1000×) every number. */}
+          <div style={{ marginTop: "1rem", maxWidth: 360 }}>
+            <FieldLabel>Units of your meter values</FieldLabel>
+            <select value={inputUnit} onChange={(e) => setInputUnit(e.target.value)} style={selectStyle(true)}>
+              {INPUT_UNIT_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.35rem", lineHeight: 1.6 }}>
+              Applies to <code>net_demand_mw</code> and <code>thermal_gen_mw</code>. Half-hourly meter exports
+              are usually kWh or MWh per half-hour; they are converted to average MW on upload.
+            </div>
           </div>
         </Card>
 
