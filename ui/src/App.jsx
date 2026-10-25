@@ -81,15 +81,18 @@ export default function App() {
     navigate({ view: "progress", jobId });
   }
 
-  function handleComplete(jobId, payload, warns, period) {
+  async function handleComplete(jobId, payload, warns, period) {
     const { results, mode } = normalise(payload);
     const p = pending?.jobId === jobId ? pending : null;
+    // Reopening a finished run's progress link has no pending inputs: keep the
+    // ones already saved for it rather than overwriting them with nothing.
+    const saved = p ? null : await loadResults(jobId);
     const entry = {
       jobId, results, mode,
       warnings: warns && warns.length ? warns : null,
       dataPeriod: period ?? null,
-      bands: p?.bands ?? null,
-      runInputs: p?.runInputs ?? null,
+      bands: p?.bands ?? saved?.bands ?? null,
+      runInputs: p?.runInputs ?? saved?.runInputs ?? null,
     };
     setRun(entry);
     saveResults(entry);
@@ -97,8 +100,8 @@ export default function App() {
     navigate({ view: "results", jobId }, { replace: true });
   }
 
-  function handleFailed(msg) {
-    setRunError(msg);
+  function handleFailed(msg, code = null) {
+    setRunError({ message: msg, code });
     navigate({ view: "config", mode: pending?.mode ?? "csv" }, { replace: true });
   }
 
@@ -161,7 +164,8 @@ export default function App() {
             <div hidden={!(showConfig && route.mode === "csv")}>
               <CsvConfigPage
                 onRunStarted={(id, bands, inputs) => handleRunStarted(id, bands, inputs, "csv")}
-                jobError={showConfig && route.mode === "csv" ? runError : null}
+                jobError={showConfig && route.mode === "csv" ? runError?.message ?? null : null}
+                jobErrorCode={showConfig && route.mode === "csv" ? runError?.code ?? null : null}
               />
             </div>
           )}
@@ -169,7 +173,7 @@ export default function App() {
             <div hidden={!(showConfig && route.mode === "archetype")}>
               <ConfigPage
                 onRunStarted={(id) => handleRunStarted(id, null, null, "archetype")}
-                jobError={showConfig && route.mode === "archetype" ? runError : null}
+                jobError={showConfig && route.mode === "archetype" ? runError?.message ?? null : null}
               />
             </div>
           )}

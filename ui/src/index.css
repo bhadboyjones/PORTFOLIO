@@ -322,3 +322,8 @@ input:focus-visible + .toggle-track {
   .scn-table-wrap { display: none; }
   .scn-list { display: block; }
 }
+
+/* Figures being replaced (re-pricing, or inputs invalid): dim, don't hide. */
+.is-stale { opacity: 0.5; }
+.is-stale, .pair, section { transition: opacity 150ms ease; }
+input[aria-invalid="true"] { border-color: var(--negative) !important; }

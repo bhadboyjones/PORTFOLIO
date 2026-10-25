@@ -39,6 +39,8 @@ export async function parseCsvMeta(file) {
     // Coverage and gaps from every timestamp; peak import in the file's own
     // unit (converted for display once the unit is known).
     let gaps = null, coverageDays = null, intervalMin = null, peakRaw = null;
+    const abs = [];
+    let absMaxRaw = null, absMaxTs = null;
     const ndIdx = headers.indexOf("net_demand_mw");
     if (tsIdx >= 0) {
       const times = [];
@@ -48,7 +50,12 @@ export async function parseCsvMeta(file) {
         if (!Number.isNaN(t)) times.push(t);
         if (ndIdx >= 0) {
           const v = parseFloat(cells[ndIdx]);
-          if (Number.isFinite(v) && (peakRaw == null || v > peakRaw)) peakRaw = v;
+          if (Number.isFinite(v)) {
+            if (peakRaw == null || v > peakRaw) peakRaw = v;
+            const a = Math.abs(v);
+            abs.push(a);
+            if (absMaxRaw == null || a > absMaxRaw) { absMaxRaw = a; absMaxTs = (cells[tsIdx] || "").replace(/^"|"$/g, "").trim(); }
+          }
         }
       }
       times.sort((a, b) => a - b);
@@ -62,16 +69,50 @@ export async function parseCsvMeta(file) {
         }
       }
     }
-    return { rows, headers, dateRange, resolution, gaps, coverageDays, intervalMin, peakRaw };
+    abs.sort((a, b) => a - b);
+    const p99AbsRaw = abs.length ? abs[Math.min(abs.length - 1, Math.floor(0.99 * (abs.length - 1)))] : null;
+    return { rows, headers, dateRange, resolution, gaps, coverageDays, intervalMin, peakRaw, absMaxRaw, absMaxTs, p99AbsRaw };
   } catch {
     return { rows: null, headers: [], dateRange: null, resolution: null };
   }
 }
 
+/** Multiplier from the file's unit to kW (energy units need the interval). */
+export function toKwFactor(inputUnit, intervalMin) {
+  if (!intervalMin) return null;
+  const h = intervalMin / 60;
+  return { mw: 1000, kw: 1, mwh: 1000 / h, kwh: 1 / h }[inputUnit] ?? null;
+}
+
 /** Peak import in kW, given the unit the user says the file is in. */
 export function peakKw(meta, inputUnit) {
-  if (meta?.peakRaw == null || !meta.intervalMin) return null;
-  const h = meta.intervalMin / 60;
-  const v = { mw: meta.peakRaw * 1000, kw: meta.peakRaw, mwh: (meta.peakRaw / h) * 1000, kwh: meta.peakRaw / h }[inputUnit];
-  return v ?? null;
+  const f = toKwFactor(inputUnit, meta?.intervalMin);
+  if (meta?.peakRaw == null || f == null) return null;
+  return meta.peakRaw * f;
+}
+
+// Mirrors api/routes/run_csv.py _data_check, so the user sees the problem
+// before uploading. The server checks again (XLSX files are only read there).
+export const PLAUSIBLE_PEAK_KW = [5, 50000];
+export const SPIKE_RATIO = 5;
+
+const nf = (v) => Math.round(v).toLocaleString("en-GB");
+
+/** @returns {{ code: "data_check" | "mic_required", text: string }[]} */
+export function dataIssues(meta, inputUnit, micEntered) {
+  const f = toKwFactor(inputUnit, meta?.intervalMin);
+  if (!meta || f == null || meta.absMaxRaw == null) return [];
+  const out = [];
+  if (!micEntered && meta.peakRaw != null && meta.peakRaw <= 0) {
+    out.push({ code: "mic_required", text: "This site never imports in the data, so its MIC can't be assumed. Enter the agreed import capacity below." });
+  }
+  const peak = meta.absMaxRaw * f;
+  const p99 = (meta.p99AbsRaw ?? 0) * f;
+  const [lo, hi] = PLAUSIBLE_PEAK_KW;
+  if (p99 > 0 && peak > SPIKE_RATIO * p99) {
+    out.push({ code: "data_check", text: `One reading (${nf(peak)} kW${meta.absMaxTs ? ` at ${meta.absMaxTs}` : ""}) is more than ${SPIKE_RATIO} times the site's usual peak (${nf(p99)} kW). It looks like a meter error and would distort the MIC and the bill.` });
+  } else if (peak < lo || peak > hi) {
+    out.push({ code: "data_check", text: `The largest reading is ${nf(peak)} kW in the selected unit, outside the ${nf(lo)} to ${nf(hi)} kW a C&I site normally sits in. Check the unit above.` });
+  }
+  return out;
 }

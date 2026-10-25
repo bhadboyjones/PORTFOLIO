@@ -96,24 +96,30 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
 
       <div className="results-grid" style={{ marginTop: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
+          {inv.available && inv.stale && !inv.loading && (
+            <p role="status" style={{ margin: 0, fontSize: 14, color: "var(--pill-warning-ink)" }}>
+              Figures shown are for the last valid inputs. Fix the highlighted assumptions to update them.
+            </p>
+          )}
           {inv.available ? (
-            <>
+            <div className={inv.stale ? "is-stale" : undefined} style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
               <LeadStrip inv={bestInv} effPct={effPct} lifetime={lifetime} loading={inv.loading || !bestInv} />
               <WhyCard
                 loading={!bestInv}
                 lines={explain({ best, inv: bestInv, assumptions: inv.assumptions, nDays, dataPeriod, bands: mode === "csv" ? bands : null })}
               />
-            </>
+            </div>
           ) : null}
 
           {selected && (
-            <div className="pair">
+            <div className={`pair${inv.stale ? " is-stale" : ""}`}>
               <CashflowChart available={inv.available} inv={selInv} label={selLabel} lifetime={lifetime} discountPct={inv.assumptions?.discount_rate_pct ?? 8} />
               <BillChart scenario={selected} label={selLabel} annual={annual} nDays={nDays ?? 0} />
             </div>
           )}
 
           <Card
+            style={inv.stale ? { opacity: 0.5 } : undefined}
             id="sizes"
             title="Battery sizes compared"
             subtitle={`${scenarios.length} scenario${scenarios.length === 1 ? "" : "s"}. Select one to show it in the charts.`}
@@ -150,7 +156,7 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
 
         <aside style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }} aria-label="Assumptions and model scope">
           {inv.available && (
-            <InvestmentInputs form={form} setForm={setForm} loading={inv.loading} error={inv.error} warnings={inv.result?.warnings} />
+            <InvestmentInputs form={form} setForm={setForm} loading={inv.loading} error={inv.error} invalid={inv.invalid} warnings={inv.result?.warnings} />
           )}
           <ScopeDetails runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} />
         </aside>

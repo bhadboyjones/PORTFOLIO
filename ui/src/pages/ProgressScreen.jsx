@@ -27,7 +27,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
           }, reduced ? 0 : 400);
           return;
         }
-        if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error."); return; }
+        if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error.", data.error_code ?? null); return; }
         setTimeout(poll, 3000);
       } catch (e) {
         if (cancelled) return;

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
-import { parseCsvMeta, peakKw } from "../lib/csvMeta";
+import { parseCsvMeta, peakKw, dataIssues } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
   { key: "UKPN", label: "UK Power Networks (SE / East / London)" },
@@ -38,7 +38,7 @@ const INPUT_UNIT_OPTIONS = [
   { value: "kwh", label: "kWh per interval (energy)" },
 ];
 
-export default function CsvConfigPage({ onRunStarted, jobError }) {
+export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) {
   const uid = useId();
   const fileInputRef = useRef(null);
 
@@ -98,9 +98,17 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const scenarioCount    = selectedCount * validExportCount;
   const thermalGenWarning = thermalGenToggle && parsedMeta?.headers?.length > 0 && !parsedMeta.headers.includes("thermal_gen_mw");
   const resolutionError   = parsedMeta?.resolution?.valid === false;
+  const [confirmData, setConfirmData] = useState(false);
+  useEffect(() => { setConfirmData(false); }, [file, inputUnit]);
   const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
   const micValid          = micKva === "" || parseFloat(micKva) > 0;
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid;
+  // Data check (mirrors the server): a unit mistake or a meter spike blocks the
+  // run until fixed or confirmed; an export-only site needs its MIC entered.
+  const issues            = dataIssues(parsedMeta, inputUnit, micKva !== "");
+  const needsMic          = issues.some((i) => i.code === "mic_required") || jobErrorCode === "mic_required";
+  const needsConfirm      = issues.some((i) => i.code === "data_check") || jobErrorCode === "data_check";
+  const dataOk            = !needsMic && (!needsConfirm || confirmData);
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid && dataOk;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -216,6 +224,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       if (micKva) fd.append("contracted_kva", micKva);
       fd.append("mic_unit", micUnit);
       fd.append("power_factor", powerFactor || "1");
+      if (confirmData) fd.append("confirm_data", "true");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
       fd.append("rag_red_start",           advanced.ragRedStart           || "16:00");
@@ -376,7 +385,17 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               meta={parsedMeta}
               inputUnit={inputUnit}
               dnoLabel={DNO_OPTIONS.find((d) => d.key === dnoKey)?.label}
+              issues={issues}
             />
+          )}
+          {needsConfirm && !needsMic && (
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 12, fontSize: 14 }}>
+              <input type="checkbox" checked={confirmData} onChange={(e) => setConfirmData(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>
+                <strong style={{ fontWeight: 500 }}>My data is correct.</strong>{" "}
+                <span style={{ color: "var(--muted)" }}>Run it anyway; results will be based on these readings as they are.</span>
+              </span>
+            </label>
           )}
         </Card>
 
@@ -955,7 +974,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Errors ──────────────────────────────────── */}
         {jobError && (
-          <div role="alert" style={errorBox}>Run failed: {jobError}</div>
+          <div role="alert" style={errorBox}>
+            {jobErrorCode === "data_check" || jobErrorCode === "mic_required" ? "Check your data: " : "Run failed: "}{jobError}
+          </div>
         )}
         {runError && (
           <div role="alert" style={errorBox}>{runError}</div>
@@ -983,6 +1004,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
               !pfValid && "set the power factor between 0.5 and 1.0",
               !micValid && "enter a MIC above zero, or leave it blank",
+              needsMic && "enter the site's MIC (it never imports in this data)",
+              needsConfirm && !needsMic && !confirmData && "fix the data or tick \u201cMy data is correct\u201d",
             ].filter(Boolean).join(", ")}.
           </div>
         )}
@@ -1124,7 +1147,7 @@ const smallBtn = {
 
 // What flexiq read from the file, echoed before the run so a wrong unit,
 // a gap or the wrong DNO shows up now rather than in the results.
-function FileEcho({ file, meta, inputUnit, dnoLabel }) {
+function FileEcho({ file, meta, inputUnit, dnoLabel, issues = [] }) {
   const isCsv = file.name.toLowerCase().endsWith(".csv");
   const peak = peakKw(meta, inputUnit);
   const nf = (v, d = 0) => v == null ? "\u2013" : v.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -1154,7 +1177,12 @@ function FileEcho({ file, meta, inputUnit, dnoLabel }) {
           XLSX files are read on the server. Coverage, gaps and the peak appear on the results page.
         </p>
       )}
-      {isCsv && peak != null && (
+      {issues.map((i) => (
+        <p key={i.code} role="alert" style={{ margin: "8px 0 0", fontSize: 14, padding: "8px 12px", borderRadius: 6, background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)", color: "var(--pill-warning-ink)" }}>
+          {i.text}
+        </p>
+      ))}
+      {isCsv && peak != null && !issues.length && (
         <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--muted)" }}>
           If the peak looks 1,000 times too big or small, change the unit above.
         </p>

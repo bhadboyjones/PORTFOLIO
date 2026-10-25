@@ -51,3 +51,29 @@ describe("peakKw", () => {
     expect(peakKw({ peakRaw: 1, intervalMin: null }, "mw")).toBeNull();
   });
 });
+
+import { dataIssues, toKwFactor } from "../csvMeta";
+describe("dataIssues", () => {
+  const base = { intervalMin: 30, peakRaw: 1.1, absMaxRaw: 1.1, p99AbsRaw: 1.0, absMaxTs: "2024-01-03 10:00" };
+  it("passes a normal site", () => {
+    expect(dataIssues(base, "mw", false)).toEqual([]);
+  });
+  it("flags kW read as MW and MW read as kW", () => {
+    expect(dataIssues({ ...base, peakRaw: 1100, absMaxRaw: 1100, p99AbsRaw: 1000 }, "mw", false)[0].code).toBe("data_check");
+    expect(dataIssues(base, "kw", false)[0].text).toContain("1 kW in the selected unit");
+  });
+  it("flags a single spike before the range rule", () => {
+    const [issue] = dataIssues({ ...base, absMaxRaw: 99.999, peakRaw: 99.999, p99AbsRaw: 0.8 }, "mw", false);
+    expect(issue.text).toContain("99,999 kW at 2024-01-03 10:00");
+    expect(issue.text).toContain("800 kW");
+  });
+  it("asks for a MIC when the site never imports", () => {
+    const issues = dataIssues({ ...base, peakRaw: -0.2, absMaxRaw: 0.8, p99AbsRaw: 0.7 }, "mw", false);
+    expect(issues.map((i) => i.code)).toEqual(["mic_required"]);
+    expect(dataIssues({ ...base, peakRaw: -0.2, absMaxRaw: 0.8, p99AbsRaw: 0.7 }, "mw", true)).toEqual([]);
+  });
+  it("converts energy units with the interval", () => {
+    expect(toKwFactor("kwh", 30)).toBe(2);
+    expect(toKwFactor("mwh", 60)).toBe(1000);
+  });
+});
