@@ -35,15 +35,43 @@ from .config import TOTAL_IMPORT_LEVIES_GBP_PER_MWH, UK_BANK_HOLIDAYS
 # CSV load and validation
 # ---------------------------------------------------------------------------
 
+INPUT_UNITS = ("mw", "kw", "mwh", "kwh")
+
+
+def _unit_to_mw_factor(input_unit: str, sp_duration_hrs: float) -> float:
+    """Multiplier that turns an uploaded value into average MW over its interval.
+
+    Meters usually export energy per interval (kWh or MWh per half-hour). The
+    model works in average MW and converts back to energy with
+    × sp_duration_hrs, so dividing energy by the interval length here makes
+    that round trip exact: 0.5 MWh in a half-hour → 1.0 MW → × 0.5 → 0.5 MWh.
+    """
+    if input_unit == "mw":
+        return 1.0
+    if input_unit == "kw":
+        return 1.0 / 1000.0
+    if input_unit == "mwh":
+        return 1.0 / sp_duration_hrs
+    if input_unit == "kwh":
+        return 1.0 / (1000.0 * sp_duration_hrs)
+    raise ValueError(f"input_unit must be one of {INPUT_UNITS}, got '{input_unit}'.")
+
+
 def load_and_validate_csv(
     filepath: str,
     chp_toggle: bool = False,
+    input_unit: str = "mw",
 ) -> tuple[pd.DataFrame, list[str], float, int]:
     """
     Load and validate a site meter CSV or XLSX file.
 
     Required columns: timestamp, net_demand_mw
     Conditional column: thermal_gen_mw (required if chp_toggle=True)
+
+    input_unit states what the numbers in net_demand_mw / thermal_gen_mw are:
+    "mw" or "kw" (average power over the interval), or "mwh" / "kwh" (energy
+    per interval). Values are converted to average MW once the interval length
+    is known. Default "mw" preserves the original behaviour.
 
     Validation checks:
     - Required columns present
@@ -190,12 +218,18 @@ def load_and_validate_csv(
         warns.append(f"{nan_count} NaN values in net_demand_mw filled with 0.0.")
         df["net_demand_mw"] = df["net_demand_mw"].fillna(0.0)
 
-    # --- Unit-magnitude sanity check ---
+    # --- Unit conversion to average MW (needs sp_duration_hrs, so runs here) ---
+    factor = _unit_to_mw_factor(input_unit, sp_duration_hrs)
+    if factor != 1.0:
+        df["net_demand_mw"] = df["net_demand_mw"] * factor
+        df["thermal_gen_mw"] = df["thermal_gen_mw"] * factor
+
+    # --- Unit-magnitude sanity check (on converted MW values) ---
     p99 = df["net_demand_mw"].abs().quantile(0.99)
     if p99 > 50:
         warns.append(
-            f"net_demand_mw 99th percentile is {p99:.1f} MW — values may be in kW "
-            f"rather than MW. If so, divide by 1000 before uploading."
+            f"net_demand_mw 99th percentile is {p99:.1f} MW after unit conversion — "
+            f"check the selected input unit (kW vs MW, kWh vs MWh)."
         )
 
     # --- thermal_gen_mw NaN / negative handling ---

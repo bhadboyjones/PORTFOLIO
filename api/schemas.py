@@ -2,8 +2,9 @@ import json as _json
 from typing import Optional
 
 from fastapi import Depends, Form, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from src.csv_pipeline import INPUT_UNITS
 from src.duos_rates import VALID_DNOS, VALID_VOLTAGE_LEVELS
 
 
@@ -56,6 +57,43 @@ class RunStatusResponse(BaseModel):
     data_period: Optional[dict] = None
 
 
+class InvestmentScenarioIn(BaseModel):
+    """One optimiser scenario to appraise — the caller passes these straight
+    from the results payload (net_benefit_gbp over the data period)."""
+    scenario_label: str
+    export_limit_mw: float = 0.0
+    power_mw: float = Field(..., gt=0)
+    capacity_mwh: float = Field(..., gt=0)
+    period_benefit_gbp: float
+    # Degradation wear accrual (deg_cost_gbp) already subtracted inside
+    # period_benefit_gbp. Added back before the cashflow: the battery's cost
+    # sits in year 0 as capex, so charging wear as well double-counts it.
+    period_wear_cost_gbp: float = Field(0.0, ge=0)
+
+
+class InvestmentAssumptions(BaseModel):
+    """Editable appraisal assumptions. Defaults are placeholders, not market
+    data — see docs/investment_case.md for the rationale behind each."""
+    capex_gbp_per_kw: float = Field(150.0, ge=0)
+    capex_gbp_per_kwh: float = Field(250.0, ge=0)
+    capex_fixed_gbp: float = Field(0.0, ge=0)
+    opex_pct_of_capex: float = Field(1.5, ge=0, le=10)
+    lifetime_yrs: int = Field(15, ge=1, le=40)
+    discount_rate_pct: float = Field(8.0, ge=0, le=30)
+    fade_pct_yr: float = Field(2.5, ge=0, le=10)
+    escalation_pct_yr: float = Field(2.0, ge=-5, le=15)
+    # Foresight haircut: the backtest dispatches with perfect price foresight,
+    # so its benefit is a ceiling. This scales it to a realistic central case.
+    # 100 = raw backtest (upper bound); ~85 = typical real-operation capture.
+    dispatch_efficiency_pct: float = Field(85.0, ge=0, le=100)
+
+
+class InvestmentEvaluateRequest(BaseModel):
+    n_days: float = Field(..., gt=0, description="Days of data actually covered (coverage, not calendar span)")
+    scenarios: list[InvestmentScenarioIn] = Field(..., min_length=1, max_length=24)
+    assumptions: InvestmentAssumptions = InvestmentAssumptions()
+
+
 class CsvRunParams:
     """
     Dependency class for POST /run/csv multipart/form-data.
@@ -102,6 +140,11 @@ class CsvRunParams:
             None, description="Contracted capacity (kVA). Defaults to peak CSV demand at unity PF.",
         ),
         chp_toggle: bool = Form(False, description="True if site has CHP generation."),
+        input_unit: str = Form(
+            "mw",
+            description="Unit of net_demand_mw/thermal_gen_mw values: 'mw' or 'kw' (average power), "
+                        "'mwh' or 'kwh' (energy per interval). Converted to average MW on load.",
+        ),
         price_exposure: str = Form("da", description="'da' or 'imbalance'"),
         chp_mc_gbp_mwh: float = Form(70.0, description="CHP marginal fuel cost (£/MWh)."),
         nec_gbp_mwh: float = Form(103.75, description="Non-energy charges (£/MWh)."),
@@ -135,6 +178,11 @@ class CsvRunParams:
             raise HTTPException(
                 status_code=422,
                 detail=f"voltage_level must be 'LV' or 'HV', got '{voltage_level}'.",
+            )
+        if input_unit not in INPUT_UNITS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"input_unit must be one of {list(INPUT_UNITS)}, got '{input_unit}'.",
             )
         if price_exposure not in ("da", "imbalance"):
             raise HTTPException(
@@ -224,6 +272,7 @@ class CsvRunParams:
 
         self.contracted_kva  = contracted_kva
         self.chp_toggle      = chp_toggle
+        self.input_unit      = input_unit
         self.price_exposure  = price_exposure
         self.chp_mc_gbp_mwh  = chp_mc_gbp_mwh
         self.nec_gbp_mwh     = nec_gbp_mwh
