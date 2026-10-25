@@ -8,6 +8,7 @@ import {
   gridProps, controlStyles,
 } from "./chartTheme";
 import { num } from "../format";
+import { niceTicks } from "../lib/results";
 
 function fmtTime(s) {
   if (!s) return "";
@@ -54,6 +55,9 @@ export default function DispatchProfileChart({ scenario }) {
       soc_mwh: r.soc_mwh ?? null,
     })), [scenario, start, end]);
 
+  const mwPeak = Math.max(0.1, ...data.map((d) => Math.max(d.dis1_mw + d.dis2_mw, -(d.charge1_mw + d.charge2_mw))));
+  const mwAxis = niceTicks(-mwPeak, mwPeak, 4);
+  const socAxis = niceTicks(0, Math.max(0.1, ...data.map((d) => d.soc_mwh ?? 0)), 4);
   const used = DISPATCH_SERIES.filter(([k]) => data.some((d) => Math.abs(d[k]) > 1e-6));
   const dayTicks = data.filter((d) => d.time?.slice(11, 16) === "00:00").map((d) => d.time);
 
@@ -77,12 +81,12 @@ export default function DispatchProfileChart({ scenario }) {
         </ul>
       </div>
       <div style={{ height: 280 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
           <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap={0}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="time" tickFormatter={fmtTime} tick={axisTick} ticks={dayTicks} axisLine={axisLineProps} tickLine={false} />
-            <YAxis yAxisId="mw" tickFormatter={(v) => num(v, 1)} tick={axisTick} width={40} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="mwh" orientation="right" tickFormatter={(v) => num(v, 1)} tick={axisTick} width={40} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="mw" tickFormatter={(v) => num(v, mwAxis.decimals)} ticks={mwAxis.ticks} domain={mwAxis.domain} tick={axisTick} width={44} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="mwh" orientation="right" tickFormatter={(v) => num(v, socAxis.decimals)} ticks={socAxis.ticks} domain={socAxis.domain} tick={axisTick} width={44} axisLine={false} tickLine={false} />
             <Tooltip
               formatter={(v, name) => [name === "State of charge" ? `${num(v, 2)} MWh` : `${num(Math.abs(v), 2)} MW`, name]}
               labelFormatter={fmtTimeFull} {...tooltipProps} />

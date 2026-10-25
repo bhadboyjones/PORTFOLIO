@@ -15,7 +15,7 @@ export default function BessConfigurator({
     <div>
       {/* MW × Duration matrix */}
       <div style={{ overflowX: "auto", marginBottom: "1.5rem" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: "0.82rem" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr>
               <th style={cornerCell}></th>
@@ -39,7 +39,7 @@ export default function BessConfigurator({
                         onClick={() => onToggleCell(cellId)}
                         disabled={locked}
                         aria-pressed={active}
-                        title={locked ? "Max 3 BESS configs selected" : `${mw} MW / ${d}h`}
+                        aria-label={`${mw} MW / ${mw * d} MWh, ${d} hours${locked ? ", limit of 3 reached" : ""}`}
                         style={{
                           width: 52,
                           height: 38,
@@ -47,7 +47,7 @@ export default function BessConfigurator({
                           border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
                           background: active ? "var(--raised)" : locked ? "var(--ground)" : "var(--surface)",
                           cursor: locked ? "not-allowed" : "pointer",
-                          fontSize: "0.75rem",
+                          fontSize: 12,
                           color: locked ? "var(--faint)" : "var(--ink)",
                           fontWeight: active ? 500 : 400,
                         }}
@@ -65,7 +65,7 @@ export default function BessConfigurator({
 
       {/* Export limit pills */}
       <div style={{ marginBottom: "1.25rem" }}>
-        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 500, marginBottom: "0.6rem" }}>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500, marginBottom: "0.6rem" }}>
           Export limit
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -84,7 +84,7 @@ export default function BessConfigurator({
                   background: active ? "var(--raised)" : "var(--bg-surface)",
                   color: active ? "var(--accent)" : "var(--text-sec)",
                   cursor: "pointer",
-                  fontSize: "0.82rem",
+                  fontSize: 14,
                   fontWeight: 600,
                 }}
               >
@@ -97,20 +97,17 @@ export default function BessConfigurator({
 
       {/* Scenario count */}
       <div style={{
-        fontSize: "0.82rem",
+        fontSize: 14,
         color: scenarioCount > 0 ? "var(--text-sec)" : "var(--text-dim)",
         padding: "0.5rem 0",
         borderTop: "1px solid var(--border)",
       }}>
         {selectedCells.size > 0 && selectedExports.length > 0 && archetypeCount > 0 ? (
           <span className="tnum">
-            <span style={{ color: "var(--accent)", fontWeight: 700 }}>{selectedCells.size}</span> BESS config{selectedCells.size !== 1 ? "s" : ""} ×{" "}
-            <span style={{ color: "var(--accent)", fontWeight: 700 }}>{selectedExports.length}</span> export limit{selectedExports.length !== 1 ? "s" : ""} ×{" "}
-            <span style={{ color: "var(--accent)", fontWeight: 700 }}>{archetypeCount}</span> archetype{archetypeCount !== 1 ? "s" : ""} ={" "}
-            <span style={{ color: "var(--positive)", fontWeight: 700 }}>{scenarioCount} scenario{scenarioCount !== 1 ? "s" : ""}</span>
+            {selectedCells.size} battery size{selectedCells.size !== 1 ? "s" : ""} × {selectedExports.length} export limit{selectedExports.length !== 1 ? "s" : ""} × {archetypeCount} site{archetypeCount !== 1 ? "s" : ""} = <strong style={{ fontWeight: 500 }}>{scenarioCount} scenario{scenarioCount !== 1 ? "s" : ""}</strong>
           </span>
         ) : (
-          <span>Select BESS configs, export limits, and archetypes above</span>
+          <span>No scenarios yet.</span>
         )}
       </div>
     </div>
@@ -128,7 +125,7 @@ const cornerCell = {
   padding: "0.3rem 0.6rem",
   textAlign: "center",
   color: "var(--text-dim)",
-  fontSize: "0.75rem",
+  fontSize: 12,
 };
 
 const colHeader = {
@@ -145,6 +142,6 @@ const rowHeader = {
   textAlign: "right",
   color: "var(--text-sec)",
   fontWeight: 700,
-  fontSize: "0.8rem",
+  fontSize: 12,
   whiteSpace: "nowrap",
 };

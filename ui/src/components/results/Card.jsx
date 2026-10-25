@@ -31,7 +31,7 @@ export default function Card({ id, title, subtitle, csv, actions, children, styl
           {actions}
           {csv && (
             <button
-              className="btn-text"
+              className="btn-text csv-link"
               style={{ fontSize: 14, whiteSpace: "nowrap", color: "var(--muted)" }}
               onClick={() => downloadCsv(csv.filename, csv.rows, csv.columns)}
             >

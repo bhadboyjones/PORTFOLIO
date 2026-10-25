@@ -90,9 +90,10 @@ export default function ScenarioTable({ scenarios, byKey, selectedKey, onSelect,
                     style={{ textAlign: c.align, fontWeight: 400, fontSize: 12, color: "var(--muted)", padding: "0 8px 8px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}
                   >
                     <button
+                      className="cell-btn"
                       onClick={() => toggle(c.key)}
                       disabled={!hasInv && c.key !== "label" && c.key !== "export"}
-                      style={{ all: "unset", cursor: "pointer", display: "inline-flex", gap: 4, alignItems: "center" }}
+                      style={{ gap: 4 }}
                     >
                       {c.header}
                       <span aria-hidden="true" style={{ width: 8, color: "var(--ink)" }}>
@@ -110,6 +111,7 @@ export default function ScenarioTable({ scenarios, byKey, selectedKey, onSelect,
               return (
                 <tr
                   key={r.key}
+                  className="scn-row"
                   onClick={() => onSelect(r.key)}
                   style={{ cursor: "pointer", background: selected ? "var(--raised)" : undefined }}
                 >
@@ -127,9 +129,9 @@ export default function ScenarioTable({ scenarios, byKey, selectedKey, onSelect,
                     >
                       {i === 0 ? (
                         <button
+                          className="cell-btn"
                           aria-pressed={selected}
                           onClick={(e) => { e.stopPropagation(); onSelect(r.key); }}
-                          style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}
                         >
                           {r.label}
                           {r.key === bestKey && <Best />}
@@ -153,8 +155,8 @@ export default function ScenarioTable({ scenarios, byKey, selectedKey, onSelect,
               <button
                 aria-pressed={selected}
                 onClick={() => onSelect(r.key)}
-                className="tnum"
-                style={{ all: "unset", boxSizing: "border-box", display: "block", width: "100%", padding: "12px 8px", cursor: "pointer", background: selected ? "var(--raised)" : undefined }}
+                className="tnum cell-btn cell-btn--block"
+                style={{ padding: "12px 8px", background: selected ? "var(--raised)" : undefined }}
               >
                 <span style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <span style={{ minWidth: 0 }}>{r.label} · {cellText.export(r)}</span>
@@ -177,7 +179,7 @@ export default function ScenarioTable({ scenarios, byKey, selectedKey, onSelect,
 
 function Best() {
   return (
-    <span style={{ flex: "none", whiteSpace: "nowrap", fontSize: 12, lineHeight: "20px", padding: "0 8px", borderRadius: 4, background: "var(--pill-neutral-bg)", color: "var(--pill-neutral-ink)" }}>
+    <span style={{ flex: "none", whiteSpace: "nowrap", fontSize: 12, lineHeight: "20px", padding: "0 8px", borderRadius: 4, background: "var(--surface)", color: "var(--pill-neutral-ink)", border: "1px solid var(--control)" }}>
       Best NPV
     </span>
   );

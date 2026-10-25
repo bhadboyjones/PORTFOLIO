@@ -33,7 +33,7 @@ export default function DownloadButton({ jobId }) {
 
   return (
     <div style={{ textAlign: "right" }}>
-      <button className="btn-primary" onClick={handleDownload} disabled={loading}>
+      <button className="btn-primary" onClick={handleDownload} disabled={loading} aria-busy={loading} style={{ minWidth: 196 }}>
         {loading ? "Preparing report…" : "Download XLSX report"}
       </button>
       {error && (

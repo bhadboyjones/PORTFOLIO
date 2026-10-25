@@ -81,7 +81,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
         <div style={{ padding: "1.5rem 2rem", background: "var(--bg-card)", border: "1px solid var(--negative-a30)", borderRadius: 10, color: "var(--negative)", maxWidth: 480 }}>
           <strong>Failed to load configuration</strong>
-          <p style={{ margin: "0.5rem 0 0", fontSize: "0.875rem", color: "var(--text-sec)" }}>
+          <p style={{ margin: "0.5rem 0 0", fontSize: 14, color: "var(--text-sec)" }}>
             {loadError}. Is the API server running?
           </p>
         </div>
@@ -93,7 +93,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--text-dim)" }}>
-                    <span style={{ fontSize: "0.875rem" }}>Loading configuration…</span>
+                    <span style={{ fontSize: 14 }}>Loading configuration…</span>
         </div>
       </div>
     );
@@ -180,7 +180,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
                   <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
                     {desc}
                   </div>
                 </button>
@@ -191,18 +191,18 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
         {/* Errors */}
         {jobError && (
-          <div role="alert" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--pill-negative-bg)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
+          <div role="alert" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--pill-negative-bg)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: 14 }}>
             Run failed: {jobError}
           </div>
         )}
         {runError && (
-          <div role="alert" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--pill-negative-bg)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
+          <div role="alert" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--pill-negative-bg)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: 14 }}>
             {runError}
           </div>
         )}
 
         <div style={{
-          fontSize: "0.75rem",
+          fontSize: 12,
           color: "var(--text-dim)",
           background: "transparent",
           border: "none",
@@ -210,7 +210,7 @@ export default function ConfigPage({ onRunStarted, jobError }) {
           padding: "0.5rem 0.85rem",
           marginBottom: "0.75rem",
         }}>
-          Representative demand profiles for typical I&amp;C sites. Network rates based on Northern Powergrid NE HV 2026/27 tariffs.
+          Representative demand profiles for typical C&amp;I sites. Network rates based on Northern Powergrid NE HV 2026/27 tariffs.
         </div>
 
         <RunButton disabled={!canRun || submitting} onClick={handleRun} />

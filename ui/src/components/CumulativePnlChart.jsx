@@ -15,7 +15,7 @@ export default function CumulativePnlChart({ scenario }) {
   const ticks = data.filter((_, i) => i % step === 0).map((d) => d.date);
   return (
     <div style={{ height: 300 }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid {...gridProps} />
           <XAxis dataKey="date" tickFormatter={fmtDate} ticks={ticks} tick={axisTick} axisLine={axisLineProps} tickLine={false} />

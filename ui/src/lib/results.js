@@ -120,3 +120,36 @@ export function finding(best, inv, lifetime) {
   }
   return `No size pays back over ${lifetime} years at these assumptions. The closest, ${name}, has an NPV of ${gbp(inv.npv_gbp)}.`;
 }
+
+// ── Axis ticks ────────────────────────────────────────────────────────
+const NICE = [1, 2, 2.5, 5, 10];
+
+/** Smallest "nice" number (1, 2, 2.5, 5 × 10^n) at or above x. */
+export function niceCeil(x) {
+  if (!(x > 0)) return 1;
+  const p = 10 ** Math.floor(Math.log10(x));
+  return NICE.find((n) => n * p >= x - 1e-12) * p;
+}
+
+/**
+ * Ticks on whole steps for an axis from `min` to `max` (`count` intervals),
+ * with the decimals each label needs. Symmetric axes pass min = −max.
+ */
+export function niceTicks(min, max, count = 4) {
+  const lo = Math.min(0, min);
+  const hi = Math.max(0, max) > lo ? Math.max(0, max) : lo + 1; // all-zero data still gets an axis
+  const span = hi - lo;
+  const step = niceCeil(span / count);
+  const start = Math.floor(lo / step + 1e-9) * step;
+  const end = Math.ceil(hi / step - 1e-9) * step;
+  const ticks = [];
+  for (let v = start; v <= end + step / 2; v += step) ticks.push(Math.round(v / step) * step);
+  const decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-9) + (String(step / 10 ** Math.floor(Math.log10(step))).includes(".") ? 1 : 0));
+  return { ticks, domain: [ticks[0], ticks[ticks.length - 1]], decimals };
+}
+
+/** "2MW / 1MWh | Export 0 MW" (backend progress label) → "2 MW / 1 MWh, 0 MW export". */
+export function progressLabel(raw) {
+  const m = /([\d.]+)\s*MW\s*\/\s*([\d.]+)\s*MWh\s*\|\s*Export\s*([\d.]+)\s*MW/i.exec(raw || "");
+  return m ? `${m[1]} MW / ${m[2]} MWh, ${m[3]} MW export` : raw;
+}

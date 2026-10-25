@@ -43,6 +43,25 @@ export default function App() {
     }
   }, [route, opened]);
 
+  // Each screen gets its own tab title, and focus moves to its heading so
+  // screen readers announce the change (not on the very first load).
+  const [first, setFirst] = useState(true);
+  useEffect(() => {
+    const titles = { landing: "Battery appraisal", config: route.mode === "archetype" ? "Archetype sites" : "Site meter data", progress: "Running", results: "Results" };
+    document.title = `${titles[route.view] ?? "Battery appraisal"} · flexiq`;
+    if (first) { setFirst(false); return; }
+    // Screens load lazily, so the heading may not exist yet: retry briefly.
+    let tries = 0;
+    const id = setInterval(() => {
+      const h1 = [...document.querySelectorAll("main h1")].find((h) => h.offsetParent !== null);
+      if (h1 || ++tries > 40) {
+        clearInterval(id);
+        if (h1) { h1.setAttribute("tabindex", "-1"); h1.focus({ preventScroll: true }); }
+      }
+    }, 50);
+    return () => clearInterval(id);
+  }, [route.view, route.mode, route.jobId, run?.jobId, loadState]);
+
   // Results by URL: memory, then this browser's cache, then the server.
   useEffect(() => {
     if (route.view !== "results" || run?.jobId === route.jobId) return;
@@ -114,6 +133,11 @@ export default function App() {
 
   if (route.view === "progress") {
     step = "Running";
+    action = (
+      <button className="btn-text" onClick={() => navigate({ view: "config", mode: pending?.mode ?? "csv" })}>
+        Back to settings
+      </button>
+    );
     content = (
       <ProgressScreen
         key={route.jobId}

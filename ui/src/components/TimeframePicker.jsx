@@ -45,7 +45,7 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
             transition: "left var(--dur-fast) var(--ease-flex)",
           }} />
         </div>
-        <span style={{ fontSize: "0.85rem", color: "var(--text-sec)", userSelect: "none" }}>
+        <span style={{ fontSize: 14, color: "var(--text-sec)", userSelect: "none" }}>
           Use last 12 months
         </span>
       </label>
@@ -69,7 +69,7 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
                 border: "1px solid",
                 borderColor: useDefault ? "var(--border)" : "var(--border-bright)",
                 borderRadius: 6,
-                fontSize: "0.85rem",
+                fontSize: 14,
                 color: useDefault ? "var(--text-dim)" : "var(--text-pri)",
                 background: useDefault ? "var(--bg-base)" : "var(--bg-surface)",
                 cursor: useDefault ? "not-allowed" : "text",

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getRunStatus } from "../api/client";
 import ProgressBar from "../components/ProgressBar";
 import WarningsNotice from "../components/WarningsNotice";
+import { progressLabel } from "../lib/results";
 import useReducedMotion from "../hooks/useReducedMotion";
 
 export default function ProgressScreen({ jobId, onComplete, onFailed }) {
@@ -74,7 +75,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         </p>
         {current && !isBuilding && (
           <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--muted)" }}>
-            Now: <span className="tnum">{current}</span>
+            Now: <span className="tnum">{progressLabel(current)}</span>
           </p>
         )}
       </div>

@@ -32,7 +32,7 @@ export default function BillChart({ scenario, label, annual, nDays }) {
         <li style={{ display: "flex", alignItems: "center", gap: 6 }}><Swatch c={CHART_COLORS.data} />With battery</li>
       </ul>
       <div style={{ height: 212 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
           <BarChart data={rows} margin={{ top: 18, right: 4, left: 0, bottom: 0 }} barGap={2} barCategoryGap="22%">
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="part" tick={{ ...axisTick, fontSize: 12 }} axisLine={axisLineProps} tickLine={false} interval={0} />

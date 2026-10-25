@@ -47,6 +47,7 @@ export function gbpCompact(v) {
   if (missing(v)) return DASH;
   const a = Math.abs(v);
   const s = v < 0 ? MINUS : "";
+  if (a >= 1e9) return `${s}£${nf(0, 1).format(a / 1e9)}bn`;
   if (a >= 1e6) return `${s}£${nf(0, 1).format(a / 1e6)}m`;
   if (a >= 1e3) return `${s}£${nf(0, 0).format(a / 1e3)}k`;
   return `${s}£${nf(0, 0).format(a)}`;

@@ -5,6 +5,7 @@ import Card from "./Card";
 import { SERIES, tooltipProps, axisTick, axisLineProps, gridProps } from "../chartTheme";
 import { gbp, gbpCompact, num } from "../../format";
 import { scenarioKey, scenarioDims, sizeLabel } from "../../hooks/useInvestment";
+import { niceTicks } from "../../lib/results";
 
 // Year-1 saving by battery size, one line per export limit. Sizes run
 // smallest energy first, then power, so the x axis reads left to right.
@@ -33,6 +34,8 @@ export default function SizeChart({ scenarios, byKey, available = true }) {
     return v.length && Math.max(...v) - Math.min(...v) <= Math.max(1, 0.005 * Math.abs(Math.max(...v)));
   });
   const drawn = same ? limits.slice(0, 1) : limits;
+  const vals = data.flatMap((p) => drawn.map((l) => p[nameOf(l)])).filter((v) => v != null);
+  const yAxis = niceTicks(Math.min(0, ...vals), Math.max(1000, ...vals), 4);
 
   return (
     <Card
@@ -58,11 +61,11 @@ export default function SizeChart({ scenarios, byKey, available = true }) {
         <p style={{ margin: 0, color: "var(--muted)" }}>{available ? "Calculating the investment case…" : "No investment case for this run."}</p>
       ) : (
         <div style={{ height: 212 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
             <LineChart data={data} margin={{ top: 8, right: 28, left: 0, bottom: 0 }}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="size" tick={{ ...axisTick, fontSize: 12 }} axisLine={axisLineProps} tickLine={false} interval="preserveStartEnd" padding={{ left: 12, right: 12 }} />
-              <YAxis tickFormatter={gbpCompact} tick={axisTick} width={64} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={gbpCompact} ticks={yAxis.ticks} domain={yAxis.domain} tick={axisTick} width={64} axisLine={false} tickLine={false} />
               <Tooltip formatter={(v, n) => [`${gbp(v)}/yr`, n]} {...tooltipProps} />
               {drawn.map((l, i) => (
                 <Line key={l} dataKey={nameOf(l)} stroke={SERIES[i]} strokeWidth={2}

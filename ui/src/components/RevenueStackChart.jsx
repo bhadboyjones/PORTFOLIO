@@ -36,7 +36,7 @@ export default function RevenueStackChart({ scenario }) {
         <li style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 12, height: 2, background: CHART_COLORS.ink }} />Net per day</li>
       </ul>
       <div style={{ height: 280 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
           <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} stackOffset="sign" barCategoryGap={1}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" tickFormatter={fmtDate} ticks={ticks} tick={axisTick} axisLine={axisLineProps} tickLine={false} />
