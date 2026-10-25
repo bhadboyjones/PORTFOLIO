@@ -2,8 +2,9 @@ import { useState } from "react";
 import Card from "./Card";
 import Tabs from "../Tabs";
 import DispatchProfileChart from "../DispatchProfileChart";
-import RevenueStackChart, { aggregateDaily } from "../RevenueStackChart";
-import CumulativePnlChart, { dailyCumulative } from "../CumulativePnlChart";
+import RevenueStackChart from "../RevenueStackChart";
+import CumulativePnlChart from "../CumulativePnlChart";
+import { aggregateDaily, dailyCumulative } from "../../lib/results";
 
 const TABS = ["Half-hourly dispatch", "Daily value", "Saving to date"];
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
+import { parseCsvMeta, peakKw } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
   { key: "UKPN", label: "UK Power Networks (SE / East / London)" },
@@ -28,73 +29,6 @@ const DEFAULT_ADV = {
 
 function r4(v) { return String(parseFloat(v.toFixed(4))); }
 function r6(v) { return String(parseFloat(v.toFixed(6))); }
-
-async function parseCsvMeta(file) {
-  if (!file.name.toLowerCase().endsWith(".csv")) {
-    return { rows: null, headers: [], dateRange: null, resolution: null };
-  }
-  try {
-    const text = await file.text();
-    const lines = text.split("\n").filter((l) => l.trim());
-    if (lines.length < 2) return { rows: 0, headers: [], dateRange: null, resolution: null };
-    const headers = lines[0]
-      .split(",")
-      .map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
-    const rows = lines.length - 1;
-    const tsIdx = headers.indexOf("timestamp");
-    let dateRange = null;
-    let resolution = null;
-    if (tsIdx >= 0) {
-      const firstTs = (lines[1].split(",")[tsIdx] || "").replace(/^"|"$/g, "").trim();
-      const lastTs = (lines[lines.length - 1].split(",")[tsIdx] || "").replace(/^"|"$/g, "").trim();
-      if (firstTs && lastTs) {
-        dateRange = { start: firstTs.slice(0, 10), end: lastTs.slice(0, 10) };
-      }
-      if (lines.length >= 3 && firstTs) {
-        const secondTs = (lines[2].split(",")[tsIdx] || "").replace(/^"|"$/g, "").trim();
-        if (secondTs) {
-          const gapMin = (new Date(secondTs) - new Date(firstTs)) / 60000;
-          if (gapMin === 30) {
-            resolution = { label: "30-minute (48 intervals/day)", valid: true };
-          } else if (gapMin === 60) {
-            resolution = { label: "Hourly (24 intervals/day)", valid: true };
-          } else {
-            resolution = { label: `Unsupported interval (${gapMin} min). flexiq accepts 30-min or hourly only`, valid: false };
-          }
-        }
-      }
-    }
-    // Coverage and gaps from every timestamp; peak import in the file's own
-    // unit (converted for display once the unit is known).
-    let gaps = null, coverageDays = null, intervalMin = null, peakRaw = null;
-    const ndIdx = headers.indexOf("net_demand_mw");
-    if (tsIdx >= 0) {
-      const times = [];
-      for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].split(",");
-        const t = new Date((cells[tsIdx] || "").replace(/^"|"$/g, "").trim()).getTime();
-        if (!Number.isNaN(t)) times.push(t);
-        if (ndIdx >= 0) {
-          const v = parseFloat(cells[ndIdx]);
-          if (Number.isFinite(v) && (peakRaw == null || v > peakRaw)) peakRaw = v;
-        }
-      }
-      times.sort((a, b) => a - b);
-      if (times.length >= 2) {
-        intervalMin = (times[1] - times[0]) / 60000;
-        if (intervalMin > 0) {
-          const expected = Math.round((times[times.length - 1] - times[0]) / (intervalMin * 60000)) + 1;
-          const unique = new Set(times).size;
-          gaps = Math.max(0, expected - unique);
-          coverageDays = (unique * intervalMin) / 1440;
-        }
-      }
-    }
-    return { rows, headers, dateRange, resolution, gaps, coverageDays, intervalMin, peakRaw };
-  } catch {
-    return { rows: null, headers: [], dateRange: null, resolution: null };
-  }
-}
 
 // Mirrors src/csv_pipeline.py INPUT_UNITS.
 const INPUT_UNIT_OPTIONS = [
@@ -1192,18 +1126,14 @@ const smallBtn = {
 // a gap or the wrong DNO shows up now rather than in the results.
 function FileEcho({ file, meta, inputUnit, dnoLabel }) {
   const isCsv = file.name.toLowerCase().endsWith(".csv");
-  let peakKw = null;
-  if (meta?.peakRaw != null && meta.intervalMin) {
-    const h = meta.intervalMin / 60;
-    peakKw = { mw: meta.peakRaw * 1000, kw: meta.peakRaw, mwh: (meta.peakRaw / h) * 1000, kwh: meta.peakRaw / h }[inputUnit];
-  }
+  const peak = peakKw(meta, inputUnit);
   const nf = (v, d = 0) => v == null ? "\u2013" : v.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
   const rows = isCsv && meta ? [
     ["Intervals", nf(meta.rows)],
     ["Period", meta.dateRange ? `${meta.dateRange.start} to ${meta.dateRange.end}` : "\u2013"],
     ["Resolution", meta.resolution?.label ?? "\u2013", meta.resolution && !meta.resolution.valid],
     ["Coverage", meta.coverageDays != null ? `${nf(meta.coverageDays, 1)} days${meta.gaps ? `, ${nf(meta.gaps)} missing interval${meta.gaps === 1 ? "" : "s"}` : ", no gaps"}` : "\u2013", !!meta.gaps],
-    ["Peak import", peakKw != null ? `${nf(peakKw)} kW in the selected unit` : "\u2013", peakKw != null && (peakKw > 100000 || peakKw < 1)],
+    ["Peak import", peak != null ? `${nf(peak)} kW in the selected unit` : "\u2013", peak != null && (peak > 100000 || peak < 1)],
     ["DNO tariff", dnoLabel ?? "Choose below"],
     ["Columns", meta.headers.join(", ")],
   ] : [];
@@ -1224,7 +1154,7 @@ function FileEcho({ file, meta, inputUnit, dnoLabel }) {
           XLSX files are read on the server. Coverage, gaps and the peak appear on the results page.
         </p>
       )}
-      {isCsv && peakKw != null && (
+      {isCsv && peak != null && (
         <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--muted)" }}>
           If the peak looks 1,000 times too big or small, change the unit above.
         </p>

@@ -27,7 +27,11 @@ export async function postRun(payload) {
 
 export async function getRunStatus(jobId) {
   const res = await fetch(`${API_BASE_URL}/run/${jobId}`);
-  if (!res.ok) throw new Error("Failed to fetch run status");
+  if (!res.ok) {
+    const err = new Error("Failed to fetch run status");
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 

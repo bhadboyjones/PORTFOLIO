@@ -7,3 +7,5 @@ node_modules/
 ui/dist/
 .taste-skill/
 .playwright-cli/
+ui/test-results/
+ui/playwright-report/
