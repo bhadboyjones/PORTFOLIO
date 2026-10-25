@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getRunStatus } from "../api/client";
 import ProgressBar from "../components/ProgressBar";
+import WarningsNotice from "../components/WarningsNotice";
 import useReducedMotion from "../hooks/useReducedMotion";
 
 export default function ProgressScreen({ jobId, onComplete, onFailed }) {
@@ -78,20 +79,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         )}
       </div>
 
-      {csvWarns?.length > 0 && (
-        <div role="status" style={{
-          marginTop: "var(--gap)",
-          padding: "12px 16px",
-          background: "var(--pill-warning-bg)",
-          border: "1px solid var(--pill-warning-line)",
-          borderRadius: "var(--radius-card)",
-          color: "var(--pill-warning-ink)",
-          fontSize: 14,
-        }}>
-          <p style={{ margin: "0 0 4px", fontWeight: 500 }}>Check your data</p>
-          {csvWarns.map((w, i) => <p key={i} style={{ margin: i ? "4px 0 0" : 0 }}>{w}</p>)}
-        </div>
-      )}
+      <WarningsNotice warnings={csvWarns} title="Check your data" style={{ marginTop: "var(--gap)" }} />
     </div>
   );
 }

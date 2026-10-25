@@ -35,3 +35,11 @@ describe("pickPrune", () => {
     expect(pickPrune([{ jobId: "a", savedAt: 1 }], 5)).toEqual([]);
   });
 });
+
+import { uniqueWarnings } from "../../components/WarningsNotice";
+describe("uniqueWarnings", () => {
+  it("keeps one copy of each message and drops blanks", () => {
+    const flood = Array(1153).fill("Constructing LpVariable is deprecated");
+    expect(uniqueWarnings([...flood, "MIC assumed", "", null])).toEqual(["Constructing LpVariable is deprecated", "MIC assumed"]);
+  });
+});

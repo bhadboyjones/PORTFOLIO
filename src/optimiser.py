@@ -79,12 +79,23 @@ Optional bess_params keys
 
 import logging
 import math
+import warnings
 from typing import Any, Dict, List
 
 import pandas as pd
 import pulp
 
 logger = logging.getLogger(__name__)
+
+# PuLP 3.3 warns on every LpVariable(...) that PuLP 4.0 will prefer
+# prob.add_variable(...). One warning per variable floods logs (and, via
+# process-wide warning capture, a user-facing box). Silence just that message;
+# migrate when the pinned PuLP moves to 4.x.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Constructing LpVariable",
+    category=DeprecationWarning,
+)
 
 # ---------------------------------------------------------------------------
 # Module constants

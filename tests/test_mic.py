@@ -69,3 +69,19 @@ def test_schema_keeps_mic_as_written():
 def test_schema_rejects_bad_inputs(bad):
     with pytest.raises(HTTPException):
         _params(**{"contracted_kva": 1000.0, **bad})
+
+
+def test_only_user_warnings_reach_the_user():
+    # A job's warning capture also records other jobs' library warnings;
+    # only flexiq's own UserWarnings, deduplicated, may reach the results.
+    import warnings as w
+    from api.routes.run_csv import _user_warnings
+
+    with w.catch_warnings(record=True) as caught:
+        w.simplefilter("always")
+        w.warn("Constructing LpVariable(name, ...) directly is deprecated", DeprecationWarning)
+        w.warn("12 NaN values in DA price filled with 0.0.", UserWarning)
+        w.warn("12 NaN values in DA price filled with 0.0.", UserWarning)
+        w.warn("something else", FutureWarning)
+    assert _user_warnings(caught) == ["12 NaN values in DA price filled with 0.0."]
+    assert _user_warnings(caught, already=["12 NaN values in DA price filled with 0.0."]) == []

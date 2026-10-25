@@ -68,6 +68,27 @@ def _build_bess_params(
     }
 
 
+def _user_warnings(caught, already=()):
+    """
+    flexiq's own data warnings from a catch_warnings record, deduplicated.
+
+    catch_warnings swaps the process-wide warning handler, so while one job
+    builds its input it also records warnings raised by other jobs' threads
+    (e.g. a library DeprecationWarning per optimiser variable). Keep only
+    UserWarning, which is what csv_pipeline raises for the user.
+    """
+    seen = set(already)
+    out = []
+    for w in caught:
+        if not issubclass(w.category, UserWarning):
+            continue
+        msg = str(w.message)
+        if msg not in seen:
+            seen.add(msg)
+            out.append(msg)
+    return out
+
+
 def _resolve_mic(net_demand_mw, mic_value, mic_unit: str, power_factor: float):
     """
     Return (import_cap_kw, billing_kva, source, warning) for the run.
@@ -234,7 +255,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 sp_duration_hrs=sp_duration_hrs,
                 n_sps_per_day=n_sps_per_day,
             )
-        warnings.extend(str(w.message) for w in caught)
+        warnings.extend(_user_warnings(caught, already=warnings))
         data_start = df["startTime"].min().date()
         data_end   = df["startTime"].max().date()
         n_days     = (data_end - data_start).days + 1

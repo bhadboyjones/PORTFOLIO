@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import DownloadButton from "../components/DownloadButton";
 import Tabs from "../components/Tabs";
+import WarningsNotice from "../components/WarningsNotice";
 import LeadStrip from "../components/results/LeadStrip";
 import ScenarioTable from "../components/results/ScenarioTable";
 import CashflowChart from "../components/results/CashflowChart";
@@ -91,15 +92,7 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
         </div>
       )}
 
-      {validationWarnings?.length > 0 && (
-        <div role="status" style={{
-          marginTop: 16, padding: "10px 14px", borderRadius: "var(--radius-card)",
-          background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)",
-          color: "var(--pill-warning-ink)", fontSize: 14,
-        }}>
-          {validationWarnings.map((w, i) => <p key={i} style={{ margin: i ? "4px 0 0" : 0 }}>{w}</p>)}
-        </div>
-      )}
+      <WarningsNotice warnings={validationWarnings} style={{ marginTop: 16 }} />
 
       <div className="results-grid" style={{ marginTop: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
