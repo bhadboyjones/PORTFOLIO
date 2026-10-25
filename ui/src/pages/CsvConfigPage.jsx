@@ -321,7 +321,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               padding: "1.75rem 1.5rem",
               textAlign: "center",
               cursor: "pointer",
-              background: dragOver ? "var(--signal-a05)" : file ? "#fafafa" : "var(--bg-surface)",
+              background: dragOver ? "var(--signal-a05)" : file ? "var(--well)" : "var(--bg-surface)",
             }}
           >
             <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls"
@@ -420,7 +420,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               {dnoRateError && (
                 <div style={{
                   fontSize: 12, color: "var(--negative)", marginTop: "0.3rem",
-                  background: "var(--pill-negative-bg)", border: "1px solid #f3c3bf",
+                  background: "var(--pill-negative-bg)", border: "1px solid var(--pill-negative-line)",
                   borderRadius: 5, padding: "0.4rem 0.6rem",
                 }}>
                   Couldn’t load DNO rates, so band windows would fall back to generic
@@ -682,7 +682,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
             marginTop: "0.75rem",
             fontSize: 14,
             padding: "0.45rem 0.85rem",
-            background: "#fafafa",
+            background: "var(--well)",
             border: `1px solid ${scenarioCount > 12 ? "var(--negative-a30)" : "var(--border)"}`,
             borderRadius: 5,
             display: "flex",
@@ -750,7 +750,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
             }}
           >
             <span>Advanced settings{advancedDirty ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> (edited)</span> : ""}</span>
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ transform: showAdvanced ? "rotate(180deg)" : "none" }}>
+            <svg className="chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ transform: showAdvanced ? "rotate(180deg)" : "none" }}>
               <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </button>
@@ -983,7 +983,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
 
         {/* ── Run button ──────────────────────────────── */}
         <button
-          className="btn-primary"
+          className="btn-primary btn-wide"
           onClick={handleRun}
           disabled={!canRun}
           style={{ width: "100%", height: 44, fontSize: 16 }}
@@ -1127,7 +1127,7 @@ const errorBox = {
   marginBottom: "var(--gap)",
   padding: "10px 14px",
   background: "var(--pill-negative-bg)",
-  border: "1px solid #f3c3bf",
+  border: "1px solid var(--pill-negative-line)",
   borderRadius: "var(--radius-card)",
   color: "var(--pill-negative-ink)",
   fontSize: 14,
@@ -1160,7 +1160,7 @@ function FileEcho({ file, meta, inputUnit, dnoLabel, issues = [] }) {
     ["Columns", meta.headers.join(", ")],
   ] : [];
   return (
-    <div aria-live="polite" style={{ marginTop: 16, padding: 16, borderRadius: "var(--radius-card)", background: "#fafafa" }}>
+    <div aria-live="polite" style={{ marginTop: 16, padding: 16, borderRadius: "var(--radius-card)", background: "var(--well)" }}>
       <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 500 }}>What flexiq read from {file.name}</p>
       {isCsv ? (
         <dl className="tnum" style={{ margin: 0, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 16px", fontSize: 14 }}>

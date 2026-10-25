@@ -174,7 +174,43 @@ XLSX files are parsed server-side, so the echo says so instead.
 - Skip link, `theme-color`, `color-scheme: light`, `touch-action`.
 - Investment help text is visible under each input, not in `title` tooltips.
 
-## 9. Checks run (2026-10-25)
+## 9. Data check before a run (`api/routes/run_csv.py _data_check`, `ui/src/lib/csvMeta.js dataIssues`)
+
+| Check | Rule | Action |
+|---|---|---|
+| Meter spike | one reading > 5 × the 99th percentile of |demand| | Block; "My data is correct" overrides (`confirm_data`) |
+| Unit mistake | largest |reading| outside 5–50,000 kW | Block; same override |
+| Export-only site | never imports and no MIC entered | Block until the MIC is entered (not overridable) |
+
+The spike rule runs first because it names the more specific cause. The
+browser runs the same rules on CSVs before upload; the server runs them
+again for every file (XLSX is only read there). Failed runs carry an
+`error_code` (`data_check`, `mic_required`) so the form shows the override.
+
+Invalid investment assumptions (bounds from `api/schemas.py`) are flagged
+per field; the figures dim with "Figures shown are for the last valid
+inputs" and the explanation uses the assumptions the figures were priced with.
+
+## 10. Apple pass (2026-10-25)
+
+Principles from the `apple-design` skill (WWDC *Designing Fluid Interfaces*):
+
+| Principle | Implementation |
+|---|---|
+| Respond on press | `.btn-*:active` scale 0.97 (0.99 on full-width buttons), cards and cells 0.98, rows a tone step; 100 ms in, 160 ms out on `cubic-bezier(0.23,1,0.32,1)` |
+| Motion from the value on screen | `hooks/useRollingNumber.js`: lead figures roll to new values in 380 ms when an assumption changes; interruptible; never on load; instant under reduced motion. Measured: −£340,270 → −£243,224 → −£184,371 → −£168,680 |
+| Materials | Translucent sticky top bar (blur 20 px, saturate 180%); its edge appears only once content scrolls under it; solid under `prefers-reduced-transparency` |
+| System type | SF Pro on Apple devices (system font stack); display face and −0.015 to −0.02 em tracking on large type |
+| Light and dark | Dark mode follows the system: neutral darks, lightness steps, colour still on data. Recharts' literal hex is remapped by attribute selectors; HTML legend swatches go through `swatch()` → CSS variables |
+| Reduced motion | Keeps colour and opacity fades, drops travel and looping |
+
+The grid-to-battery progress animation stays (fill now eased over 600 ms
+between 3 s polls; the line stays blue under reduced motion). Investment
+charts moved directly under the scenario table so a row click changes what
+is right below it. Deliberately not done: sliding tab underline (keyboard
+driven), entrance animations, chart draw-in.
+
+## 11. Checks run (2026-10-25)
 
 - taste-skill lint: 12 FAIL / 9 WARN → 0 FAIL / 4 WARN (clock zero-padding,
   Geist Mono declared for code).

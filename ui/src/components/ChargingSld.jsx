@@ -19,7 +19,10 @@ export default function ChargingSld({ pct }) {
   const full = clamped >= 100;
   const flowing = !full && !reduced;
 
-  const label = { fontFamily: "var(--font-body)", fontSize: 12, fill: "#5f6368" };
+  const label = { fontFamily: "var(--font-body)", fontSize: 12, fill: "var(--muted)" };
+  // Blue while power flows (reduced motion stops the dashes, not the colour).
+  const lineColour = full ? GREY : DATA;
+  const lineStyle = { transition: "stroke 200ms ease" };
 
   return (
     <svg
@@ -34,13 +37,13 @@ export default function ChargingSld({ pct }) {
 
       {/* connection, interrupted by the transformer */}
       <line className={flowing ? "sld-flow" : undefined} x1="24" y1="42" x2="137" y2="42"
-        stroke={flowing ? DATA : GREY} strokeWidth="2" />
+        stroke={lineColour} strokeWidth="2" style={lineStyle} />
       {/* transformer: two overlapping windings */}
       <circle cx="150" cy="42" r="12" fill="none" stroke={INK} strokeWidth="1.5" />
       <circle cx="166" cy="42" r="12" fill="none" stroke={INK} strokeWidth="1.5" />
       <text x="158" y="90" textAnchor="middle" style={label}>Transformer</text>
       <line className={flowing ? "sld-flow" : undefined} x1="179" y1="42" x2={BATT.x} y2="42"
-        stroke={flowing ? DATA : GREY} strokeWidth="2" />
+        stroke={lineColour} strokeWidth="2" style={lineStyle} />
 
       {/* battery */}
       <rect x={BATT.x} y={BATT.y} width={BATT.w} height={BATT.h} rx="6"
@@ -54,7 +57,8 @@ export default function ChargingSld({ pct }) {
           transform: `scaleX(${clamped / 100})`,
           transformOrigin: "0 50%",
           transformBox: "fill-box",
-          transition: "transform var(--dur-med) var(--ease-flex)",
+          // Eased over 600ms so the fill charges smoothly between 3s polls.
+          transition: "transform 600ms var(--ease-out)",
         }}
       />
       {/* cell dividers */}

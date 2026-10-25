@@ -1,5 +1,8 @@
-// The app's one piece of chrome: a 48px bar with the product's mark and
-// name, the current step, and at most one action on the right.
+import { useEffect, useState } from "react";
+
+// The app's one piece of chrome: a 48px translucent bar with the product's
+// mark and name, the current step, and at most one action on the right.
+// Content scrolls under it; its edge appears only once something does.
 
 export function Mark({ size = 20 }) {
   // A battery cell seen from the front: a filled lower half (stored energy)
@@ -14,17 +17,18 @@ export function Mark({ size = 20 }) {
 }
 
 export default function TopBar({ step, action }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 2);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
   return (
     <header
-      style={{
-        height: 48,
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "0 24px",
-        borderBottom: "1px solid var(--line)",
-        background: "var(--ground)",
-      }}
+      className="topbar"
+      data-scrolled={scrolled}
+      style={{ height: 48, display: "flex", alignItems: "center", gap: 12, padding: "0 24px" }}
     >
       <a href="#main" className="skip-link">Skip to content</a>
       <span style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -5,8 +5,7 @@ import {
 } from "recharts";
 import {
   CHART_COLORS, STREAM_COLORS, STREAM_LABELS, tooltipProps, axisTick, axisLineProps,
-  gridProps, controlStyles,
-} from "./chartTheme";
+  gridProps, controlStyles, swatch } from "./chartTheme";
 import { num } from "../format";
 import { niceTicks } from "../lib/results";
 
@@ -74,9 +73,9 @@ export default function DispatchProfileChart({ scenario }) {
         </label>
         <ul style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", margin: "0 0 8px auto", padding: 0, listStyle: "none", fontSize: 12, color: "var(--muted)" }}>
           {used.map(([k, c, l]) => (
-            <li key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 10, height: 10, background: c }} />{l}</li>
+            <li key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 10, height: 10, background: swatch(c) }} />{l}</li>
           ))}
-          <li style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 12, height: 2, background: STREAM_COLORS.soc }} />State of charge (MWh, right axis)</li>
+          <li style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 12, height: 2, background: swatch(STREAM_COLORS.soc) }} />State of charge (MWh, right axis)</li>
           <li>Power in MW, left axis</li>
         </ul>
       </div>

@@ -4,8 +4,7 @@ import {
   ReferenceLine, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import {
-  CHART_COLORS, STREAM_COLORS, STREAM_LABELS, tooltipProps, axisTick, axisLineProps, gridProps,
-} from "./chartTheme";
+  CHART_COLORS, STREAM_COLORS, STREAM_LABELS, tooltipProps, axisTick, axisLineProps, gridProps, swatch } from "./chartTheme";
 import { gbp, gbpCompact } from "../format";
 import { aggregateDaily } from "../lib/results";
 
@@ -31,9 +30,9 @@ export default function RevenueStackChart({ scenario }) {
     <div>
       <ul style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", margin: "0 0 8px", padding: 0, listStyle: "none", fontSize: 12, color: "var(--muted)" }}>
         {used.map(([k, c, l]) => (
-          <li key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 10, height: 10, background: c }} />{l}</li>
+          <li key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 10, height: 10, background: swatch(c) }} />{l}</li>
         ))}
-        <li style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 12, height: 2, background: CHART_COLORS.ink }} />Net per day</li>
+        <li style={{ display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden="true" style={{ width: 12, height: 2, background: swatch(CHART_COLORS.ink) }} />Net per day</li>
       </ul>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>

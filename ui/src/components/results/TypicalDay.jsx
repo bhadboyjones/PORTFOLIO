@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import Card from "./Card";
 import { averageDay, bandRuns, hhmm, niceTicks } from "../../lib/results";
-import { BAND_COLORS, STREAM_COLORS, CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps } from "../chartTheme";
+import { BAND_COLORS, STREAM_COLORS, CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps, swatch } from "../chartTheme";
 import { DEFAULT_WEEKDAY_BANDS } from "../dayTapeBands";
 import { num } from "../../format";
 
@@ -73,5 +73,5 @@ export default function TypicalDay({ scenario, label, bands }) {
 }
 
 function Sw({ c, o = 1 }) {
-  return <span aria-hidden="true" style={{ width: 10, height: 10, background: c, opacity: o === 1 ? 1 : 0.35 }} />;
+  return <span aria-hidden="true" style={{ width: 10, height: 10, background: swatch(c), opacity: o === 1 ? 1 : 0.35 }} />;
 }

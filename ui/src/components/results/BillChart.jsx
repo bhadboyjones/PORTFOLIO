@@ -3,7 +3,7 @@ import {
 } from "recharts";
 import Card from "./Card";
 import { billRows } from "../../lib/results";
-import { CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps } from "../chartTheme";
+import { CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps, swatch } from "../chartTheme";
 import { gbp, gbpCompact, num } from "../../format";
 
 // Annual site bill without vs with the battery, split by component, each
@@ -50,5 +50,5 @@ export default function BillChart({ scenario, label, annual, nDays }) {
 }
 
 function Swatch({ c }) {
-  return <span aria-hidden="true" style={{ width: 10, height: 10, background: c }} />;
+  return <span aria-hidden="true" style={{ width: 10, height: 10, background: swatch(c) }} />;
 }

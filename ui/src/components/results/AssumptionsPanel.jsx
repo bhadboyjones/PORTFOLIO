@@ -127,6 +127,9 @@ export function ScopeDetails({ runInputs, dataPeriod, mode }) {
     <details style={{ ...panel, padding: 0 }}>
       <summary style={{ padding: "16px 20px", cursor: "pointer", fontSize: "var(--fs-section)", fontWeight: 500 }}>
         Inputs and model scope
+        <svg className="chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
       </summary>
       <div style={{ padding: "0 20px 20px" }}>
         <RunInputs runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} bare />

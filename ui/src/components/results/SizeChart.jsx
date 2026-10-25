@@ -2,7 +2,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import Card from "./Card";
-import { SERIES, tooltipProps, axisTick, axisLineProps, gridProps } from "../chartTheme";
+import { SERIES, tooltipProps, axisTick, axisLineProps, gridProps, swatch } from "../chartTheme";
 import { gbp, gbpCompact, num } from "../../format";
 import { scenarioKey, scenarioDims, sizeLabel } from "../../hooks/useInvestment";
 import { niceTicks } from "../../lib/results";
@@ -52,7 +52,7 @@ export default function SizeChart({ scenarios, byKey, available = true }) {
         <ul style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", margin: "0 0 8px", padding: 0, listStyle: "none", fontSize: 12, color: "var(--muted)" }}>
           {drawn.map((l, i) => (
             <li key={l} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span aria-hidden="true" style={{ width: 12, height: 2, background: SERIES[i] }} />{nameOf(l)}
+              <span aria-hidden="true" style={{ width: 12, height: 2, background: swatch(SERIES[i]) }} />{nameOf(l)}
             </li>
           ))}
         </ul>
