@@ -55,7 +55,7 @@ export default function CumulativePnlChart({ rankedScenarios }) {
         <CartesianGrid {...gridProps} />
         <XAxis dataKey="date" tickFormatter={fmtDate} tick={axisTick} interval={tickInterval} axisLine={axisLineProps} tickLine={false} />
         <YAxis tickFormatter={fmtGbp} tick={axisTick} width={62} axisLine={false} tickLine={false} />
-        <Tooltip formatter={(v) => (v != null ? fmtGbp(v) : "—")} labelFormatter={fmtDate} {...tooltipProps} />
+        <Tooltip formatter={(v) => (v != null ? fmtGbp(v) : "–")} labelFormatter={fmtDate} {...tooltipProps} />
         <Legend wrapperStyle={legendStyle} />
         <ReferenceLine y={0} stroke={CHART_COLORS.refLine} strokeDasharray="3 3" />
         {keys.map((key, i) => (

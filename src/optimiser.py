@@ -66,6 +66,15 @@ bess_params keys (all required — no defaults)
     export_limit_mw      float  scenario export cap (0.0 = BTM only)
     max_cycles_per_day   float  throughput cap in full cycles per day (e.g. 1.5)
     contracted_kva       float  site contracted capacity (kVA); caps battery grid import
+
+Optional bess_params keys
+-------------------------
+    import_cap_kw        float  real-power import limit at the meter (kW). When
+                                present it is used as-is (CSV mode resolves it
+                                from the MIC and its unit). When absent the cap
+                                is contracted_kva × power_factor.
+    power_factor         float  kW = kVA × PF, used only when import_cap_kw is
+                                absent (default 1.0).
 """
 
 import logging
@@ -202,7 +211,13 @@ def _solve_chunk(
     soc_tol_mwh        = 0.10 * capacity_mwh
     n_days             = n / n_sps_per_day
     max_throughput_mwh = max_cycles * capacity_mwh * n_days * 2
-    import_cap_mw      = float(bess_params["contracted_kva"]) / 1000.0
+    # The model works in real power. An explicit kW cap wins; otherwise convert
+    # the kVA MIC with kW = kVA × PF (at PF < 1 the same MIC allows less import).
+    if bess_params.get("import_cap_kw") is not None:
+        import_cap_mw = float(bess_params["import_cap_kw"]) / 1000.0
+    else:
+        power_factor  = float(bess_params.get("power_factor", 1.0))
+        import_cap_mw = float(bess_params["contracted_kva"]) * power_factor / 1000.0
 
     nd_mw = chunk["net_demand_mw"].values  # negative = on-site surplus
 
@@ -211,7 +226,7 @@ def _solve_chunk(
     # -----------------------------------------------------------------------
     prob = pulp.LpProblem(name=f"BESS_chunk_{chunk_idx}", sense=pulp.LpMaximize)
 
-    chr1, chr2, dis1, dis2, spill, opp = {}, {}, {}, {}, {}, {}
+    chr1, chr2, dis1, dis2, spill, opp, mode = {}, {}, {}, {}, {}, {}, {}
     soc = {}  # SOC at the START of each period — n+1 nodes, soc[0]..soc[n]
 
     for i in range(n):
@@ -250,6 +265,11 @@ def _solve_chunk(
         # the whole surplus is curtailable, so charging from it costs nothing.
         opp[i] = pulp.LpVariable(f"opp_{i}", lowBound=0.0)
 
+        # mode: 1 = battery may charge this period, 0 = battery may discharge.
+        # A real battery cannot do both at once; without this the LP can charge
+        # and discharge together to burn energy as losses at negative prices.
+        mode[i] = pulp.LpVariable(f"mode_{i}", cat="Binary")
+
     # SOC nodes: soc[i] is the state of charge entering period i (n+1 nodes)
     for i in range(n + 1):
         soc[i] = pulp.LpVariable(f"soc_{i}", lowBound=soc_min_mwh, upBound=soc_max_mwh)
@@ -278,6 +298,13 @@ def _solve_chunk(
     # C3: Power limit per period
     for i in range(n):
         prob += (total_chr(i) + total_dis(i) <= power_mw, f"pwr_{i}")
+
+    # C3a: No simultaneous charge and discharge. mode=1 opens the charge side
+    # and closes discharge; mode=0 the reverse. power_mw is the tightest valid
+    # big-M because neither side can exceed it anyway.
+    for i in range(n):
+        prob += (total_chr(i) <= power_mw * mode[i],       f"chr_mode_{i}")
+        prob += (total_dis(i) <= power_mw * (1 - mode[i]), f"dis_mode_{i}")
 
     # C3b: Export boundary cap — site surplus net of on-site charge and spill,
     # plus battery export, must stay within the export connection limit.
@@ -335,7 +362,7 @@ def _solve_chunk(
 
     if prob.status != pulp.LpStatusOptimal:
         logger.warning(
-            "Chunk %d: HiGHS returned no optimal solution — filling with zeros.", chunk_idx
+            "Chunk %d: HiGHS returned no optimal solution, filling with zeros.", chunk_idx
         )
         chunk["charge1_mw"] = 0.0
         chunk["charge2_mw"] = 0.0
@@ -358,7 +385,7 @@ def _solve_chunk(
     chunk["soc_mwh"]    = [_sv(soc,  i + 1) for i in range(n)]
 
     logger.info(
-        "Chunk %d solved — objective £%.2f, end SOC %.3f MWh",
+        "Chunk %d solved: objective £%.2f, end SOC %.3f MWh",
         chunk_idx,
         pulp.value(prob.objective),
         chunk["soc_mwh"].iloc[-1],
@@ -619,7 +646,7 @@ def calculate_settlement(
     missing = [c for c in dispatch_cols if c not in df.columns]
     if missing:
         raise ValueError(
-            f"Dispatch columns missing — run run_optimiser() first. Missing: {missing}"
+            f"Dispatch columns missing. Run run_optimiser() first. Missing: {missing}"
         )
 
     # ------------------------------------------------------------------

@@ -101,3 +101,66 @@ def test_charge1_opp_cost_respects_export_limit():
     assert s0["charge1_mw"].sum() > 0                         # battery uses the free surplus
     assert s0["charge1_opp_cost_gbp"].sum() < 1e-6           # but pays no opp cost
     assert s5["charge1_opp_cost_gbp"].sum() > 1.0            # exportable surplus does cost
+
+
+def test_no_simultaneous_charge_and_discharge():
+    # Negative import price with a large export credit makes charging and
+    # exporting at the same time pay on both legs: import is paid (price -50),
+    # export earns price - gduos = 50. A battery cannot do both at once, so
+    # the mode switch must keep one side at zero in every period.
+    df = _frame(n=96)
+    df["da_forecast_gbp"] = -50.0
+    df["da_actual_gbp"] = -50.0
+    df["duos_gbp_mwh"] = 0.0
+    df["nec_gbp_mwh"] = 0.0
+    df["gduos_gbp_mwh"] = -100.0
+    bess = _bess(export_limit=1.0, contracted_kva=3000.0)
+    dfb = calculate_baseline(df, thermal_mc_gbp_mwh=70.0, export_limit_mw=1.0)
+    out = run_optimiser(dfb, bess, forecast_price_col="da_forecast_gbp", actual_price_col="da_actual_gbp")
+    assert out["total_charge_mw"].sum() > 0.1, "battery should be active in this setup"
+    both = (out["total_charge_mw"] > 1e-6) & (out["total_dis_mw"] > 1e-6)
+    assert not both.any(), f"simultaneous charge/discharge in {int(both.sum())} periods"
+
+
+def _max_meter_import(out):
+    """Highest meter import in periods where the battery charged from the grid."""
+    charging = out["charge2_mw"] > 1e-6
+    meter = out["net_demand_mw"] - out["dis1_mw"] + out["charge2_mw"]
+    return float(meter[charging].max()) if charging.any() else 0.0
+
+
+def test_import_cap_is_mic_times_power_factor():
+    # A 1 MW battery charging from the grid could push meter import to ~2 MW.
+    # MIC 1,200 kVA caps it at 1.2 MW at PF 1.0 and 1.08 MW at PF 0.9
+    # (kW = kVA × PF). Only grid-charging periods are checked: demand itself
+    # reaches 1.1 MW and nothing yet forces discharge to cover that (peak
+    # shaving slice 2), so the cap binds on the battery's own draw only.
+    df = _frame(n=144)
+    dfb = calculate_baseline(df, thermal_mc_gbp_mwh=70.0, export_limit_mw=0.5)
+
+    bess_pf1 = _bess(contracted_kva=1200.0)
+    out_pf1 = run_optimiser(dfb, bess_pf1)
+    bess_pf09 = {**_bess(contracted_kva=1200.0), "power_factor": 0.9}
+    out_pf09 = run_optimiser(dfb, bess_pf09)
+
+    assert _max_meter_import(out_pf1) <= 1.2 + 1e-6
+    assert _max_meter_import(out_pf1) > 1.08 + 1e-3, "PF 1.0 run should use headroom above 1.08"
+    assert 0 < _max_meter_import(out_pf09) <= 1.08 + 1e-6
+
+
+def test_power_factor_defaults_to_one():
+    # Omitting power_factor must behave exactly like PF 1.0.
+    df = _frame(n=144)
+    dfb = calculate_baseline(df, thermal_mc_gbp_mwh=70.0, export_limit_mw=0.5)
+    out_default = run_optimiser(dfb, _bess(contracted_kva=1200.0))
+    out_pf1 = run_optimiser(dfb, {**_bess(contracted_kva=1200.0), "power_factor": 1.0})
+    assert abs(_max_meter_import(out_default) - _max_meter_import(out_pf1)) < 1e-6
+
+
+def test_explicit_import_cap_kw_overrides_kva_conversion():
+    # import_cap_kw is used as-is: 1,080 kW, even though contracted_kva × PF
+    # would give 1,200 kW here. This is the kW/MW MIC path from CSV mode.
+    df = _frame(n=144)
+    dfb = calculate_baseline(df, thermal_mc_gbp_mwh=70.0, export_limit_mw=0.5)
+    out = run_optimiser(dfb, {**_bess(contracted_kva=1200.0), "import_cap_kw": 1080.0})
+    assert 0 < _max_meter_import(out) <= 1.08 + 1e-6

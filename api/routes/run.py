@@ -37,7 +37,7 @@ def _validate_run_request(req: RunRequest) -> str | None:
         start = date.fromisoformat(req.start_date)
         end = date.fromisoformat(req.end_date)
     except ValueError:
-        return "Invalid date format — use YYYY-MM-DD."
+        return "Invalid date format. Use YYYY-MM-DD."
     if end <= start:
         return "End date must be after start date."
     return None

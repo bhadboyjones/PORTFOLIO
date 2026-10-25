@@ -13,7 +13,6 @@ const DNO_OPTIONS = [
 
 
 const DEFAULT_ADV = {
-  contractedKva: "",
   necGbpMwh: "103.75",
   duosRed: "", duosAmber: "", duosGreen: "",
   gduosRed: "", gduosAmber: "", gduosGreen: "",
@@ -60,7 +59,7 @@ async function parseCsvMeta(file) {
           } else if (gapMin === 60) {
             resolution = { label: "Hourly (24 intervals/day)", valid: true };
           } else {
-            resolution = { label: `Unsupported interval (${gapMin} min) — flexiq accepts 30-min or hourly only`, valid: false };
+            resolution = { label: `Unsupported interval (${gapMin} min). flexiq accepts 30-min or hourly only`, valid: false };
           }
         }
       }
@@ -73,8 +72,8 @@ async function parseCsvMeta(file) {
 
 // Mirrors src/csv_pipeline.py INPUT_UNITS.
 const INPUT_UNIT_OPTIONS = [
-  { value: "mw",  label: "MW — average power per interval" },
-  { value: "kw",  label: "kW — average power per interval" },
+  { value: "mw",  label: "MW: average power per interval" },
+  { value: "kw",  label: "kW: average power per interval" },
   { value: "mwh", label: "MWh per interval (energy)" },
   { value: "kwh", label: "kWh per interval (energy)" },
 ];
@@ -92,6 +91,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const [thermalGenToggle, setThermalGenToggle] = useState(false);
   const [inputUnit, setInputUnit] = useState("mw");
   const [thermalMcGbpMwh, setThermalMcGbpMwh] = useState("70");
+  const [micKva, setMicKva]           = useState("");
+  const [micUnit, setMicUnit]         = useState("kva");
+  const [powerFactor, setPowerFactor] = useState("1");
 
   const [powers, setPowers]           = useState(["1", "2", "3"]);
   const [capacities, setCapacities]   = useState(["1", "2", "4"]);
@@ -135,7 +137,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const scenarioCount    = selectedCount * validExportCount;
   const thermalGenWarning = thermalGenToggle && parsedMeta?.headers?.length > 0 && !parsedMeta.headers.includes("thermal_gen_mw");
   const resolutionError   = parsedMeta?.resolution?.valid === false;
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError;
+  const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
+  const micValid          = micKva === "" || parseFloat(micKva) > 0;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -248,7 +252,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       fd.append("price_exposure", priceExposure);
       fd.append("nec_gbp_mwh", advanced.necGbpMwh || "103.75");
       fd.append("chp_mc_gbp_mwh", thermalMcGbpMwh || "70");
-      if (advanced.contractedKva) fd.append("contracted_kva", advanced.contractedKva);
+      if (micKva) fd.append("contracted_kva", micKva);
+      fd.append("mic_unit", micUnit);
+      fd.append("power_factor", powerFactor || "1");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
       fd.append("rag_red_start",           advanced.ragRedStart           || "16:00");
@@ -324,7 +330,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             }}>BETA</span>
           </div>
           <p style={{ margin: "0 0 1rem", color: "var(--text-sec)", fontSize: "0.9rem" }}>
-            BTM BESS optimisation — site meter data upload
+            BTM BESS optimisation: site meter data upload
           </p>
           <p style={{
             margin: 0, color: "var(--text-dim)", fontSize: "0.8rem",
@@ -345,7 +351,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             className="lift"
             role="button"
             tabIndex={0}
-            aria-label={file ? `Replace uploaded file ${file.name}` : "Upload meter data — CSV or XLSX"}
+            aria-label={file ? `Replace uploaded file ${file.name}` : "Upload meter data, CSV or XLSX"}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); }
             }}
@@ -448,7 +454,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             <div style={{ gridColumn: "1 / -1" }}>
               <FieldLabel>Network operator (DNO)</FieldLabel>
               <select value={dnoKey} onChange={(e) => handleDnoChange(e.target.value)} style={selectStyle(dnoKey !== "")}>
-                <option value="">— Select your DNO —</option>
+                <option value="">Select your DNO</option>
                 {DNO_OPTIONS.map(({ key, label }) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
@@ -464,7 +470,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.25)",
                   borderRadius: 5, padding: "0.4rem 0.6rem",
                 }}>
-                  Couldn’t load DNO rates — band windows would fall back to generic
+                  Couldn’t load DNO rates, so band windows would fall back to generic
                   defaults and mis-price the tariff. Check your connection and reselect
                   the DNO, or enter rates manually in Advanced settings.
                 </div>
@@ -491,9 +497,59 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               </div>
               {voltageLevel === "unknown" && (
                 <div style={{ marginTop: "0.4rem", fontSize: "0.72rem", color: "var(--text-dim)" }}>
-                  Defaults to HV — lower DUoS rates give a conservative savings estimate. Select LV or HV if known.
+                  Defaults to HV: lower DUoS rates give a conservative savings estimate. Select LV or HV if known.
                 </div>
               )}
+            </div>
+
+            {/* Agreed import capacity (MIC) */}
+            <div>
+              <FieldLabel>Agreed import capacity (MIC)</FieldLabel>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div style={{ flex: 1 }}>
+                  <SuffixInput type="number" step="any" min="0"
+                    placeholder="From your connection agreement"
+                    value={micKva}
+                    onChange={(e) => setMicKva(e.target.value)}
+                    suffix={{ kva: "kVA", kw: "kW", mw: "MW" }[micUnit]} />
+                </div>
+                {[["kva", "kVA"], ["kw", "kW"], ["mw", "MW"]].map(([value, label]) => {
+                  const active = micUnit === value;
+                  return (
+                    <button key={value} className="lift" aria-pressed={active} onClick={() => setMicUnit(value)} style={{
+                      padding: "0.5rem 0.6rem",
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      borderRadius: 6,
+                      background: active ? "var(--signal-a10)" : "var(--bg-surface)",
+                      color: active ? "var(--accent)" : "var(--text-dim)",
+                      cursor: "pointer", fontSize: "0.78rem", fontWeight: active ? 700 : 500,
+                    }}>{label}</button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+                {!micKva
+                  ? "Blank = assumed equal to the peak import in your data, which hides any capacity headroom."
+                  : micUnit === "kva"
+                    ? "Use the unit written in your agreement. kVA: import cap = MIC × power factor."
+                    : "Use the unit written in your agreement. kW/MW: used as the import cap directly; power factor converts it to kVA for the capacity charge."}
+              </div>
+            </div>
+
+            {/* Power factor */}
+            <div>
+              <FieldLabel>Power factor</FieldLabel>
+              <SuffixInput type="number" step="0.01" min="0.5" max="1"
+                value={powerFactor}
+                onChange={(e) => setPowerFactor(e.target.value)}
+                suffix="PF" />
+              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+                {!pfValid
+                  ? "Power factor must be between 0.5 and 1.0."
+                  : parseFloat(powerFactor) === 1
+                  ? "Default 1.0 (kW = kVA). Use your meter's figure if known."
+                  : `Import cap = MIC × ${powerFactor} in kW.`}
+              </div>
             </div>
 
             {/* Thermal generation toggle */}
@@ -623,7 +679,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                         width: "100%",
                       }}
                     >
-                      {cellValid && dur !== null ? `${dur.toFixed(1)}h` : dur !== null && dur < 0.5 ? "< 0.5h" : dur !== null && dur > 6.0 ? "> 6h" : "—"}
+                      {cellValid && dur !== null ? `${dur.toFixed(1)}h` : dur !== null && dur < 0.5 ? "< 0.5h" : dur !== null && dur > 6.0 ? "> 6h" : "–"}
                     </button>
                   );
                 }),
@@ -647,7 +703,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
           {/* Export limits */}
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-            <FieldLabel>Export limits — up to 4 scenarios</FieldLabel>
+            <FieldLabel>Export limits (up to 4 scenarios)</FieldLabel>
             <div className="export-grid">
               {exportLimits.map((v, i) => (
                 <SuffixInput
@@ -684,7 +740,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {" "}({selectedCount} config{selectedCount !== 1 ? "s" : ""} × {validExportCount} export limit{validExportCount !== 1 ? "s" : ""})
             </span>
             {scenarioCount > 12 && (
-              <span style={{ fontSize: "0.72rem", color: "var(--negative)" }}>max 12 — deselect some configs</span>
+              <span style={{ fontSize: "0.72rem", color: "var(--negative)" }}>max 12. Deselect some configs</span>
             )}
           </div>
 
@@ -799,14 +855,6 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       suffix="£/MWh" />
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>EII-exempt sites: 43.75</div>
                   </div>
-                  <div>
-                    <FieldLabel>Contracted capacity</FieldLabel>
-                    <SuffixInput type="number" step="1" min="0"
-                      placeholder="Auto from CSV peak"
-                      value={advanced.contractedKva}
-                      onChange={(e) => updateAdv("contractedKva", e.target.value)}
-                      suffix="kVA" />
-                  </div>
                 </div>
               </AdvancedSection>
 
@@ -881,7 +929,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   </div>
 
                   <div>
-                    <FieldLabel>Amber band — morning (weekday)</FieldLabel>
+                    <FieldLabel>Amber band, morning (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput value={advanced.ragAmberMorningStart} onChange={(v) => updateAdv("ragAmberMorningStart", v)} />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
@@ -890,7 +938,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   </div>
 
                   <div>
-                    <FieldLabel>Amber band — evening (weekday)</FieldLabel>
+                    <FieldLabel>Amber band, evening (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput value={advanced.ragAmberEveningStart} onChange={(v) => updateAdv("ragAmberEveningStart", v)} />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
@@ -899,18 +947,18 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   </div>
 
                   <div>
-                    <FieldLabel>Amber band — weekend (optional)</FieldLabel>
+                    <FieldLabel>Amber band, weekend (optional)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput
                         value={advanced.ragWeekendAmberStart}
                         onChange={(v) => updateAdv("ragWeekendAmberStart", v)}
-                        placeholder="—"
+                        placeholder="–"
                       />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
                       <TimeInput
                         value={advanced.ragWeekendAmberEnd}
                         onChange={(v) => updateAdv("ragWeekendAmberEnd", v)}
-                        placeholder="—"
+                        placeholder="–"
                       />
                     </div>
                   </div>

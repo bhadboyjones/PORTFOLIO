@@ -15,10 +15,10 @@ import { postInvestmentEvaluate } from "../api/client";
 // assumptions to be replaced with real quotes, not market data.
 const FIELDS = [
   { key: "capex_gbp_per_kw",  label: "Capex £/kW",       def: 150,  step: 10,   title: "Power-related capex: inverter/PCS, switchgear, connection" },
-  { key: "capex_gbp_per_kwh", label: "Capex £/kWh",      def: 250,  step: 10,   title: "Energy-related capex: cells and racks — the dominant share" },
-  { key: "capex_fixed_gbp",   label: "Fixed capex £",    def: 0,    step: 5000, title: "Site works, design, project management — size-independent" },
+  { key: "capex_gbp_per_kwh", label: "Capex £/kWh",      def: 250,  step: 10,   title: "Energy-related capex: cells and racks, the dominant share" },
+  { key: "capex_fixed_gbp",   label: "Fixed capex £",    def: 0,    step: 5000, title: "Site works, design, project management; size-independent" },
   { key: "opex_pct_of_capex", label: "Opex % capex/yr",  def: 1.5,  step: 0.1,  title: "O&M contract, insurance, monitoring" },
-  { key: "lifetime_yrs",      label: "Life (years)",     def: 15,   step: 1,    title: "Design life — warranty is typically 10y", int: true },
+  { key: "lifetime_yrs",      label: "Life (years)",     def: 15,   step: 1,    title: "Design life. Warranty is typically 10y", int: true },
   { key: "discount_rate_pct", label: "Discount %/yr",    def: 8,    step: 0.5,  title: "Nominal cost of capital / hurdle rate" },
   { key: "fade_pct_yr",       label: "Fade %/yr",        def: 2.5,  step: 0.1,  title: "Usable capacity lost per year to degradation" },
   { key: "escalation_pct_yr", label: "Escalation %/yr",  def: 2,    step: 0.1,  title: "Benefit and opex price growth (nominal)" },
@@ -26,7 +26,7 @@ const FIELDS = [
 ];
 
 function fmt(v, dec = 0) {
-  if (v == null || isNaN(v)) return "—";
+  if (v == null || isNaN(v)) return "–";
   return v.toLocaleString("en-GB", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
@@ -192,11 +192,11 @@ export default function InvestmentCard({ rankedScenarios, nDays }) {
         )}
       </div>
       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "1.25rem", lineHeight: 1.6 }}>
-        Lifetime appraisal of each scenario — nominal, unlevered, pre-tax. Annual benefit
+        Lifetime appraisal of each scenario: nominal, unlevered, pre-tax. Annual benefit
         is scaled from the data period, then cut by the dispatch-efficiency haircut: the
         backtest assumes perfect price foresight, so its raw benefit is a ceiling no real
         operator reaches. Headline figures are the realistic case; "up to" is the raw
-        backtest. Defaults below are editable placeholders — replace with real quotes.
+        backtest. Defaults below are editable placeholders. Replace them with real quotes.
       </div>
 
       {/* Assumption inputs */}
@@ -258,7 +258,7 @@ export default function InvestmentCard({ rankedScenarios, nDays }) {
                 value={best.payback_yrs != null ? `${fmt(best.payback_yrs, 1)}y` : `> ${lifetime}y`}
                 sub={best.discounted_payback_yrs != null ? `${fmt(best.discounted_payback_yrs, 1)}y discounted` : "beyond life discounted"}
               />
-              <MetricTile label="Benefit / £ capex" value={best.benefit_cost_ratio != null ? fmt(best.benefit_cost_ratio, 2) : "—"} sub="PV terms · >1 pays" />
+              <MetricTile label="Benefit / £ capex" value={best.benefit_cost_ratio != null ? fmt(best.benefit_cost_ratio, 2) : "–"} sub="PV terms · >1 pays" />
               <MetricTile label="Capex" value={`£${fmt(best.capex_gbp)}`} />
               <MetricTile label="Year-1 benefit" value={`£${fmt(best.annual_benefit_yr1_gbp)}`} sub={`opex £${fmt(best.annual_opex_yr1_gbp)}/yr`} />
             </div>
@@ -301,7 +301,7 @@ export default function InvestmentCard({ rankedScenarios, nDays }) {
                       {s.payback_yrs != null ? `${fmt(s.payback_yrs, 1)}y` : `> ${lifetime}y`}
                     </td>
                     <td style={{ padding: "0.5rem 0.6rem", textAlign: "right", color: "var(--text-sec)" }}>
-                      {s.benefit_cost_ratio != null ? fmt(s.benefit_cost_ratio, 2) : "—"}
+                      {s.benefit_cost_ratio != null ? fmt(s.benefit_cost_ratio, 2) : "–"}
                     </td>
                   </tr>
                 ))}
@@ -322,7 +322,7 @@ export default function InvestmentCard({ rankedScenarios, nDays }) {
               />
               <YAxis tickFormatter={fmtGbpAxis} tick={axisTick} width={62} axisLine={false} tickLine={false} />
               <Tooltip
-                formatter={(v) => (v != null ? `£${fmt(v)}` : "—")}
+                formatter={(v) => (v != null ? `£${fmt(v)}` : "–")}
                 labelFormatter={(y) => `End of year ${y}`}
                 {...tooltipProps}
               />

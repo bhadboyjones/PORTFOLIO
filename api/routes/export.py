@@ -18,7 +18,7 @@ def export_xlsx(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found.")
 
     if job["status"] != "complete":
-        raise HTTPException(status_code=404, detail="Job not complete — results not yet available.")
+        raise HTTPException(status_code=404, detail="Job not complete. Results not yet available.")
 
     xlsx_path = job.get("xlsx_path")
     if not xlsx_path or not os.path.exists(xlsx_path):

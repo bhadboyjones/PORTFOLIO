@@ -26,13 +26,13 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
           }, reduced ? 0 : 700);
           return;
         }
-        if (data.status === "failed")   { onFailed(data.error || "Run failed — unknown error."); return; }
+        if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error."); return; }
         setTimeout(poll, 3000);
       } catch {
         if (cancelled) return;
         failures += 1;
         if (failures >= MAX_FAILURES) {
-          onFailed(`Lost connection to API server after ${MAX_FAILURES} attempts. The job may still be running — job ID: ${jobId}`);
+          onFailed(`Lost connection to API server after ${MAX_FAILURES} attempts. The job may still be running. Job ID: ${jobId}`);
         } else {
           setTimeout(poll, 3000);  // keep polling; the job runs server-side
         }

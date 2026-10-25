@@ -111,6 +111,7 @@ schedule on DA prices needs only the site forecast.
 
 | Item | Notes |
 |---|---|
+| **Negative export rate → zero-dispatch chunks** | `opp` is unbounded; when price − GDUoS < 0 the chunk goes unbounded and dispatches nothing ([peak_shaving.md §4](peak_shaving.md)). Fix: bound `opp ≤ chr1` (approximate in negative-rate periods; settlement still prices it exactly), or a binary for the exact max. Found 2026-10-25. |
 | DNO rates refresh | `src/duos_rates.py` holds 2026-27. Final charges publish ~15 months ahead (EPN 2026/27 v1.0: 24 Dec 2024), so 2027/28 is likely already out — check. Refresh window is Dec–Jan, not April; fix the file comment. |
 | Staleness banner | Warn on results when today is outside the loaded charge year. |
 | 15-minute data | Resample to 30-minute in the pipeline (PV and some meter exports are 15-min). |

@@ -154,7 +154,7 @@ DUOS_RATES = {
                 "capacity_p_per_kva_day": 6.92,
                 "gduos_fixed_p_per_day":  0.00,
                 "rag_schedule": {
-                    "_warning": "UNVERIFIED — placeholder only, verify against ENWL LC14 docx",
+                    "_warning": "UNVERIFIED: placeholder only, verify against ENWL LC14 docx",
                     "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
                     "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
                     "green": "remainder",
@@ -171,7 +171,7 @@ DUOS_RATES = {
                 "capacity_p_per_kva_day": 7.79,
                 "gduos_fixed_p_per_day":  15.15,
                 "rag_schedule": {
-                    "_warning": "UNVERIFIED — placeholder only, verify against ENWL LC14 docx",
+                    "_warning": "UNVERIFIED: placeholder only, verify against ENWL LC14 docx",
                     "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
                     "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
                     "green": "remainder",
