@@ -1,281 +1,181 @@
-import { useState } from "react";
-import KpiCards from "../components/KpiCards";
+import { useMemo, useState } from "react";
 import DownloadButton from "../components/DownloadButton";
-import ScenarioTable from "../components/ScenarioTable";
-import CumulativePnlChart from "../components/CumulativePnlChart";
-import DispatchProfileChart from "../components/DispatchProfileChart";
-import RevenueStackChart from "../components/RevenueStackChart";
-import BaselineComparisonChart from "../components/BaselineComparisonChart";
-import InvestmentCard from "../components/InvestmentCard";
-import DayTape from "../components/DayTape";
+import Tabs from "../components/Tabs";
+import LeadStrip from "../components/results/LeadStrip";
+import ScenarioTable from "../components/results/ScenarioTable";
+import CashflowChart from "../components/results/CashflowChart";
+import BillChart from "../components/results/BillChart";
+import SizeChart from "../components/results/SizeChart";
+import TypicalDay from "../components/results/TypicalDay";
+import OperationDetail from "../components/results/OperationDetail";
+import Card from "../components/results/Card";
+import { InvestmentInputs, RunInputs, ModelScope } from "../components/results/AssumptionsPanel";
+import useInvestment, { defaultInvestmentForm, scenarioKey, sizeLabel } from "../hooks/useInvestment";
+import { gbp, num, date } from "../format";
+
+// Screen question: does a battery pay on this site, and which size?
+// The title row answers it; the lead strip carries the figures; the
+// charts below show the selected scenario (the best NPV until you pick one).
 
 const DISPLAY_NAMES = {
-  small_office:      "Small Commercial",
-  medium_industrial: "Mid-Size Industrial",
-  large_industrial:  "Large Industrial",
+  small_office:      "Small commercial",
+  medium_industrial: "Mid-size industrial",
+  large_industrial:  "Large industrial",
 };
 
-const CHART_TABS = ["Cumulative P&L", "Dispatch Profile", "Revenue Stack", "Baseline vs BESS"];
+const labelOf = (s) => `${sizeLabel(s)}, ${num(s.export_limit_mw, s.export_limit_mw % 1 ? 1 : 0)} MW export`;
 
-function rankScenarios(scenarios) {
-  return [...scenarios]
-    .sort((a, b) => b.net_benefit_gbp - a.net_benefit_gbp)
-    .map((s, i) => ({ ...s, rank: i + 1 }));
+// Days of data actually covered: rows × interval. CSV runs send it; archetype
+// runs don't, so derive it from the timeseries the same way.
+function coverageDays(dataPeriod, scenarios) {
+  if (dataPeriod?.coverage_days) return dataPeriod.coverage_days;
+  const ts = scenarios[0]?.dispatch_timeseries ?? [];
+  if (ts.length < 2) return null;
+  const step = (new Date(ts[1].startTime.replace(" ", "T")) - new Date(ts[0].startTime.replace(" ", "T"))) / 3.6e6;
+  return step > 0 ? (ts.length * step) / 24 : null;
 }
 
-function TabBar({ tabs, active, onSelect, small }) {
-  return (
-    <div className="tab-bar" style={{
-      display: "flex",
-      gap: 0,
-      borderBottom: "1px solid var(--border)",
-      marginBottom: small ? "1.25rem" : "1.5rem",
-    }}>
-      {tabs.map((tab, i) => (
-        <button
-          key={tab}
-          onClick={() => onSelect(i)}
-          style={{
-            padding: small ? "0.45rem 1rem" : "0.6rem 1.25rem",
-            border: "none",
-            borderBottom: active === i ? "2px solid var(--accent)" : "2px solid transparent",
-            marginBottom: -1,
-            background: "none",
-            cursor: "pointer",
-            fontWeight: active === i ? 700 : 500,
-            color: active === i ? "var(--accent)" : "var(--text-dim)",
-            fontSize: small ? "0.82rem" : "0.875rem",
-            whiteSpace: "nowrap",
-            transition: "color 0.15s",
-          }}
-        >
-          {tab}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function fmt(v, dec = 0) {
-  if (v == null || isNaN(v)) return "–";
-  return v.toLocaleString("en-GB", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-
-function fmtDate(iso) {
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const [y, m, d] = iso.split("-");
-  return `${parseInt(d)} ${MONTHS[parseInt(m) - 1]} ${y}`;
-}
-
-function BaselineBreakdown({ topScenario }) {
-  if (!topScenario) return null;
-  const rows = [
-    { label: "Import cost",   value: topScenario.baseline_import_cost_gbp, sign: 1  },
-    { label: "Thermal generation cost", value: topScenario.baseline_thermal_cost_gbp, sign: 1  },
-    { label: "Export revenue",value: topScenario.baseline_export_rev_gbp,  sign: -1 },
-    { label: "Standing charges", value: topScenario.total_standing_gbp,    sign: 1  },
-    { label: "Net site cost", value: topScenario.baseline_net_gbp + topScenario.total_standing_gbp, sign: 1, bold: true },
-  ];
-  return (
-    <div style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border)",
-      borderRadius: 10,
-      padding: "1.25rem 1.5rem",
-      marginBottom: "1.5rem",
-    }}>
-      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-        Baseline Site Cost (without BESS)
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
-        {rows.map(({ label, value, sign, bold }) => {
-          const display = value != null ? `£${fmt(value, 0)}` : "–";
-          const color = bold ? "var(--text-pri)" : sign < 0 ? "var(--positive)" : "var(--text-sec)";
-          return (
-            <div key={label} style={{ paddingBottom: bold ? "0" : "0", borderTop: bold ? "1px solid var(--border)" : "none", paddingTop: bold ? "0.6rem" : "0" }}>
-              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>{label}</div>
-              <div style={{ fontSize: bold ? "1rem" : "0.9rem", fontWeight: bold ? 700 : 600, color }}>
-                {display}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export default function ResultsPage({ results, jobId, mode, onBack, validationWarnings, dataPeriod, bands }) {
-  const archetypeIds   = Object.keys(results);
-  const [activeArchetype, setActiveArchetype] = useState(archetypeIds[0]);
-  const [chartTab, setChartTab]               = useState(0);
-
-  const rankedScenarios = rankScenarios(results[activeArchetype] || []);
-  const topScenario     = rankedScenarios[0] ?? null;
-
-  function handleArchetypeChange(i) {
-    setActiveArchetype(archetypeIds[i]);
-    setChartTab(0);
+function finding(best, inv, lifetime) {
+  if (!best || !inv) return null;
+  const name = labelOf(best);
+  if (inv.npv_gbp >= 0) {
+    return inv.payback_yrs != null
+      ? `${name} pays back in ${num(inv.payback_yrs, 1)} years, with an NPV of ${gbp(inv.npv_gbp)}.`
+      : `${name} has the best NPV, ${gbp(inv.npv_gbp)}.`;
   }
+  return `No size pays back over ${lifetime} years at these assumptions. The closest, ${name}, has an NPV of ${gbp(inv.npv_gbp)}.`;
+}
+
+export default function ResultsPage({ results, jobId, mode, validationWarnings, dataPeriod, bands, runInputs }) {
+  const archetypeIds = Object.keys(results);
+  const [archIdx, setArchIdx] = useState(0);
+  const scenarios = results[archetypeIds[archIdx]] || [];
+  const nDays = coverageDays(dataPeriod, scenarios);
+
+  const [form, setForm] = useState(defaultInvestmentForm);
+  const inv = useInvestment(scenarios, nDays, form);
+  const lifetime = inv.assumptions?.lifetime_yrs ?? 15;
+  const effPct = inv.assumptions?.dispatch_efficiency_pct ?? 85;
+
+  // Best = highest NPV once priced; until then, highest backtest benefit.
+  const bestKey = useMemo(() => {
+    if (inv.byKey.size) {
+      let top = null;
+      for (const [k, v] of inv.byKey) if (!top || v.npv_gbp > top[1].npv_gbp) top = [k, v];
+      return top?.[0] ?? null;
+    }
+    const s = [...scenarios].sort((a, b) => b.net_benefit_gbp - a.net_benefit_gbp)[0];
+    return s ? scenarioKey(s) : null;
+  }, [inv.byKey, scenarios]);
+
+  const [picked, setPicked] = useState(null);
+  const selectedKey = picked && scenarios.some((s) => scenarioKey(s) === picked) ? picked : bestKey;
+  const selected = scenarios.find((s) => scenarioKey(s) === selectedKey) ?? scenarios[0];
+  const best = scenarios.find((s) => scenarioKey(s) === bestKey);
+  const bestInv = bestKey ? inv.byKey.get(bestKey) : null;
+  const selInv = selected ? inv.byKey.get(scenarioKey(selected)) : null;
+  const selLabel = selected ? labelOf(selected) : "";
+  const annual = nDays ? 365 / nDays : 1;
+
+  const subtitle = [
+    runInputs?.fileName,
+    runInputs?.dnoLabel && `${runInputs.dnoLabel} ${runInputs.voltage}`,
+    dataPeriod?.start && `${date(dataPeriod.start)} to ${date(dataPeriod.end)}`,
+    nDays && `${num(nDays, 0)} days of data`,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
-
-      {/* Top bar */}
-      <div style={{
-        background: "var(--bg-surface)",
-        borderBottom: "1px solid var(--border)",
-        padding: "0.9rem 1.5rem",
-        display: "flex",
-        alignItems: "center",
-        gap: "1.25rem",
-      }}>
-        <button
-          onClick={onBack}
-          style={{
-            padding: "0.35rem 0.85rem",
-            border: "1px solid var(--border)",
-            borderRadius: 5,
-            background: "transparent",
-            cursor: "pointer",
-            fontSize: "0.82rem",
-            color: "var(--text-sec)",
-            transition: "border-color 0.15s",
-          }}
-        >
-          ← New run
-        </button>
-        <div>
-          <span style={{ fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.01em" }}>
-            flex<span style={{ color: "var(--accent)" }}>iq</span>
-          </span>
-          <span style={{ marginLeft: "0.75rem", fontSize: "0.8rem", color: "var(--text-dim)" }}>Results</span>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "32px 24px 64px" }}>
+      {/* Title row: the answer, and the one primary action */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+            {mode === "archetype" ? "Archetype appraisal" : "Site appraisal"}
+          </h1>
+          {subtitle && <p className="tnum" style={{ margin: "4px 0 0", fontSize: 14, color: "var(--muted)" }}>{subtitle}</p>}
+          <p aria-live="polite" style={{ margin: "8px 0 0", fontSize: 16, lineHeight: "24px" }}>
+            {finding(best, bestInv, lifetime) ?? (inv.available ? "Pricing the investment case…" : "")}
+          </p>
         </div>
+        <DownloadButton jobId={jobId} />
       </div>
 
-      <div style={{ maxWidth: 1020, margin: "0 auto", padding: "1.75rem 1rem" }}>
-
-        {/* Archetype tabs */}
-        {archetypeIds.length > 1 && (
-          <TabBar
+      {archetypeIds.length > 1 && (
+        <div style={{ marginTop: 16 }}>
+          <Tabs
             tabs={archetypeIds.map((id) => DISPLAY_NAMES[id] ?? id)}
-            active={archetypeIds.indexOf(activeArchetype)}
-            onSelect={handleArchetypeChange}
+            active={archIdx}
+            onSelect={(i) => { setArchIdx(i); setPicked(null); }}
+            label="Archetype site"
           />
-        )}
+        </div>
+      )}
 
-        {/* Mode / disclaimer badge */}
-        {mode === "archetype" && (
-          <div style={{
-            marginBottom: "1rem",
-            fontSize: "0.72rem",
-            color: "var(--text-dim)",
-            background: "rgba(0,200,232,0.03)",
-            border: "1px solid var(--signal-a10)",
-            borderRadius: 5,
-            padding: "0.4rem 0.75rem",
-            display: "inline-block",
-          }}>
-            ⓘ Archetype mode: demand profile is representative, not site-specific
-          </div>
-        )}
-        {mode === "csv" && (
-          <div style={{ marginBottom: "1rem" }}>
-            <div style={{
-              fontSize: "0.72rem",
-              color: "var(--text-dim)",
-              background: "rgba(0,200,232,0.03)",
-              border: "1px solid var(--signal-a10)",
-              borderRadius: 5,
-              padding: "0.4rem 0.75rem",
-              display: "inline-block",
-            }}>
-              ⓘ{" "}
-              {dataPeriod
-                ? `Results cover ${fmtDate(dataPeriod.start)} – ${fmtDate(dataPeriod.end)} (${dataPeriod.n_days} days) · `
-                : ""}
-              Upper-bound estimate: dispatch optimised with perfect price foresight
-            </div>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.4rem", lineHeight: 1.6 }}>
-              net_demand_mw is treated as metered boundary flow, so on-site generation is already reflected.
-              {dataPeriod?.resolution === "hourly" && (
-                <>
-                  {" "}For hourly data, the DUoS band is assigned by start-of-hour timestamp
-                  (e.g. 16:00 → Red, 19:00 → Amber evening); no intra-hour band splitting is applied.
-                </>
-              )}
-            </div>
-          </div>
-        )}
+      {validationWarnings?.length > 0 && (
+        <div role="status" style={{
+          marginTop: 16, padding: "10px 14px", borderRadius: "var(--radius-card)",
+          background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)",
+          color: "var(--pill-warning-ink)", fontSize: 14,
+        }}>
+          {validationWarnings.map((w, i) => <p key={i} style={{ margin: i ? "4px 0 0" : 0 }}>{w}</p>)}
+        </div>
+      )}
 
-        {/* Validation warnings from CSV upload */}
-        {validationWarnings?.length > 0 && (
-          <div style={{
-            marginBottom: "1.25rem",
-            padding: "0.75rem 1rem",
-            background: "rgba(255,176,58,0.07)",
-            border: "1px solid rgba(255,176,58,0.25)",
-            borderRadius: 6,
-          }}>
-            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--warn)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
-              Data warnings
-            </div>
-            {validationWarnings.map((w, i) => (
-              <div key={i} style={{ fontSize: "0.78rem", color: "var(--warn)", marginTop: i > 0 ? "0.25rem" : 0 }}>
-                {w}
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="results-grid" style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
+          {inv.available ? (
+            <LeadStrip inv={bestInv} effPct={effPct} lifetime={lifetime} loading={inv.loading || !bestInv} />
+          ) : null}
 
-        {/* KPI cards */}
-        <KpiCards topScenario={topScenario} />
-
-        {/* DUoS-band motif — reflects the tariff actually used in CSV mode */}
-        <div style={{ margin: "0 0 1.75rem" }}>
-          <DayTape variant="divider" bands={bands || undefined} />
-          {mode === "csv" && bands && (
-            <div style={{
-              marginTop: "0.4rem", fontSize: "0.65rem", color: "var(--text-dim)",
-              letterSpacing: "0.06em", textTransform: "uppercase",
-            }}>
-              Your DUoS band day · charge green · discharge red
+          {selected && (
+            <div className="pair">
+              <CashflowChart available={inv.available} inv={selInv} label={selLabel} lifetime={lifetime} discountPct={inv.assumptions?.discount_rate_pct ?? 8} />
+              <BillChart scenario={selected} label={selLabel} annual={annual} nDays={nDays ?? 0} />
             </div>
           )}
+
+          <Card
+            id="sizes"
+            title="Battery sizes compared"
+            subtitle={`${scenarios.length} scenario${scenarios.length === 1 ? "" : "s"}. Select one to show it in the charts.`}
+            csv={inv.byKey.size ? {
+              filename: "flexiq-scenarios.csv",
+              rows: scenarios.map((s) => {
+                const v = inv.byKey.get(scenarioKey(s)) || {};
+                return {
+                  size: sizeLabel(s), export: s.export_limit_mw, backtest: s.net_benefit_gbp,
+                  saving: v.annual_benefit_yr1_gbp, capex: v.capex_gbp, npv: v.npv_gbp, irr: v.irr_pct,
+                  payback: v.payback_yrs, dpayback: v.discounted_payback_yrs,
+                };
+              }),
+              columns: [["size", "Battery size"], ["export", "Export limit (MW)"], ["backtest", "Backtest saving over data period (GBP)"], ["saving", "Year-1 saving, realistic (GBP)"], ["capex", "Capex (GBP)"], ["npv", "NPV (GBP)"], ["irr", "IRR (%)"], ["payback", "Payback (years)"], ["dpayback", "Discounted payback (years)"]],
+            } : null}
+          >
+            <ScenarioTable
+              scenarios={scenarios}
+              byKey={inv.byKey}
+              selectedKey={selectedKey}
+              onSelect={setPicked}
+              bestKey={inv.byKey.size ? bestKey : null}
+              lifetime={lifetime}
+            />
+          </Card>
+
+          <div className="pair">
+            <SizeChart scenarios={scenarios} byKey={inv.byKey} available={inv.available} />
+            {selected && <TypicalDay scenario={selected} label={selLabel} bands={mode === "csv" ? bands : null} />}
+          </div>
+
+          {selected && <OperationDetail scenario={selected} label={selLabel} />}
         </div>
 
-        {/* Baseline breakdown — shown in both modes (both serialisers emit the fields) */}
-        <BaselineBreakdown topScenario={topScenario} />
-
-        {/* Scenario table */}
-        <div style={{ marginBottom: "2rem" }}>
-          <ScenarioTable rankedScenarios={rankedScenarios} />
-        </div>
-
-        {/* Investment case — lifetime NPV/IRR view of the same scenarios.
-            Annualises by days of data actually covered (not calendar span),
-            so CSV mode only. */}
-        <InvestmentCard rankedScenarios={rankedScenarios} nDays={dataPeriod?.coverage_days ?? dataPeriod?.n_days} />
-
-        {/* Charts */}
-        <div style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: "1.5rem",
-          marginBottom: "1.5rem",
-        }}>
-          <TabBar tabs={CHART_TABS} active={chartTab} onSelect={setChartTab} small />
-          {chartTab === 0 && <CumulativePnlChart     rankedScenarios={rankedScenarios} />}
-          {chartTab === 1 && <DispatchProfileChart   rankedScenarios={rankedScenarios} />}
-          {chartTab === 2 && <RevenueStackChart      rankedScenarios={rankedScenarios} />}
-          {chartTab === 3 && <BaselineComparisonChart rankedScenarios={rankedScenarios} />}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <DownloadButton jobId={jobId} />
-        </div>
-
+        <aside style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }} aria-label="Assumptions and model scope">
+          {inv.available && (
+            <InvestmentInputs form={form} setForm={setForm} loading={inv.loading} error={inv.error} warnings={inv.result?.warnings} />
+          )}
+          <RunInputs runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} />
+          <ModelScope />
+        </aside>
       </div>
     </div>
   );

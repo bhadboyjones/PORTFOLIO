@@ -19,11 +19,11 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         failures = 0;
         setStatus(data);
         if (data.status === "complete") {
-          // hold at 100% so the battery-full pulse is visible before results
+          // hold at 100% briefly so the finished bar is seen before results
           setStatus({ ...data, progress_pct: 100 });
           setTimeout(() => {
             if (!cancelled) onComplete(data.results, data.validation_warnings ?? null, data.data_period ?? null);
-          }, reduced ? 0 : 700);
+          }, reduced ? 0 : 400);
           return;
         }
         if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error."); return; }
@@ -51,90 +51,43 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
   const isBuilding = pct === 99 && complete === total && total > 0;
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "2rem",
-      background: "var(--bg-base)",
-    }}>
-      <div style={{ width: "100%", maxWidth: 520 }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 24px 64px" }}>
+      <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700 }}>
+        {isBuilding ? "Building the report" : "Running the optimisation"}
+      </h1>
+      <p style={{ margin: "4px 0 24px", color: "var(--muted)", fontSize: 16, lineHeight: "24px" }}>
+        Each scenario is a full dispatch optimisation over your data. Larger files and more
+        scenarios take longer.
+      </p>
 
-        {/* Brand */}
-        <div style={{ textAlign: "center", marginBottom: "3rem" }}>
-          <div style={{ fontSize: "1.4rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.02em", marginBottom: "0.25rem" }}>
-            flex<span style={{ color: "var(--accent)" }}>iq</span>
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            BTM BESS Optimiser
-          </div>
-        </div>
-
-        {/* Pulse indicator */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.75rem" }}>
-          <div
-            className="pulse-dot"
-            style={{
-              width: 10, height: 10, borderRadius: "50%",
-              background: "var(--accent)",
-              boxShadow: "0 0 10px rgba(0,200,232,0.5)",
-              flexShrink: 0,
-            }}
-          />
-          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-pri)" }}>
-            {isBuilding ? "Building report…" : "Running optimisation…"}
-          </h2>
-        </div>
-
+      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-card)", padding: 24 }}>
         <ProgressBar pct={pct} />
-
-        <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <p style={{ margin: 0, color: "var(--text-sec)", fontSize: "0.875rem" }}>
-            {total > 0
-              ? `${complete} of ${total} scenario${total !== 1 ? "s" : ""} complete`
-              : "Initialising…"}
-          </p>
-          {isBuilding && (
-            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Writing XLSX…</span>
-          )}
-        </div>
-
+        <p aria-live="polite" style={{ margin: "16px 0 0", fontSize: 14 }}>
+          {total > 0
+            ? `${complete} of ${total} scenario${total !== 1 ? "s" : ""} complete${isBuilding ? ". Writing the XLSX report…" : ""}`
+            : "Starting…"}
+        </p>
         {current && !isBuilding && (
-          <div style={{
-            marginTop: "1rem",
-            padding: "0.6rem 0.9rem",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            fontSize: "0.78rem",
-            color: "var(--text-dim)",
-            fontFamily: "monospace",
-          }}>
-            {current}
-          </div>
-        )}
-
-        {csvWarns?.length > 0 && (
-          <div style={{
-            marginTop: "1.25rem",
-            padding: "0.75rem 1rem",
-            background: "rgba(255,176,58,0.07)",
-            border: "1px solid rgba(255,176,58,0.25)",
-            borderRadius: 6,
-          }}>
-            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--warn)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
-              Validation warnings
-            </div>
-            {csvWarns.map((w, i) => (
-              <div key={i} style={{ fontSize: "0.78rem", color: "var(--warn)", marginTop: i > 0 ? "0.25rem" : 0 }}>
-                {w}
-              </div>
-            ))}
-          </div>
+          <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--muted)" }}>
+            Now: <span className="tnum">{current}</span>
+          </p>
         )}
       </div>
+
+      {csvWarns?.length > 0 && (
+        <div role="status" style={{
+          marginTop: "var(--gap)",
+          padding: "12px 16px",
+          background: "var(--pill-warning-bg)",
+          border: "1px solid var(--pill-warning-line)",
+          borderRadius: "var(--radius-card)",
+          color: "var(--pill-warning-ink)",
+          fontSize: 14,
+        }}>
+          <p style={{ margin: "0 0 4px", fontWeight: 500 }}>Check your data</p>
+          {csvWarns.map((w, i) => <p key={i} style={{ margin: i ? "4px 0 0" : 0 }}>{w}</p>)}
+        </div>
+      )}
     </div>
   );
 }

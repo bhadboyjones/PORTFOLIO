@@ -13,8 +13,6 @@ export default function BessConfigurator({
 
   return (
     <div>
-      <h2 style={sectionLabel}>BESS Configuration</h2>
-
       {/* MW × Duration matrix */}
       <div style={{ overflowX: "auto", marginBottom: "1.5rem" }}>
         <table style={{ borderCollapse: "collapse", fontSize: "0.82rem" }}>
@@ -46,16 +44,15 @@ export default function BessConfigurator({
                           width: 52,
                           height: 38,
                           borderRadius: 5,
-                          border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                          background: active ? "var(--signal-a15)" : locked ? "var(--bg-base)" : "var(--bg-surface)",
+                          border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
+                          background: active ? "var(--raised)" : locked ? "var(--ground)" : "var(--surface)",
                           cursor: locked ? "not-allowed" : "pointer",
                           fontSize: "0.75rem",
-                          color: active ? "var(--accent)" : locked ? "var(--border-bright)" : "var(--text-dim)",
-                          fontWeight: 700,
-                          boxShadow: active ? "inset 0 0 0 1px var(--accent)" : "none",
+                          color: locked ? "var(--faint)" : "var(--ink)",
+                          fontWeight: active ? 500 : 400,
                         }}
                       >
-                        {active ? "✓" : `${mw * d} MWh`}
+                        {`${mw * d} MWh`}
                       </button>
                     </td>
                   );
@@ -68,8 +65,8 @@ export default function BessConfigurator({
 
       {/* Export limit pills */}
       <div style={{ marginBottom: "1.25rem" }}>
-        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
-          Export Limit
+        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 500, marginBottom: "0.6rem" }}>
+          Export limit
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           {exportOptions.map((ex) => {
@@ -84,7 +81,7 @@ export default function BessConfigurator({
                   padding: "0.4rem 1rem",
                   borderRadius: 999,
                   border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  background: active ? "rgba(0,200,232,0.12)" : "var(--bg-surface)",
+                  background: active ? "var(--raised)" : "var(--bg-surface)",
                   color: active ? "var(--accent)" : "var(--text-sec)",
                   cursor: "pointer",
                   fontSize: "0.82rem",
@@ -121,12 +118,10 @@ export default function BessConfigurator({
 }
 
 const sectionLabel = {
-  margin: "0 0 1rem",
-  fontSize: "0.72rem",
-  fontWeight: 700,
-  color: "var(--text-dim)",
-  textTransform: "uppercase",
-  letterSpacing: "0.1em",
+  margin: "0 0 12px",
+  fontSize: 14,
+  fontWeight: 500,
+  color: "var(--ink)",
 };
 
 const cornerCell = {
@@ -140,9 +135,8 @@ const colHeader = {
   padding: "0.4rem 0.4rem 0.6rem",
   textAlign: "center",
   color: "var(--text-sec)",
-  fontWeight: 700,
-  fontSize: "0.8rem",
-  letterSpacing: "0.04em",
+  fontWeight: 500,
+  fontSize: 14,
   borderBottom: "1px solid var(--border)",
 };
 

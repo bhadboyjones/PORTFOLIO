@@ -1,64 +1,94 @@
 /* ════════════════════════════════════════════════════════════════
-   flexiq — "Night Grid" design tokens
-   Canonical tokens first; legacy aliases keep older inline styles
-   working. Chart colours mirrored in components/chartTheme.js —
-   keep in sync.
+   flexiq: "Ledger" design tokens (taste-skill achromatic-ledger,
+   seed 798273244). The chrome carries no colour: ink, greys and one
+   near-black action. Colour lives on data only, in the fixed palette
+   in components/chartTheme.js (keep the two in sync).
+   Legacy aliases below map the Night Grid names onto ledger values
+   so older inline styles render light without a rewrite.
    ════════════════════════════════════════════════════════════════ */
 
 :root {
   /* ── canonical ─────────────────────────────────────────────── */
-  --void:      #0A0F1C;   /* page background */
-  --panel:     #121C30;   /* cards / surfaces */
-  --grid-line: #24344F;   /* borders, hairlines */
-  --paper:     #E6EEF8;   /* primary text */
-  --signal:    #00C8E8;   /* cyan — discharge / action / CTA */
-  --charge:    #FFB03A;   /* amber — charge / energy-in */
-  --positive:  #00E5A0;
-  --negative:  #FF5577;
+  --ground:   #f2f4f7;   /* blue-grey "ledger" ground: the product's face */
+  --surface:  #ffffff;   /* cards */
+  --raised:   #eeeeee;   /* active pill, selected state */
+  --line:     #e6e6e6;   /* card edges */
+  --rule:     #f0f0f0;   /* row rules */
+  --control:  #d4d4d4;   /* control borders */
+  --ink:      #0a0a0a;   /* primary text */
+  --muted:    #5f6368;   /* secondary text, 6.0:1 on white */
+  --faint:    #6b6b6b;   /* meta, placeholders, 5.3:1 on white */
+  --primary:  #141414;   /* the one filled action */
+  --data:     #1d5fbf;   /* the one chart hue: main data element */
+  --positive: #2e7d32;
+  --negative: #c4242a;
+  --warning:  #92400e;
 
-  /* DUoS band triad — tariff-band contexts only (Day Tape, rates) */
-  --band-red:   var(--negative);
-  --band-amber: var(--charge);
-  --band-green: var(--positive);
+  --pill-positive-bg: #dcfae5; --pill-positive-ink: #04250e;
+  --pill-negative-bg: #ffedea; --pill-negative-ink: #831c1e;
+  --pill-warning-bg:  #fffbeb; --pill-warning-ink:  #92400e; --pill-warning-line: #fde68a;
+  --pill-neutral-bg:  #eeeeee; --pill-neutral-ink:  #3d3d3d;
 
-  /* alpha steps — inline styles can't derive alphas from tokens */
-  --signal-a05: rgba(0, 200, 232, 0.05);
-  --signal-a08: rgba(0, 200, 232, 0.08);
-  --signal-a10: rgba(0, 200, 232, 0.10);
-  --signal-a15: rgba(0, 200, 232, 0.15);
-  --signal-a25: rgba(0, 200, 232, 0.25);
-  --signal-a40: rgba(0, 200, 232, 0.40);
-  --charge-a15:   rgba(255, 176, 58, 0.15);
-  --negative-a10: rgba(255, 85, 119, 0.10);
-  --negative-a30: rgba(255, 85, 119, 0.30);
-  --positive-a12: rgba(0, 229, 160, 0.12);
+  /* DUoS bands: data colours, used only where a band is shown */
+  --band-red:   #c4242a;
+  --band-amber: #b7791f;
+  --band-green: #2e7d32;
 
-  /* ── legacy aliases (pre-overhaul names) ───────────────────── */
-  --bg-base:       var(--void);
-  --bg-surface:    #0E1726;
-  --bg-card:       var(--panel);
-  --bg-card-hover: #17233C;
-  --border:        var(--grid-line);
-  --border-bright: #2E4266;
-  --text-pri:      var(--paper);
-  --text-sec:      #8FA9C9;
-  --text-dim:      #4A6B8C;
-  --accent:        var(--signal);
-  --accent-hover:  #00B4D2;
-  --accent-dim:    var(--signal-a10);
-  --accent-glow:   var(--signal-a25);
-  --amber:         var(--charge);
-  --warn:          var(--charge);
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --gap: 12px;
+  --pad: 24px;
+  --control-height: 36px;
+  --fs-title: 24px;
+  --fs-section: 16px;
+  --fs-kpi: 30px;
+  --fs-body: 14px;
+  --fs-small: 12px;
 
-  /* ── motion ────────────────────────────────────────────────── */
+  /* ── legacy aliases (Night Grid names → ledger values) ─────── */
+  --void:          var(--ground);
+  --panel:         var(--surface);
+  --grid-line:     var(--line);
+  --paper:         var(--ink);
+  --signal:        var(--ink);
+  --charge:        var(--band-amber);
+  --bg-base:       var(--ground);
+  --bg-surface:    var(--surface);
+  --bg-card:       var(--surface);
+  --bg-card-hover: #fafafa;
+  --border:        var(--line);
+  --border-bright: var(--control);
+  --text-pri:      var(--ink);
+  --text-sec:      var(--muted);
+  --text-dim:      var(--faint);
+  --accent:        var(--ink);
+  --accent-hover:  #000000;
+  --accent-dim:    var(--raised);
+  --accent-glow:   transparent;
+  --amber:         var(--warning);
+  --warn:          var(--warning);
+  /* former cyan alpha steps: neutral tone steps now */
+  --signal-a05: #fafafa;
+  --signal-a08: #f6f6f6;
+  --signal-a10: var(--raised);
+  --signal-a15: var(--raised);
+  --signal-a25: var(--control);
+  --signal-a40: var(--control);
+  --charge-a15:   var(--pill-warning-bg);
+  --negative-a10: var(--pill-negative-bg);
+  --negative-a30: #f3c3bf;
+  --positive-a12: var(--pill-positive-bg);
+
+  /* ── motion: feedback only, nothing performs an entrance ───── */
   --ease-flex: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-fast: 150ms;
-  --dur-med:  300ms;
-  --dur-slow: 500ms;
+  --dur-fast: 120ms;
+  --dur-med:  200ms;
+  --dur-slow: 200ms;
 
-  /* ── type ──────────────────────────────────────────────────── */
-  --font-display: 'Space Grotesk', 'Inter', sans-serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* ── type: one grotesk; Geist Mono for IDs only ────────────── */
+  --font-body: "Geist", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -72,84 +102,129 @@
 
 /* ── base ─────────────────────────────────────────────────────── */
 
-*, *::before, *::after {
-  box-sizing: border-box;
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
 }
+@media (pointer: fine) { html { overscroll-behavior: none; } }
 
 body {
   margin: 0;
   font-family: var(--font-body);
-  background: var(--bg-base);
-  color: var(--text-pri);
+  font-size: var(--fs-body);
+  line-height: 20px;
+  background: var(--ground);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
-}
+#root { width: 100%; min-height: 100vh; }
 
-input[type="date"],
-input[type="text"],
-select {
-  color-scheme: dark;
-}
+h1, h2, h3 { text-wrap: balance; }
+button, a, input, select, label { touch-action: manipulation; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+input, select, textarea {
+  font: inherit;
+  color: var(--ink);
+  background-color: var(--surface);
+}
+select { background-color: var(--surface); color: var(--ink); }
+::placeholder { color: var(--faint); opacity: 1; }
 
 /* ── focus ────────────────────────────────────────────────────── */
 
 :focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--data);
   outline-offset: 2px;
 }
 :focus:not(:focus-visible) { outline: none; }
 input:focus-visible + .toggle-track {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--data);
   outline-offset: 2px;
 }
 .recharts-wrapper:focus-visible { outline-offset: -2px; }
 
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  padding: 8px 12px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: var(--radius-control);
+  z-index: 10;
+}
+.skip-link:focus { top: 8px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 /* ── utilities ────────────────────────────────────────────────── */
 
-.tnum {
+.tnum, .num {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
+/* hover feedback: a tone step, never a lift or a glow */
 .lift {
   transition:
-    transform    var(--dur-fast) var(--ease-flex),
     border-color var(--dur-fast) var(--ease-flex),
-    box-shadow   var(--dur-fast) var(--ease-flex),
-    background   var(--dur-fast) var(--ease-flex);
+    background-color var(--dur-fast) var(--ease-flex);
 }
-.lift:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: var(--border-bright);
-}
-.lift-glow:hover:not(:disabled) {
-  box-shadow: 0 0 20px var(--signal-a15);
-}
+.lift:hover:not(:disabled) { border-color: var(--control); }
+.lift-glow:hover:not(:disabled) { background-color: #fafafa; }
 
-/* view transitions — keyed wrapper in App.jsx re-mounts per view */
-.view-enter {
-  animation: view-enter var(--dur-med) var(--ease-flex) both;
+.btn-primary {
+  height: var(--control-height);
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-flex);
 }
-@keyframes view-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
-}
+.btn-primary:hover:not(:disabled) { background: #000; }
+.btn-primary:disabled { background: var(--raised); color: var(--faint); cursor: not-allowed; }
 
-/* staggered KPI entrance — delay set inline per card */
-.kpi-enter {
-  animation: view-enter var(--dur-slow) var(--ease-flex) both;
+.btn-secondary {
+  height: var(--control-height);
+  padding: 0 14px;
+  border: 1px solid var(--control);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-flex);
 }
+.btn-secondary:hover:not(:disabled) { background: #fafafa; }
+
+.btn-text {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--control);
+}
+.btn-text:hover { text-decoration-color: var(--ink); }
+
+/* view transitions removed: app screens perform no entrance */
+.view-enter, .kpi-enter { animation: none; }
 
 /* ── responsive grids (media queries need stylesheet classes) ─── */
 
@@ -159,10 +234,10 @@ input:focus-visible + .toggle-track {
 .export-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
+  gap: 8px;
 }
-.adv-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-.adv-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+.adv-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.adv-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
 .tab-bar {
   overflow-x: auto;
@@ -179,51 +254,27 @@ input:focus-visible + .toggle-track {
   .adv-grid-2, .adv-grid-3 { grid-template-columns: 1fr; }
 }
 
-/* ── Day Tape — 48 settlement periods, coloured by DUoS band ──── */
+/* ── Day Tape: 48 settlement periods, coloured by DUoS band ───── */
 
 .day-tape {
   position: relative;
   display: flex;
   gap: 2px;
   overflow: hidden;
-  border-radius: 3px;
 }
-.day-tape--hero    { height: 36px; }
-.day-tape--divider { height: 6px; opacity: 0.55; }
+.day-tape--hero    { height: 28px; }
+.day-tape--divider { height: 6px; }
 
 .day-tape__seg {
   flex: 1;
-  border-radius: 1px;
   background: var(--seg-color);
-  opacity: 0.32;
-  transition: opacity var(--dur-med) var(--ease-flex);
+  opacity: 0.22;
 }
 .day-tape__seg[data-band="red"]   { --seg-color: var(--band-red); }
 .day-tape__seg[data-band="amber"] { --seg-color: var(--band-amber); }
 .day-tape__seg[data-band="green"] { --seg-color: var(--band-green); }
-.day-tape__seg.is-filled { opacity: 1; }
-
-.day-tape__wave {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 30%;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--signal-a25) 40%,
-    var(--charge-a15) 70%,
-    transparent
-  );
-  animation: tape-wave 8s linear infinite;
-}
-@keyframes tape-wave {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(433%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .day-tape__wave { display: none; }
-}
+.day-tape__seg.is-filled { opacity: 0.85; }
+.day-tape__wave { display: none; }
 
 /* ── Charging SLD (progress screen) ───────────────────────────── */
 
@@ -231,28 +282,43 @@ input:focus-visible + .toggle-track {
   stroke-dasharray: 6 8;
   animation: sld-dash 1.2s linear infinite;
 }
-@keyframes sld-dash {
-  to { stroke-dashoffset: -14; }
-}
-.sld-complete {
-  animation: sld-pulse 600ms var(--ease-flex) both;
-}
-@keyframes sld-pulse {
-  0%   { filter: drop-shadow(0 0 0 transparent); }
-  50%  { filter: drop-shadow(0 0 14px var(--signal-a40)); }
-  100% { filter: drop-shadow(0 0 0 transparent); }
-}
+@keyframes sld-dash { to { stroke-dashoffset: -14; } }
+.sld-complete { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .sld-flow { animation: none; }
 }
 
-/* ── animations (legacy) ──────────────────────────────────────── */
+.pulse-dot { animation: none; }
 
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 var(--accent-glow); }
-  50%       { transform: scale(1.15); opacity: 0.85; box-shadow: 0 0 0 8px transparent; }
+/* ── Results layout ───────────────────────────────────────────── */
+
+.results-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--gap);
+  align-items: start;
 }
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+.lead-strip { grid-template-columns: 1.7fr repeat(4, minmax(0, 1fr)); }
+.lead-strip > * + * { border-left: 1px solid var(--line); }
+.scn-list { display: none; }
 
-.pulse-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
+@media (max-width: 1100px) {
+  .results-grid { grid-template-columns: minmax(0, 1fr); }
+  .lead-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lead-strip > * { border-left: none !important; border-top: 1px solid var(--line); }
+  .lead-strip > :first-child { grid-column: 1 / -1; border-top: none; }
+  .lead-strip > :nth-child(odd):not(:first-child) { border-left: 1px solid var(--line) !important; }
+}
+@media (max-width: 760px) {
+  .pair { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .scn-table-wrap { display: none; }
+  .scn-list { display: block; }
 }

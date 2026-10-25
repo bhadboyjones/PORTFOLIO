@@ -93,58 +93,29 @@ export default function ConfigPage({ onRunStarted, jobError }) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--text-dim)" }}>
-          <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 8px rgba(0,200,232,0.5)", flexShrink: 0 }} />
-          <span style={{ fontSize: "0.875rem" }}>Loading configuration…</span>
+                    <span style={{ fontSize: "0.875rem" }}>Loading configuration…</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
+    <div style={{ paddingBottom: 64 }}>
 
-      {/* Hero */}
-      <div style={{
-        background: "var(--bg-surface)",
-        backgroundImage: `
-          linear-gradient(rgba(0,200,232,0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0,200,232,0.04) 1px, transparent 1px)
-        `,
-        backgroundSize: "48px 48px",
-        borderBottom: "1px solid var(--border)",
-        padding: "2.5rem 1.5rem 2rem",
-      }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem" }}>
-            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.02em" }}>
-              flex<span style={{ color: "var(--accent)" }}>iq</span>
-            </h1>
-            <span style={{
-              fontSize: "0.62rem", fontWeight: 700, color: "var(--accent)",
-              background: "var(--signal-a10)", border: "1px solid var(--signal-a25)",
-              borderRadius: 3, padding: "0.12rem 0.4rem", letterSpacing: "0.1em", textTransform: "uppercase",
-            }}>
-              BETA
-            </span>
-          </div>
-          <p style={{ margin: "0 0 1rem", color: "var(--text-sec)", fontSize: "0.9rem" }}>
-            BTM BESS optimisation
-          </p>
-          <p style={{
-            margin: 0, color: "var(--text-dim)", fontSize: "0.8rem",
-            background: "var(--signal-a05)", border: "1px solid rgba(0,200,232,0.12)",
-            borderRadius: 5, padding: "0.45rem 0.85rem", display: "inline-block",
-          }}>
-            Select 1 site archetype, up to 3 BESS configurations and up to 4 export limits (max 12 scenarios).
-          </p>
-        </div>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px 0" }}>
+        <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+          Archetype sites
+        </h1>
+        <p style={{ margin: "4px 0 0", fontSize: 16, lineHeight: "24px", color: "var(--muted)" }}>
+          Choose one site, up to 3 battery sizes and up to 4 export limits (12 scenarios at most).
+        </p>
       </div>
 
       {/* Config body */}
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "1.75rem 1rem" }}>
 
-        {/* Site Archetypes */}
-        <Card label="Site Archetypes">
+        {/* Site */}
+        <Card label="Site">
           <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap" }}>
             {archetypes.map((a) => (
               <ArchetypeCard
@@ -157,8 +128,8 @@ export default function ConfigPage({ onRunStarted, jobError }) {
           </div>
         </Card>
 
-        {/* BESS Configuration */}
-        <Card label="BESS Configuration">
+        {/* Battery sizes */}
+        <Card label="Battery sizes">
           <BessConfigurator
             mwOptions={scenarioOptions.mw_options}
             durationOptions={scenarioOptions.duration_options}
@@ -171,8 +142,8 @@ export default function ConfigPage({ onRunStarted, jobError }) {
           />
         </Card>
 
-        {/* Analysis Window */}
-        <Card label="Analysis Window">
+        {/* Analysis window */}
+        <Card label="Analysis window">
           <TimeframePicker
             startDate={startDate}
             endDate={endDate}
@@ -180,12 +151,12 @@ export default function ConfigPage({ onRunStarted, jobError }) {
           />
         </Card>
 
-        {/* Price Exposure */}
-        <Card label="Price Exposure">
+        {/* Price signal */}
+        <Card label="Price signal">
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             {[
-              { value: "da",        label: "Day-Ahead (DA)",     desc: "Settled against day-ahead market price" },
-              { value: "imbalance", label: "Imbalance (System)", desc: "Settled against system imbalance price" },
+              { value: "da",        label: "Day-ahead (DA)",     desc: "Elexon market index, a day-ahead proxy" },
+              { value: "imbalance", label: "Imbalance (system)", desc: "Settled against the system imbalance price" },
             ].map(({ value, label, desc }) => {
               const active = priceExposure === value;
               return (
@@ -198,15 +169,15 @@ export default function ConfigPage({ onRunStarted, jobError }) {
                     flex: 1,
                     minWidth: 220,
                     padding: "0.85rem 1rem",
-                    border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                    borderRadius: 7,
-                    background: active ? "var(--signal-a08)" : "var(--bg-surface)",
+                    border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
+                    borderRadius: "var(--radius-control)",
+                    background: active ? "var(--raised)" : "var(--surface)",
                     cursor: "pointer",
                     textAlign: "left",
-                    boxShadow: active ? "0 0 16px var(--signal-a10)" : "none",
+                    font: "inherit",
                   }}
                 >
-                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "var(--accent)" : "var(--text-sec)", marginBottom: "0.25rem" }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
                     {label}
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
@@ -220,12 +191,12 @@ export default function ConfigPage({ onRunStarted, jobError }) {
 
         {/* Errors */}
         {jobError && (
-          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
+          <div role="alert" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--pill-negative-bg)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
             Run failed: {jobError}
           </div>
         )}
         {runError && (
-          <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "rgba(255,85,119,0.08)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
+          <div role="alert" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--pill-negative-bg)", border: "1px solid var(--negative-a30)", borderRadius: 6, color: "var(--negative)", fontSize: "0.875rem" }}>
             {runError}
           </div>
         )}
@@ -233,13 +204,13 @@ export default function ConfigPage({ onRunStarted, jobError }) {
         <div style={{
           fontSize: "0.75rem",
           color: "var(--text-dim)",
-          background: "rgba(0,200,232,0.03)",
-          border: "1px solid var(--signal-a10)",
+          background: "transparent",
+          border: "none",
           borderRadius: 6,
           padding: "0.5rem 0.85rem",
           marginBottom: "0.75rem",
         }}>
-          ⓘ Using representative demand profiles for typical I&amp;C sites. Network rates based on Northern Powergrid NE HV 2026/27 tariffs.
+          Representative demand profiles for typical I&amp;C sites. Network rates based on Northern Powergrid NE HV 2026/27 tariffs.
         </div>
 
         <RunButton disabled={!canRun || submitting} onClick={handleRun} />
@@ -257,12 +228,9 @@ function Card({ label, children }) {
       padding: "1.5rem",
       marginBottom: "1rem",
     }}>
-      <div style={{
-        fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)",
-        textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.1rem",
-      }}>
+      <h2 style={{ margin: "0 0 16px", fontSize: "var(--fs-section)", lineHeight: "24px", fontWeight: 500 }}>
         {label}
-      </div>
+      </h2>
       {children}
     </div>
   );

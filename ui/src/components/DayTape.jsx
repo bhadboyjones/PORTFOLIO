@@ -1,4 +1,4 @@
-// Day Tape — one day of 48 settlement periods, coloured by DUoS time band.
+// Day Tape: one day of 48 settlement periods, coloured by DUoS time band.
 // Styles live in index.css under "Day Tape"; band helpers in dayTapeBands.js.
 import { DEFAULT_WEEKDAY_BANDS } from "./dayTapeBands";
 
@@ -47,13 +47,12 @@ export default function DayTape({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            marginTop: "0.3rem",
-            fontSize: "0.65rem",
-            color: "var(--text-dim)",
-            letterSpacing: "0.05em",
+            marginTop: 4,
+            fontSize: 12,
+            color: "var(--muted)",
           }}
         >
-          <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
+          <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
         </div>
       )}
     </div>
