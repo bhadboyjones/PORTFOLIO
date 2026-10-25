@@ -1,6 +1,6 @@
 // Pure calculations behind the results page. No React, no charts:
 // everything here is unit-tested in src/lib/__tests__.
-import { gbp, num } from "../format";
+import { gbp, num, count } from "../format";
 import { sizeLabel } from "../hooks/useInvestment";
 
 // ── Annual site bill, without vs with the battery ─────────────────────
@@ -115,10 +115,10 @@ export function finding(best, inv, lifetime) {
   const name = labelOf(best);
   if (inv.npv_gbp >= 0) {
     return inv.payback_yrs != null
-      ? `${name} pays back in ${num(inv.payback_yrs, 1)} years, with an NPV of ${gbp(inv.npv_gbp)}.`
+      ? `${name} pays back in ${count(inv.payback_yrs, "year", 1)}, with an NPV of ${gbp(inv.npv_gbp)}.`
       : `${name} has the best NPV, ${gbp(inv.npv_gbp)}.`;
   }
-  return `No size pays back over ${lifetime} years at these assumptions. The closest, ${name}, has an NPV of ${gbp(inv.npv_gbp)}.`;
+  return `No size pays back over ${count(lifetime, "year")} at these assumptions. The closest, ${name}, has an NPV of ${gbp(inv.npv_gbp)}.`;
 }
 
 // ── Axis ticks ────────────────────────────────────────────────────────

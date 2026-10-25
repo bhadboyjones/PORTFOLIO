@@ -87,3 +87,17 @@ describe("explain", () => {
     expect(source.text).toContain("40% of the battery's gross value is export revenue");
   });
 });
+
+describe("explain edge cases", () => {
+  const best = { dispatch_timeseries: [], dis1_saving_gbp: 1, dis2_revenue_gbp: 0 };
+  const a = { opex_pct_of_capex: 1.5, discount_rate_pct: 8, escalation_pct_yr: 2, lifetime_yrs: 1, dispatch_efficiency_pct: 85 };
+  it("skips the breakeven line when the saving can't cover opex", () => {
+    const lines = explain({ best, inv: { capex_gbp: 400000, npv_gbp: -500000, annual_benefit_yr1_gbp: 100, annual_opex_yr1_gbp: 6000 }, assumptions: a, nDays: 1, bands: null });
+    expect(lines.find((l) => l.key === "change").text).toContain("No capex level makes it pay");
+    expect(lines.map((l) => l.text).join(" ")).not.toMatch(/0% of today's|1 days|1 years/);
+  });
+  it("handles zero capex without a 0.0-year payback", () => {
+    const lines = explain({ best, inv: { capex_gbp: 0, npv_gbp: 5000, annual_benefit_yr1_gbp: 600, annual_opex_yr1_gbp: 0, payback_yrs: 0 }, assumptions: a, nDays: 365, bands: null });
+    expect(lines.find((l) => l.key === "pays").text).toContain("pays from day one");
+  });
+});

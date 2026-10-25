@@ -1,6 +1,6 @@
 // "Why this result": three or four plain sentences computed from the figures
 // on screen. No text generation, so the words always match the numbers.
-import { gbp, num } from "../format";
+import { gbp, num, count } from "../format";
 import { averageDay, bandRuns } from "./results";
 import { DEFAULT_WEEKDAY_BANDS } from "../components/dayTapeBands";
 
@@ -73,10 +73,12 @@ export function explain({ best, inv, assumptions, nDays, dataPeriod, bands }) {
   // 2. Why it does or doesn't pay
   const net1 = inv.annual_benefit_yr1_gbp - inv.annual_opex_yr1_gbp;
   const life = assumptions.lifetime_yrs;
-  if (inv.npv_gbp >= 0) {
+  if (inv.npv_gbp >= 0 && inv.capex_gbp <= 0) {
+    out.push({ key: "pays", text: `It pays from day one: there is no capex to repay, so the NPV of ${gbp(inv.npv_gbp)} over ${count(life, "year")} is all saving.` });
+  } else if (inv.npv_gbp >= 0) {
     out.push({
       key: "pays",
-      text: `It pays: capex of ${gbp(inv.capex_gbp)} is repaid in ${inv.payback_yrs != null ? `${num(inv.payback_yrs, 1)} years` : "the design life"}, leaving an NPV of ${gbp(inv.npv_gbp)} over ${life} years.`,
+      text: `It pays: capex of ${gbp(inv.capex_gbp)} is repaid in ${inv.payback_yrs != null ? count(inv.payback_yrs, "year", 1) : "the design life"}, leaving an NPV of ${gbp(inv.npv_gbp)} over ${count(life, "year")}.`,
     });
   } else if (net1 <= 0) {
     out.push({
@@ -86,17 +88,22 @@ export function explain({ best, inv, assumptions, nDays, dataPeriod, bands }) {
   } else {
     out.push({
       key: "pays",
-      text: `It doesn't pay: capex of ${gbp(inv.capex_gbp)} against ${gbp(net1)}/yr of saving after opex would take about ${num(inv.capex_gbp / net1, 0)} years to repay at year-1 rates, longer than the ${life}-year life.`,
+      text: `It doesn't pay: capex of ${gbp(inv.capex_gbp)} against ${gbp(net1)}/yr of saving after opex would take about ${count(inv.capex_gbp / net1, "year")} to repay at year-1 rates, longer than the ${life}-year life.`,
     });
   }
 
   // 3. What would change the answer
   const be = breakeven(inv, assumptions);
-  if (inv.npv_gbp < 0 && be.savingsMultiplier != null) {
+  const sharePct = inv.capex_gbp > 0 ? (be.capex / inv.capex_gbp) * 100 : null;
+  if (net1 <= 0 && inv.npv_gbp < 0) {
+    out.push({ key: "change", text: "No capex level makes it pay: the saving doesn't cover opex. A larger saving, or lower running costs, would have to come first." });
+  } else if (inv.npv_gbp < 0 && be.savingsMultiplier != null) {
     out.push({
       key: "change",
-      text: `It breaks even if capex falls to about ${gbp(be.capex, { decimals: 0 })} (${num((be.capex / inv.capex_gbp) * 100, 0)}% of today's), or if the saving is ${num(be.savingsMultiplier, 1)} times larger.`,
+      text: `It breaks even if capex falls to about ${gbp(be.capex, { decimals: 0 })} (${sharePct != null && sharePct < 1 ? "under 1%" : `${num(sharePct, 0)}%`} of today's), or if the saving is ${num(be.savingsMultiplier, 1)} times larger.`,
     });
+  } else if (inv.npv_gbp >= 0 && inv.capex_gbp <= 0) {
+    out.push({ key: "change", text: "With no capex, only a saving below opex would make it fail." });
   } else if (inv.npv_gbp >= 0) {
     out.push({
       key: "change",
@@ -111,7 +118,7 @@ export function explain({ best, inv, assumptions, nDays, dataPeriod, bands }) {
     const m = months(dataPeriod?.start, dataPeriod?.end);
     out.push({
       key: "data",
-      text: `This rests on ${num(nDays, 0)} days of data${m ? ` (${m})` : ""}, scaled to a year, and on a perfect-foresight backtest cut to ${num(assumptions.dispatch_efficiency_pct, 0)}%. A full year of data would show the seasons.`,
+      text: `This rests on ${count(nDays, "day")} of data${m ? ` (${m})` : ""}, scaled to a year, and on a perfect-foresight backtest cut to ${num(assumptions.dispatch_efficiency_pct, 0)}%. A full year of data would show the seasons.`,
     });
   } else {
     out.push({

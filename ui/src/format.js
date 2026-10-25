@@ -61,4 +61,10 @@ export function date(isoOrDate) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(d);
 }
 
+/** "1 day", "60 days", "1.5 years": the count formatted, the noun agreeing. */
+export function count(n, noun, decimals = 0, pluralNoun = `${noun}s`) {
+  const shown = num(n, decimals);
+  return `${shown} ${shown === "1" ? noun : pluralNoun}`;
+}
+
 export { DASH, MINUS };

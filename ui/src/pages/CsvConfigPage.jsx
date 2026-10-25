@@ -331,7 +331,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-pri)" }}>{file.name}</div>
                 <div style={{ fontSize: 14, color: "var(--text-dim)", marginTop: "0.25rem" }}>
-                  {(file.size / 1024).toFixed(0)} KB · click to replace
+                  {file.size < 1024 ? `${file.size} bytes` : `${Math.round(file.size / 1024).toLocaleString("en-GB")} KB`} · click to replace
                 </div>
                 {thermalGenWarning && (
                   <div style={{ marginTop: "0.75rem", fontSize: 14, color: "var(--warn)",
@@ -999,7 +999,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               resolutionError && "use 30-minute or hourly data",
               !dnoKey && "choose a DNO",
               selectedCount === 0 && "select at least one battery size",
-              validExportCount === 0 && "enter at least one export limit (0 for none)",
+              exportLimits.some((v) => v !== "" && parseFloat(v) < 0) ? "export limits can't be negative" : validExportCount === 0 && "enter at least one export limit (0 for none)",
               scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
               !pfValid && "set the power factor between 0.5 and 1.0",
               !micValid && "enter a MIC above zero, or leave it blank",
@@ -1154,8 +1154,8 @@ function FileEcho({ file, meta, inputUnit, dnoLabel, issues = [] }) {
     ["Intervals", nf(meta.rows)],
     ["Period", meta.dateRange ? `${meta.dateRange.start} to ${meta.dateRange.end}` : "\u2013"],
     ["Resolution", meta.resolution?.label ?? "\u2013", meta.resolution && !meta.resolution.valid],
-    ["Coverage", meta.coverageDays != null ? `${nf(meta.coverageDays, 1)} days${meta.gaps ? `, ${nf(meta.gaps)} missing interval${meta.gaps === 1 ? "" : "s"}` : ", no gaps"}` : "\u2013", !!meta.gaps],
-    ["Peak import", peak != null ? `${nf(peak)} kW in the selected unit` : "\u2013", peak != null && (peak > 100000 || peak < 1)],
+    ["Coverage", meta.coverageDays != null && meta.resolution?.valid !== false ? `${nf(meta.coverageDays, 1)} days${meta.gaps ? `, ${nf(meta.gaps)} missing interval${meta.gaps === 1 ? "" : "s"}` : ", no gaps"}` : "\u2013", !!meta.gaps],
+    ["Peak import", peak == null ? "\u2013" : peak <= 0 ? "No import (the site exports throughout)" : `${nf(peak)} kW in the selected unit`, peak != null && peak > 0 && (peak > 100000 || peak < 1)],
     ["DNO tariff", dnoLabel ?? "Choose below"],
     ["Columns", meta.headers.join(", ")],
   ] : [];

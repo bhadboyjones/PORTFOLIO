@@ -14,7 +14,7 @@ import { InvestmentInputs, ScopeDetails } from "../components/results/Assumption
 import WhyCard from "../components/results/WhyCard";
 import { explain } from "../lib/explain";
 import useInvestment, { defaultInvestmentForm, scenarioKey, sizeLabel } from "../hooks/useInvestment";
-import { num, date } from "../format";
+import { num, date, count } from "../format";
 import { labelOf, coverageDays, finding } from "../lib/results";
 
 // Screen question: does a battery pay on this site, and which size?
@@ -62,7 +62,7 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
     runInputs?.fileName,
     runInputs?.dnoLabel && `${runInputs.dnoLabel} ${runInputs.voltage}`,
     dataPeriod?.start && `${date(dataPeriod.start)} to ${date(dataPeriod.end)}`,
-    nDays && `${num(nDays, 0)} days of data`,
+    nDays && `${count(nDays, "day")} of data`,
   ].filter(Boolean).join(" · ");
 
   return (

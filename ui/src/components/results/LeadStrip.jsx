@@ -1,4 +1,4 @@
-import { gbp, gbpCompact, pct, num, DASH } from "../../format";
+import { gbp, gbpCompact, pct, num, count, DASH } from "../../format";
 
 // Large figures switch to £28.9m so they never run into the next cell.
 const money = (v) => (Math.abs(v) >= 1e7 ? gbpCompact(v) : gbp(v));
@@ -46,13 +46,13 @@ export default function LeadStrip({ inv, effPct, lifetime, loading }) {
           : "On the site bill, vs no battery on the same tariff."}
       />
       <Cell label="NPV" value={inv ? money(inv.npv_gbp) : DASH} tone={npvTone} loading={pending}
-        caption={inv ? `Over ${lifetime} years, after capex and opex` : null} />
+        caption={inv ? `Over ${count(lifetime, "year")}, after capex and opex` : null} />
       <Cell label="IRR" value={inv?.irr_pct != null ? pct(inv.irr_pct, 1) : DASH} tone={irrTone} loading={pending}
         caption={inv && inv.irr_pct == null ? "No rate makes NPV zero" : "Compare with your hurdle rate"} />
       <Cell label="Payback" loading={pending}
         value={inv ? (inv.payback_yrs != null ? num(inv.payback_yrs, 1) : `> ${lifetime}`) : DASH}
-        unit={inv ? "years" : null}
-        caption={inv ? (inv.discounted_payback_yrs != null ? `${num(inv.discounted_payback_yrs, 1)} years discounted` : "Not within the design life") : null} />
+        unit={inv ? (inv.payback_yrs != null && num(inv.payback_yrs, 1) === "1.0" ? "year" : "years") : null}
+        caption={inv ? (inv.discounted_payback_yrs != null ? `${count(inv.discounted_payback_yrs, "year", 1)} discounted` : "Not within the design life") : null} />
       <Cell label="Capex" value={inv ? money(inv.capex_gbp) : DASH} loading={pending}
         caption={inv ? `Opex ${gbp(inv.annual_opex_yr1_gbp)}/yr` : null} />
     </div>

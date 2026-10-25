@@ -210,10 +210,10 @@ export default function App() {
 function Expired() {
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 24px" }}>
-      <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700 }}>These results have expired</h1>
+      <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700 }}>These results aren&rsquo;t available</h1>
       <p style={{ margin: "8px 0 24px", fontSize: 16, lineHeight: "24px", color: "var(--muted)" }}>
-        They are no longer on the server, which keeps recent runs only until it restarts, and
-        this browser has no saved copy. Run the appraisal again to get them back.
+        Either the link is wrong, or the run has expired: the server keeps recent runs only
+        until it restarts, and this browser has no saved copy. Run the appraisal again to get them back.
       </p>
       <button className="btn-primary" onClick={() => navigate({ view: "config", mode: "csv" })}>Start a new run</button>
     </div>

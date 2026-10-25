@@ -47,3 +47,13 @@ describe("date", () => {
     expect(date("not a date")).toBe(DASH);
   });
 });
+
+import { count } from "../../format";
+describe("count", () => {
+  it("agrees the noun with the number as shown", () => {
+    expect(count(1, "day")).toBe("1 day");
+    expect(count(60, "day")).toBe("60 days");
+    expect(count(1.04, "year", 1)).toBe("1.0 years");
+    expect(count(0.6, "year")).toBe("1 year");
+  });
+});
