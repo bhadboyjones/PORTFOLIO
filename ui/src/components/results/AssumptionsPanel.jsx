@@ -56,7 +56,7 @@ export function InvestmentInputs({ form, setForm, loading, error, warnings }) {
 }
 
 /** What this run was given: tariff, connection, battery and data. */
-export function RunInputs({ runInputs, dataPeriod, mode }) {
+export function RunInputs({ runInputs, dataPeriod, mode, bare }) {
   const base = useId();
   const r = runInputs || {};
   const dp = dataPeriod || {};
@@ -76,7 +76,7 @@ export function RunInputs({ runInputs, dataPeriod, mode }) {
   ].filter(([, v]) => v != null && v !== "");
   if (!rows.length && mode !== "archetype") return null;
   return (
-    <section aria-labelledby={`${base}-h`} style={panel}>
+    <section aria-labelledby={`${base}-h`} style={bare ? undefined : panel}>
       <h2 id={`${base}-h`} style={heading}>This run</h2>
       {mode === "archetype" && (
         <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--muted)" }}>Representative demand profile, not a real site.</p>
@@ -94,11 +94,11 @@ export function RunInputs({ runInputs, dataPeriod, mode }) {
 }
 
 /** Model scope, stated plainly: what it counts and what it leaves out. */
-export function ModelScope() {
+export function ModelScope({ bare }) {
   const base = useId();
   const li = { margin: "0 0 6px" };
   return (
-    <section aria-labelledby={`${base}-h`} style={panel}>
+    <section aria-labelledby={`${base}-h`} style={bare ? { marginTop: 20 } : panel}>
       <h2 id={`${base}-h`} style={heading}>What this model includes</h2>
       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
         <li style={li}>Half-hourly dispatch against wholesale price, DUoS bands and non-energy charges</li>
@@ -116,5 +116,20 @@ export function ModelScope() {
         <li style={li}>Tax, financing and battery augmentation</li>
       </ul>
     </section>
+  );
+}
+
+/** The run's inputs and the model's scope, folded away under one summary. */
+export function ScopeDetails({ runInputs, dataPeriod, mode }) {
+  return (
+    <details style={{ ...panel, padding: 0 }}>
+      <summary style={{ padding: "16px 20px", cursor: "pointer", fontSize: "var(--fs-section)", fontWeight: 500 }}>
+        Inputs and model scope
+      </summary>
+      <div style={{ padding: "0 20px 20px" }}>
+        <RunInputs runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} bare />
+        <ModelScope bare />
+      </div>
+    </details>
   );
 }

@@ -9,7 +9,9 @@ import SizeChart from "../components/results/SizeChart";
 import TypicalDay from "../components/results/TypicalDay";
 import OperationDetail from "../components/results/OperationDetail";
 import Card from "../components/results/Card";
-import { InvestmentInputs, RunInputs, ModelScope } from "../components/results/AssumptionsPanel";
+import { InvestmentInputs, ScopeDetails } from "../components/results/AssumptionsPanel";
+import WhyCard from "../components/results/WhyCard";
+import { explain } from "../lib/explain";
 import useInvestment, { defaultInvestmentForm, scenarioKey, sizeLabel } from "../hooks/useInvestment";
 import { num, date } from "../format";
 import { labelOf, coverageDays, finding } from "../lib/results";
@@ -102,7 +104,13 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
       <div className="results-grid" style={{ marginTop: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
           {inv.available ? (
-            <LeadStrip inv={bestInv} effPct={effPct} lifetime={lifetime} loading={inv.loading || !bestInv} />
+            <>
+              <LeadStrip inv={bestInv} effPct={effPct} lifetime={lifetime} loading={inv.loading || !bestInv} />
+              <WhyCard
+                loading={!bestInv}
+                lines={explain({ best, inv: bestInv, assumptions: inv.assumptions, nDays, dataPeriod, bands: mode === "csv" ? bands : null })}
+              />
+            </>
           ) : null}
 
           {selected && (
@@ -151,8 +159,7 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
           {inv.available && (
             <InvestmentInputs form={form} setForm={setForm} loading={inv.loading} error={inv.error} warnings={inv.result?.warnings} />
           )}
-          <RunInputs runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} />
-          <ModelScope />
+          <ScopeDetails runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} />
         </aside>
       </div>
     </div>
