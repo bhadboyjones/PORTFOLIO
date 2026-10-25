@@ -362,7 +362,7 @@ def _solve_chunk(
 
     if prob.status != pulp.LpStatusOptimal:
         logger.warning(
-            "Chunk %d: HiGHS returned no optimal solution — filling with zeros.", chunk_idx
+            "Chunk %d: HiGHS returned no optimal solution, filling with zeros.", chunk_idx
         )
         chunk["charge1_mw"] = 0.0
         chunk["charge2_mw"] = 0.0
@@ -385,7 +385,7 @@ def _solve_chunk(
     chunk["soc_mwh"]    = [_sv(soc,  i + 1) for i in range(n)]
 
     logger.info(
-        "Chunk %d solved — objective £%.2f, end SOC %.3f MWh",
+        "Chunk %d solved: objective £%.2f, end SOC %.3f MWh",
         chunk_idx,
         pulp.value(prob.objective),
         chunk["soc_mwh"].iloc[-1],
@@ -646,7 +646,7 @@ def calculate_settlement(
     missing = [c for c in dispatch_cols if c not in df.columns]
     if missing:
         raise ValueError(
-            f"Dispatch columns missing — run run_optimiser() first. Missing: {missing}"
+            f"Dispatch columns missing. Run run_optimiser() first. Missing: {missing}"
         )
 
     # ------------------------------------------------------------------

@@ -130,7 +130,7 @@ class CsvRunParams:
         # --- BESS matrix (multi-scenario) ---
         bess_configs_json: str = Form(..., description="JSON array of {power_mw, capacity_mwh} objects"),
         export_limits_json: str = Form(..., description="JSON array of export limit values (MW, >= 0; 0 = no export)"),
-        bess_rte_pct: float = Form(90.0, description="Round-trip efficiency (%) — fallback if charge/discharge eff not provided"),
+        bess_rte_pct: float = Form(90.0, description="Round-trip efficiency (%), the fallback if charge/discharge eff not provided"),
         bess_max_cycles: float = Form(1.5, description="Max charge+discharge cycles per day"),
         bess_charge_eff_pct: Optional[float] = Form(None, description="One-way charge efficiency (%). Defaults to sqrt(RTE)."),
         bess_discharge_eff_pct: Optional[float] = Form(None, description="One-way discharge efficiency (%). Defaults to sqrt(RTE)."),
@@ -223,7 +223,7 @@ class CsvRunParams:
             except Exception:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Invalid time '{v}' for {label} — expected HH:MM (00:00–23:59).",
+                    detail=f"Invalid time '{v}' for {label}. Expected HH:MM (00:00–23:59).",
                 )
 
         for _lbl, _val in [

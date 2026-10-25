@@ -57,7 +57,7 @@ function TabBar({ tabs, active, onSelect, small }) {
 }
 
 function fmt(v, dec = 0) {
-  if (v == null || isNaN(v)) return "—";
+  if (v == null || isNaN(v)) return "–";
   return v.toLocaleString("en-GB", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
@@ -89,7 +89,7 @@ function BaselineBreakdown({ topScenario }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
         {rows.map(({ label, value, sign, bold }) => {
-          const display = value != null ? `£${fmt(value, 0)}` : "—";
+          const display = value != null ? `£${fmt(value, 0)}` : "–";
           const color = bold ? "var(--text-pri)" : sign < 0 ? "var(--positive)" : "var(--text-sec)";
           return (
             <div key={label} style={{ paddingBottom: bold ? "0" : "0", borderTop: bold ? "1px solid var(--border)" : "none", paddingTop: bold ? "0.6rem" : "0" }}>
@@ -176,7 +176,7 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
             padding: "0.4rem 0.75rem",
             display: "inline-block",
           }}>
-            ⓘ Archetype mode — demand profile is representative, not site-specific
+            ⓘ Archetype mode: demand profile is representative, not site-specific
           </div>
         )}
         {mode === "csv" && (
@@ -194,10 +194,10 @@ export default function ResultsPage({ results, jobId, mode, onBack, validationWa
               {dataPeriod
                 ? `Results cover ${fmtDate(dataPeriod.start)} – ${fmtDate(dataPeriod.end)} (${dataPeriod.n_days} days) · `
                 : ""}
-              Upper-bound estimate — dispatch optimised with perfect price foresight
+              Upper-bound estimate: dispatch optimised with perfect price foresight
             </div>
             <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.4rem", lineHeight: 1.6 }}>
-              net_demand_mw is treated as metered boundary flow — on-site generation is already reflected.
+              net_demand_mw is treated as metered boundary flow, so on-site generation is already reflected.
               {dataPeriod?.resolution === "hourly" && (
                 <>
                   {" "}For hourly data, the DUoS band is assigned by start-of-hour timestamp

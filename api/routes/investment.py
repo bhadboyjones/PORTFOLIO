@@ -31,7 +31,7 @@ def evaluate_investment(req: InvestmentEvaluateRequest):
     warnings = []
     if req.n_days < _SEASONAL_WARNING_DAYS:
         warnings.append(
-            f"Annual figures are scaled up from {req.n_days:.0f} days of data — a period "
+            f"Annual figures are scaled up from {req.n_days:.0f} days of data. A period "
             "this short may not be seasonally representative. Treat them as indicative."
         )
 

@@ -1,7 +1,7 @@
 import useCountUp from "../hooks/useCountUp";
 
 function fmt(value, decimals = 0) {
-  if (value == null || isNaN(value)) return "—";
+  if (value == null || isNaN(value)) return "–";
   return value.toLocaleString("en-GB", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -66,7 +66,7 @@ export default function KpiCards({ topScenario }) {
     { title: "Site Cost (w/ BESS)", value: topScenario.site_cost_w_bess_gbp,  format: (v) => `£${fmt(v)}`,     sub: "vs no BESS" },
     { title: "Value / kWh Cycled",  value: topScenario.gbp_per_kwh,           format: (v) => `£${fmt(v, 3)}`,  sub: "net benefit ÷ throughput" },
     { title: "Total Throughput",    value: topScenario.total_throughput_mwh,  format: (v) => `${fmt(v)} MWh`,  sub: "top scenario" },
-    { title: "Peak Dispatch",       value: topScenario.peak_dispatch_mw,      format: (v) => `${v == null || isNaN(v) ? "—" : (+v).toLocaleString("en-GB", { maximumFractionDigits: 1 })} MW`, sub: "top scenario" },
+    { title: "Peak Dispatch",       value: topScenario.peak_dispatch_mw,      format: (v) => `${v == null || isNaN(v) ? "–" : (+v).toLocaleString("en-GB", { maximumFractionDigits: 1 })} MW`, sub: "top scenario" },
   ];
 
   return (

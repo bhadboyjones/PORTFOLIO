@@ -10,7 +10,7 @@ const COLUMNS = [
 ];
 
 function fmt(key, value) {
-  if (value == null || (typeof value === "number" && isNaN(value))) return "—";
+  if (value == null || (typeof value === "number" && isNaN(value))) return "–";
   if (["net_benefit_gbp", "site_cost_wo_bess_gbp", "site_cost_w_bess_gbp"].includes(key)) {
     return `£${Math.round(value).toLocaleString("en-GB")}`;
   }

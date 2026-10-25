@@ -19,7 +19,7 @@ export default function DayTape({
   bands = DEFAULT_WEEKDAY_BANDS,
   variant = "divider",
   showTicks = false,
-  ariaLabel = "A representative DUoS day — charge in green overnight, discharge into the red peak",
+  ariaLabel = "A representative DUoS day: charge in green overnight, discharge into the red peak",
 }) {
   const hero = variant === "hero";
   return (

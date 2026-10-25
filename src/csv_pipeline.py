@@ -228,8 +228,8 @@ def load_and_validate_csv(
     p99 = df["net_demand_mw"].abs().quantile(0.99)
     if p99 > 50:
         warns.append(
-            f"net_demand_mw 99th percentile is {p99:.1f} MW after unit conversion — "
-            f"check the selected input unit (kW vs MW, kWh vs MWh)."
+            f"net_demand_mw 99th percentile is {p99:.1f} MW after unit conversion. "
+            f"Check the selected input unit (kW vs MW, kWh vs MWh)."
         )
 
     # --- thermal_gen_mw NaN / negative handling ---
@@ -240,7 +240,7 @@ def load_and_validate_csv(
             df["thermal_gen_mw"] = df["thermal_gen_mw"].fillna(0.0)
         if (df["thermal_gen_mw"] < 0).any():
             warns.append(
-                "thermal_gen_mw contains negative values — these have been clipped to 0.0."
+                "thermal_gen_mw contains negative values. These have been clipped to 0.0."
             )
             df["thermal_gen_mw"] = df["thermal_gen_mw"].clip(lower=0.0)
 
@@ -249,7 +249,7 @@ def load_and_validate_csv(
     # non-zero sum is the real signal that thermal data was supplied and used.)
     if df["thermal_gen_mw"].abs().sum() > 0:
         warns.append(
-            "thermal_gen_mw detected — used for baseline fuel cost only, never to "
+            "thermal_gen_mw detected: used for baseline fuel cost only, never to "
             "adjust net demand. Make sure thermal output was already subtracted when "
             "you built net_demand_mw, or savings will be overstated."
         )
@@ -514,12 +514,12 @@ def build_csv_optimiser_input(
         if n_rows and nan_count / n_rows > 0.05:
             raise ValueError(
                 f"{nan_count} of {n_rows} intervals ({nan_count / n_rows:.0%}) have no "
-                f"{label} price — too many to fill safely. Check Elexon data "
+                f"{label} price, too many to fill safely. Check Elexon data "
                 "coverage for the selected date range."
             )
         warnings.warn(
-            f"{nan_count} NaN values in {label} price filled with 0.0 — "
-            "check Elexon data coverage for the selected date range.",
+            f"{nan_count} NaN values in {label} price filled with 0.0. "
+            "Check Elexon data coverage for the selected date range.",
             UserWarning,
             stacklevel=2,
         )

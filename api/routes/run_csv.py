@@ -84,7 +84,7 @@ def _resolve_mic(net_demand_mw, mic_value, mic_unit: str, power_factor: float):
     if mic_value is None:
         import_cap_kw = float(net_demand_mw.clip(lower=0).max()) * 1000
         warning = (
-            f"No agreed import capacity (MIC) entered — assumed {import_cap_kw:,.0f} kW, "
+            f"No agreed import capacity (MIC) entered. Assumed {import_cap_kw:,.0f} kW, "
             "the site's peak import in this data. Enter the MIC from your "
             "connection agreement for capacity-charge accuracy."
         )

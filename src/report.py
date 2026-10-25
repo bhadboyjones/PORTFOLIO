@@ -255,7 +255,7 @@ def build_report(all_results, output_path, job_id=None):
         <scenario>   : one interval-level detail sheet per scenario
     """
     if not all_results:
-        raise ValueError("all_results is empty — nothing to report.")
+        raise ValueError("all_results is empty: nothing to report.")
 
     # Derive final output path
     if job_id is not None:
@@ -295,6 +295,6 @@ def build_report(all_results, output_path, job_id=None):
         _write_detail_sheet(wb, scenario)
 
     wb.save(output_path)
-    print(f"Report saved — {len(all_results)} scenarios → {output_path}")
+    print(f"Report saved: {len(all_results)} scenarios → {output_path}")
 
     return output_path
