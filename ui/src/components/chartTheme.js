@@ -103,3 +103,13 @@ export const controlStyles = {
     marginBottom: 8,
   },
 };
+
+// Legend swatches are HTML, so dark mode can't remap them by attribute like
+// the SVG marks. Route the theme-dependent colours through CSS variables.
+const SWATCH_VARS = {
+  "#141414": "var(--ink)",
+  "#c4c4c4": "var(--swatch-light)",
+  "#1d5fbf": "var(--data)",
+  "#0f766e": "var(--swatch-teal)",
+};
+export const swatch = (c) => SWATCH_VARS[c] ?? c;

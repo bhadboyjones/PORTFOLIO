@@ -28,24 +28,26 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
             width: 36,
             height: 20,
             borderRadius: 999,
-            background: useDefault ? "var(--accent)" : "var(--border)",
+            background: useDefault ? "var(--positive)" : "var(--control)",
             position: "relative",
-            transition: "background var(--dur-fast) var(--ease-flex)",
+            transition: "background-color 160ms ease",
             flexShrink: 0,
           }}
         >
           <div style={{
             position: "absolute",
             top: 2,
-            left: useDefault ? 18 : 2,
+            left: 2,
             width: 16,
             height: 16,
             borderRadius: "50%",
-            background: useDefault ? "var(--bg-base)" : "var(--text-dim)",
-            transition: "left var(--dur-fast) var(--ease-flex)",
+            background: "#ffffff",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            transform: useDefault ? "translateX(16px)" : "none",
+            transition: "transform 200ms var(--ease-out)",
           }} />
         </div>
-        <span style={{ fontSize: "0.85rem", color: "var(--text-sec)", userSelect: "none" }}>
+        <span style={{ fontSize: 14, color: "var(--text-sec)", userSelect: "none" }}>
           Use last 12 months
         </span>
       </label>
@@ -69,7 +71,7 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
                 border: "1px solid",
                 borderColor: useDefault ? "var(--border)" : "var(--border-bright)",
                 borderRadius: 6,
-                fontSize: "0.85rem",
+                fontSize: 14,
                 color: useDefault ? "var(--text-dim)" : "var(--text-pri)",
                 background: useDefault ? "var(--bg-base)" : "var(--bg-surface)",
                 cursor: useDefault ? "not-allowed" : "text",

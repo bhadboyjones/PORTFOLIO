@@ -26,3 +26,19 @@ describe("sizeLabel and scenarioKey", () => {
     expect(scenarioKey({ scenario_label: "1MW / 2MWh", export_limit_mw: 0.5 })).toBe("1MW / 2MWh|0.5");
   });
 });
+
+import { validateAssumptions, defaultInvestmentForm } from "../../hooks/useInvestment";
+describe("validateAssumptions", () => {
+  it("accepts the defaults", () => {
+    expect(validateAssumptions(defaultInvestmentForm())).toEqual({});
+  });
+  it("rejects what the server would reject", () => {
+    const errs = validateAssumptions({ ...defaultInvestmentForm(), capex_gbp_per_kwh: "", capex_gbp_per_kw: "-250", lifetime_yrs: "2.5", discount_rate_pct: "31" });
+    expect(errs).toEqual({
+      capex_gbp_per_kwh: "Enter a number",
+      capex_gbp_per_kw: "Between 0 and 1,000,000",
+      lifetime_yrs: "Whole years only",
+      discount_rate_pct: "Between 0 and 30",
+    });
+  });
+});

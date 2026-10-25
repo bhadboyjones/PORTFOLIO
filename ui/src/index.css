@@ -12,6 +12,12 @@
   --ground:   #f2f4f7;   /* blue-grey "ledger" ground: the product's face */
   --surface:  #ffffff;   /* cards */
   --raised:   #eeeeee;   /* active pill, selected state */
+  --hover:    #f7f7f8;   /* hover tone step */
+  --well:     #fafafa;   /* inset panels inside a card */
+  --swatch-light: #c4c4c4;
+  --swatch-teal: #0f766e;
+  --on-primary: #ffffff; /* text on the primary fill */
+  --bar-bg:   rgba(242, 244, 247, 0.72); /* translucent top bar */
   --line:     #e6e6e6;   /* card edges */
   --rule:     #f0f0f0;   /* row rules */
   --control:  #d4d4d4;   /* control borders */
@@ -25,7 +31,7 @@
   --warning:  #92400e;
 
   --pill-positive-bg: #dcfae5; --pill-positive-ink: #04250e;
-  --pill-negative-bg: #ffedea; --pill-negative-ink: #831c1e;
+  --pill-negative-bg: #ffedea; --pill-negative-ink: #831c1e; --pill-negative-line: #f3c3bf;
   --pill-warning-bg:  #fffbeb; --pill-warning-ink:  #92400e; --pill-warning-line: #fde68a;
   --pill-neutral-bg:  #eeeeee; --pill-neutral-ink:  #3d3d3d;
 
@@ -85,19 +91,23 @@
   --dur-med:  200ms;
   --dur-slow: 200ms;
 
-  /* ── type: one grotesk; Geist Mono for IDs only ────────────── */
-  --font-body: "Geist", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: var(--font-body);
-  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* ── type: the platform's own face (SF Pro on Apple devices) ── */
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ── motion: critically damped feel (no overshoot) ─────────── */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+/* Reduced motion keeps colour and opacity fades (they aid comprehension)
+   and drops travel: no looping animation, no press scaling. */
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0.01ms; --dur-med: 0.01ms; --dur-slow: 0.01ms; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
+  .btn-primary:active, .btn-secondary:active, .lift:active { transform: none !important; }
 }
 
 /* ── base ─────────────────────────────────────────────────────── */
@@ -113,6 +123,7 @@ html {
 body {
   margin: 0;
   font-family: var(--font-body);
+  font-optical-sizing: auto;
   font-size: var(--fs-body);
   line-height: 20px;
   background: var(--ground);
@@ -124,6 +135,10 @@ body {
 #root { width: 100%; min-height: 100vh; }
 
 h1, h2, h3 { text-wrap: balance; }
+/* Tracking by size (Apple): tighter as type grows, a touch looser when small. */
+h1 { font-family: var(--font-display); letter-spacing: -0.015em; }
+.figure-lg { font-family: var(--font-display); letter-spacing: -0.02em; }
+small, .fs-small { letter-spacing: 0.005em; }
 button, a, input, select, label { touch-action: manipulation; }
 
 input, select, textarea {
@@ -173,12 +188,17 @@ input:focus-visible + .toggle-track {
 
 /* hover feedback: a tone step, never a lift or a glow */
 .lift {
-  transition:
-    border-color var(--dur-fast) var(--ease-flex),
-    background-color var(--dur-fast) var(--ease-flex);
+  transition: border-color 120ms ease, background-color 120ms ease, transform 160ms var(--ease-out);
 }
-.lift:hover:not(:disabled) { border-color: var(--control); }
-.lift-glow:hover:not(:disabled) { background-color: #fafafa; }
+.lift:active:not(:disabled) { transform: scale(0.98); transition-duration: 100ms; }
+/* Inline styles set resting border/background on these controls, so hover
+   must win with !important. Pressed (selected) controls keep their look. */
+@media (hover: hover) and (pointer: fine) {
+  .lift:hover:not(:disabled):not([aria-pressed="true"]) {
+    border-color: var(--ink) !important;
+    background-color: var(--hover) !important;
+  }
+}
 
 .btn-primary {
   height: var(--control-height);
@@ -186,14 +206,20 @@ input:focus-visible + .toggle-track {
   border: none;
   border-radius: var(--radius-control);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-flex);
+  transition: background-color 120ms ease, transform 160ms var(--ease-out);
 }
-.btn-primary:hover:not(:disabled) { background: #000; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+}
+/* Feedback on press, not release (Apple: respond on pointer-down). */
+.btn-primary:active:not(:disabled), .btn-secondary:active:not(:disabled) { transform: scale(0.97); transition-duration: 100ms; }
+.btn-wide:active:not(:disabled) { transform: scale(0.99); }
 .btn-primary:disabled { background: var(--raised); color: var(--faint); cursor: not-allowed; }
+:root { --primary-hover: #000000; }
 
 .btn-secondary {
   height: var(--control-height);
@@ -205,9 +231,11 @@ input:focus-visible + .toggle-track {
   font: inherit;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-flex);
+  transition: background-color 120ms ease, transform 160ms var(--ease-out);
 }
-.btn-secondary:hover:not(:disabled) { background: #fafafa; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-secondary:hover:not(:disabled) { background: var(--hover); }
+}
 
 .btn-text {
   border: none;
@@ -307,6 +335,24 @@ input:focus-visible + .toggle-track {
 .lead-strip { grid-template-columns: 1.7fr repeat(4, minmax(0, 1fr)); }
 .lead-strip > * + * { border-left: 1px solid var(--line); }
 .scn-list { display: none; }
+.scn-table-wrap { overflow-x: auto; }
+
+/* Buttons that sit inside table cells: no chrome, but a visible focus ring. */
+.cell-btn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 4px;
+}
+.cell-btn:disabled { cursor: default; }
+.cell-btn:focus-visible { outline: 2px solid var(--data); outline-offset: 2px; }
+.cell-btn--block { display: block; box-sizing: border-box; width: 100%; }
+.scn-row td { transition: background-color 120ms ease; }
+@media (hover: hover) and (pointer: fine) {
+  .scn-row:hover td { background-color: var(--hover); }
+}
 
 @media (max-width: 1100px) {
   .results-grid { grid-template-columns: minmax(0, 1fr); }
@@ -318,7 +364,109 @@ input:focus-visible + .toggle-track {
 @media (max-width: 760px) {
   .pair { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 640px) {
+@media (max-width: 800px) {
   .scn-table-wrap { display: none; }
   .scn-list { display: block; }
+}
+@media (max-width: 480px) {
+  .bess-grid { grid-template-columns: 64px repeat(3, minmax(0, 1fr)) !important; }
+  .tab-bar { gap: 14px !important; }
+  .csv-link { padding: 12px 0; }
+}
+
+/* Figures being replaced (re-pricing, or inputs invalid): dim, don't hide. */
+.is-stale { opacity: 0.5; }
+.is-stale, .pair, section { transition: opacity 150ms ease; }
+input[aria-invalid="true"] { border-color: var(--negative) !important; }
+h1[tabindex="-1"]:focus { outline: none; }
+
+/* ── Translucent top bar: content scrolls under it; a soft edge appears
+   only once something is underneath (Apple scroll-edge, no hard rule). ── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bar-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid transparent;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.topbar[data-scrolled="true"] {
+  border-bottom-color: var(--line);
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.04);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .topbar { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+.scn-row:active td { background-color: var(--raised); }
+[role="tab"] { transition: color 120ms ease; }
+@media (hover: hover) and (pointer: fine) {
+  [role="tab"][aria-selected="false"]:hover { color: var(--ink) !important; }
+}
+.chevron { transition: transform 200ms var(--ease-out); }
+details > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary .chevron { transform: rotate(180deg); }
+
+/* ════════════════════════════════════════════════════════════════
+   Dark mode: follows the system setting. Neutral darks (no navy),
+   surfaces separated by lightness, colour still only on data.
+   ════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:   #0b0b0c;
+    --surface:  #1c1c1e;
+    --raised:   #2c2c2e;
+    --hover:    #242426;
+    --well:     #242426;
+    --swatch-light: #636366;
+    --swatch-teal: #40c8b0;
+    --line:     #38383a;
+    --rule:     #2c2c2e;
+    --control:  #48484a;
+    --ink:      #f5f5f7;
+    --muted:    #a1a1a6;
+    --faint:    #8e8e93;
+    --primary:  #f5f5f7;
+    --primary-hover: #ffffff;
+    --on-primary: #0b0b0c;
+    --data:     #0a84ff;
+    --positive: #30d158;
+    --negative: #ff6961;
+    --warning:  #ffd479;
+    --bar-bg:   rgba(11, 11, 12, 0.72);
+    --pill-positive-bg: #12301c; --pill-positive-ink: #6ee7a0;
+    --pill-negative-bg: #3b1a1a; --pill-negative-ink: #ff8a80; --pill-negative-line: #5c2a28;
+    --pill-warning-bg:  #2e2610; --pill-warning-ink:  #ffd479; --pill-warning-line: #5c4813;
+    --pill-neutral-bg:  #2c2c2e; --pill-neutral-ink:  #d1d1d6;
+    --band-red:   #ff6961;
+    --band-amber: #ffb340;
+    --band-green: #30d158;
+    color-scheme: dark;
+  }
+  html { color-scheme: dark; }
+  .topbar[data-scrolled="true"] { box-shadow: 0 1px 12px rgba(0, 0, 0, 0.5); }
+
+  /* Charts draw with literal hex (Recharts attributes); remap them here. */
+  svg [stroke="#141414"] { stroke: #f5f5f7; }
+  svg [fill="#141414"]   { fill: #f5f5f7; }
+  svg [stroke="#e5e5e5"] { stroke: #38383a; }
+  svg [stroke="#ffffff"], svg [stroke="#fff"] { stroke: #1c1c1e; }
+  svg [fill="#ffffff"]   { fill: #1c1c1e; }
+  svg [fill="#c4c4c4"]   { fill: #636366; }
+  svg [stroke="#c4c4c4"] { stroke: #636366; }
+  svg [fill="#1d5fbf"]   { fill: #0a84ff; }
+  svg [stroke="#1d5fbf"] { stroke: #0a84ff; }
+  svg [fill="#0f766e"]   { fill: #40c8b0; }
+  svg [fill="#5f6368"], .recharts-cartesian-axis-tick-value { fill: #a1a1a6; }
+  svg [fill="#0a0a0a"]   { fill: #f5f5f7; }
+  .recharts-default-tooltip {
+    background: var(--surface) !important;
+    border-color: var(--line) !important;
+    color: var(--ink) !important;
+  }
+  .recharts-tooltip-item, .recharts-tooltip-label { color: var(--ink) !important; }
+  .recharts-label { fill: #a1a1a6; }
 }

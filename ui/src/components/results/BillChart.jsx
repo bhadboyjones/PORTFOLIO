@@ -3,7 +3,7 @@ import {
 } from "recharts";
 import Card from "./Card";
 import { billRows } from "../../lib/results";
-import { CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps } from "../chartTheme";
+import { CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps, swatch } from "../chartTheme";
 import { gbp, gbpCompact, num } from "../../format";
 
 // Annual site bill without vs with the battery, split by component, each
@@ -32,7 +32,7 @@ export default function BillChart({ scenario, label, annual, nDays }) {
         <li style={{ display: "flex", alignItems: "center", gap: 6 }}><Swatch c={CHART_COLORS.data} />With battery</li>
       </ul>
       <div style={{ height: 212 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
           <BarChart data={rows} margin={{ top: 18, right: 4, left: 0, bottom: 0 }} barGap={2} barCategoryGap="22%">
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="part" tick={{ ...axisTick, fontSize: 12 }} axisLine={axisLineProps} tickLine={false} interval={0} />
@@ -50,5 +50,5 @@ export default function BillChart({ scenario, label, annual, nDays }) {
 }
 
 function Swatch({ c }) {
-  return <span aria-hidden="true" style={{ width: 10, height: 10, background: c }} />;
+  return <span aria-hidden="true" style={{ width: 10, height: 10, background: swatch(c) }} />;
 }

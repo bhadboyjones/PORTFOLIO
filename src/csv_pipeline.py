@@ -205,9 +205,11 @@ def load_and_validate_csv(
     diffs = df["timestamp"].diff().dropna()
     irregular = diffs[diffs != expected_gap]
     if not irregular.empty:
+        n = len(irregular)
+        minutes = int(sp_duration_hrs * 60)
         warns.append(
-            f"{len(irregular)} timestamp gaps or irregular intervals detected "
-            f"(expected {expected_gap} spacing). Results may be affected."
+            f"{n:,} gap{'s' if n != 1 else ''} or irregular interval{'s' if n != 1 else ''} in the timestamps "
+            f"(expected one reading every {minutes} minutes). Results may be affected."
         )
 
     # --- net_demand_mw NaN handling ---
@@ -265,9 +267,10 @@ def load_and_validate_csv(
         n_expected = len(full_range)
         n_actual   = len(df)
         if n_actual < n_expected:
+            missing = n_expected - n_actual
             warns.append(
-                f"{n_expected - n_actual} time intervals missing from upload "
-                f"(expected {n_expected}, got {n_actual}). "
+                f"{missing:,} time interval{'s' if missing != 1 else ''} missing from the upload "
+                f"(expected {n_expected:,}, got {n_actual:,}). "
                 f"Missing intervals are excluded from the optimisation."
             )
 

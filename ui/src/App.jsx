@@ -43,6 +43,25 @@ export default function App() {
     }
   }, [route, opened]);
 
+  // Each screen gets its own tab title, and focus moves to its heading so
+  // screen readers announce the change (not on the very first load).
+  const [first, setFirst] = useState(true);
+  useEffect(() => {
+    const titles = { landing: "Battery appraisal", config: route.mode === "archetype" ? "Archetype sites" : "Site meter data", progress: "Running", results: "Results" };
+    document.title = `${titles[route.view] ?? "Battery appraisal"} · flexiq`;
+    if (first) { setFirst(false); return; }
+    // Screens load lazily, so the heading may not exist yet: retry briefly.
+    let tries = 0;
+    const id = setInterval(() => {
+      const h1 = [...document.querySelectorAll("main h1")].find((h) => h.offsetParent !== null);
+      if (h1 || ++tries > 40) {
+        clearInterval(id);
+        if (h1) { h1.setAttribute("tabindex", "-1"); h1.focus({ preventScroll: true }); }
+      }
+    }, 50);
+    return () => clearInterval(id);
+  }, [route.view, route.mode, route.jobId, run?.jobId, loadState]);
+
   // Results by URL: memory, then this browser's cache, then the server.
   useEffect(() => {
     if (route.view !== "results" || run?.jobId === route.jobId) return;
@@ -81,15 +100,18 @@ export default function App() {
     navigate({ view: "progress", jobId });
   }
 
-  function handleComplete(jobId, payload, warns, period) {
+  async function handleComplete(jobId, payload, warns, period) {
     const { results, mode } = normalise(payload);
     const p = pending?.jobId === jobId ? pending : null;
+    // Reopening a finished run's progress link has no pending inputs: keep the
+    // ones already saved for it rather than overwriting them with nothing.
+    const saved = p ? null : await loadResults(jobId);
     const entry = {
       jobId, results, mode,
       warnings: warns && warns.length ? warns : null,
       dataPeriod: period ?? null,
-      bands: p?.bands ?? null,
-      runInputs: p?.runInputs ?? null,
+      bands: p?.bands ?? saved?.bands ?? null,
+      runInputs: p?.runInputs ?? saved?.runInputs ?? null,
     };
     setRun(entry);
     saveResults(entry);
@@ -97,8 +119,8 @@ export default function App() {
     navigate({ view: "results", jobId }, { replace: true });
   }
 
-  function handleFailed(msg) {
-    setRunError(msg);
+  function handleFailed(msg, code = null) {
+    setRunError({ message: msg, code });
     navigate({ view: "config", mode: pending?.mode ?? "csv" }, { replace: true });
   }
 
@@ -111,6 +133,11 @@ export default function App() {
 
   if (route.view === "progress") {
     step = "Running";
+    action = (
+      <button className="btn-text" onClick={() => navigate({ view: "config", mode: pending?.mode ?? "csv" })}>
+        Back to settings
+      </button>
+    );
     content = (
       <ProgressScreen
         key={route.jobId}
@@ -161,7 +188,8 @@ export default function App() {
             <div hidden={!(showConfig && route.mode === "csv")}>
               <CsvConfigPage
                 onRunStarted={(id, bands, inputs) => handleRunStarted(id, bands, inputs, "csv")}
-                jobError={showConfig && route.mode === "csv" ? runError : null}
+                jobError={showConfig && route.mode === "csv" ? runError?.message ?? null : null}
+                jobErrorCode={showConfig && route.mode === "csv" ? runError?.code ?? null : null}
               />
             </div>
           )}
@@ -169,7 +197,7 @@ export default function App() {
             <div hidden={!(showConfig && route.mode === "archetype")}>
               <ConfigPage
                 onRunStarted={(id) => handleRunStarted(id, null, null, "archetype")}
-                jobError={showConfig && route.mode === "archetype" ? runError : null}
+                jobError={showConfig && route.mode === "archetype" ? runError?.message ?? null : null}
               />
             </div>
           )}
@@ -182,10 +210,10 @@ export default function App() {
 function Expired() {
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 24px" }}>
-      <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700 }}>These results have expired</h1>
+      <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700 }}>These results aren&rsquo;t available</h1>
       <p style={{ margin: "8px 0 24px", fontSize: 16, lineHeight: "24px", color: "var(--muted)" }}>
-        They are no longer on the server, which keeps recent runs only until it restarts, and
-        this browser has no saved copy. Run the appraisal again to get them back.
+        Either the link is wrong, or the run has expired: the server keeps recent runs only
+        until it restarts, and this browser has no saved copy. Run the appraisal again to get them back.
       </p>
       <button className="btn-primary" onClick={() => navigate({ view: "config", mode: "csv" })}>Start a new run</button>
     </div>

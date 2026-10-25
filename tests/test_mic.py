@@ -69,3 +69,63 @@ def test_schema_keeps_mic_as_written():
 def test_schema_rejects_bad_inputs(bad):
     with pytest.raises(HTTPException):
         _params(**{"contracted_kva": 1000.0, **bad})
+
+
+def test_only_user_warnings_reach_the_user():
+    # A job's warning capture also records other jobs' library warnings;
+    # only flexiq's own UserWarnings, deduplicated, may reach the results.
+    import warnings as w
+    from api.routes.run_csv import _user_warnings
+
+    with w.catch_warnings(record=True) as caught:
+        w.simplefilter("always")
+        w.warn("Constructing LpVariable(name, ...) directly is deprecated", DeprecationWarning)
+        w.warn("12 NaN values in DA price filled with 0.0.", UserWarning)
+        w.warn("12 NaN values in DA price filled with 0.0.", UserWarning)
+        w.warn("something else", FutureWarning)
+    assert _user_warnings(caught) == ["12 NaN values in DA price filled with 0.0."]
+    assert _user_warnings(caught, already=["12 NaN values in DA price filled with 0.0."]) == []
+
+
+def _df(values, start="2024-01-01"):
+    import pandas as pd
+    ts = pd.date_range(start, periods=len(values), freq="30min", tz="UTC")
+    return pd.DataFrame({"timestamp": ts, "net_demand_mw": values})
+
+
+def test_data_check_passes_a_normal_site():
+    from api.routes.run_csv import _data_check
+    assert _data_check(_df([0.5, 0.8, 1.1, 0.9] * 50), None, False) == (None, None)
+
+
+def test_data_check_blocks_kw_read_as_mw():
+    # 1,100 "MW" = 1.1 GW: kW values with the unit left as MW
+    from api.routes.run_csv import _data_check
+    code, msg = _data_check(_df([500.0, 800.0, 1100.0] * 50), None, False)
+    assert code == "data_check" and "1,100,000 kW" in msg
+
+
+def test_data_check_blocks_mw_read_as_kw():
+    # 0.0011 MW = 1.1 kW: MW values with the unit set to kW
+    from api.routes.run_csv import _data_check
+    code, _ = _data_check(_df([0.0005, 0.0011] * 50), None, False)
+    assert code == "data_check"
+
+
+def test_data_check_blocks_a_single_spike():
+    from api.routes.run_csv import _data_check
+    values = [0.8] * 199 + [99.999]
+    code, msg = _data_check(_df(values), None, False)
+    assert code == "data_check" and "99,999 kW" in msg and "800 kW" in msg
+
+
+def test_confirmed_data_runs_anyway():
+    from api.routes.run_csv import _data_check
+    assert _data_check(_df([0.8] * 199 + [99.999]), None, True) == (None, None)
+
+
+def test_export_only_site_needs_a_mic():
+    from api.routes.run_csv import _data_check
+    code, _ = _data_check(_df([-0.5, -0.8] * 50), None, True)
+    assert code == "mic_required"
+    assert _data_check(_df([-0.5, -0.8] * 50), 500.0, False) == (None, None)

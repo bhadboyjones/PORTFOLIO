@@ -47,6 +47,7 @@ export function gbpCompact(v) {
   if (missing(v)) return DASH;
   const a = Math.abs(v);
   const s = v < 0 ? MINUS : "";
+  if (a >= 1e9) return `${s}£${nf(0, 1).format(a / 1e9)}bn`;
   if (a >= 1e6) return `${s}£${nf(0, 1).format(a / 1e6)}m`;
   if (a >= 1e3) return `${s}£${nf(0, 0).format(a / 1e3)}k`;
   return `${s}£${nf(0, 0).format(a)}`;
@@ -58,6 +59,12 @@ export function date(isoOrDate) {
   const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
   if (Number.isNaN(d.getTime())) return DASH;
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(d);
+}
+
+/** "1 day", "60 days", "1.5 years": the count formatted, the noun agreeing. */
+export function count(n, noun, decimals = 0, pluralNoun = `${noun}s`) {
+  const shown = num(n, decimals);
+  return `${shown} ${shown === "1" ? noun : pluralNoun}`;
 }
 
 export { DASH, MINUS };

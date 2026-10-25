@@ -282,6 +282,7 @@ def get_run_status(job_id: str):
         current_scenario=job.get("current_scenario"),
         results=job["results"],
         error=job["error"],
+        error_code=job.get("error_code"),
         mode=job.get("mode"),
         validation_warnings=job.get("validation_warnings"),
         data_period=job.get("data_period"),

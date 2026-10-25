@@ -33,7 +33,7 @@ export default function CashflowChart({ inv, label, lifetime, discountPct, avail
       }}
     >
       <div style={{ height: 220 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 200 }}>
           <ComposedChart data={data} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="year" type="number" domain={[0, lifetime]} tickCount={6} allowDecimals={false}

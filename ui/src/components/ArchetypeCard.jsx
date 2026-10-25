@@ -34,7 +34,7 @@ export default function ArchetypeCard({ archetype, selected, onToggle }) {
         )}
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
         <tbody>
           <Row label="Peak demand" value={`${archetype.peak_mw} MW`} />
           <Row label="Base load"   value={`${archetype.base_mw} MW`} />

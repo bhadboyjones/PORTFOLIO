@@ -6,7 +6,7 @@ const heading = { margin: "0 0 8px", fontSize: "var(--fs-section)", lineHeight: 
 const panel = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-card)", padding: 20 };
 
 /** Editable investment assumptions; every change re-prices all scenarios. */
-export function InvestmentInputs({ form, setForm, loading, error, warnings }) {
+export function InvestmentInputs({ form, setForm, loading, error, invalid = {}, warnings }) {
   const base = useId();
   return (
     <section aria-labelledby={`${base}-h`} style={panel}>
@@ -35,13 +35,15 @@ export function InvestmentInputs({ form, setForm, loading, error, warnings }) {
                 autoComplete="off"
                 step={f.step}
                 value={form[f.key]}
-                aria-describedby={`${id}-hint`}
+                aria-describedby={invalid[f.key] ? `${id}-err ${id}-hint` : `${id}-hint`}
+                aria-invalid={invalid[f.key] ? true : undefined}
                 onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
                 className="tnum"
                 style={{ width: "100%", height: 36, padding: "0 10px", paddingRight: f.unit.length > 6 ? 96 : 52, border: "1px solid var(--control)", borderRadius: "var(--radius-control)" }}
               />
               <span aria-hidden="true" style={{ position: "absolute", right: 10, top: 0, lineHeight: "36px", fontSize: 12, color: "var(--muted)", pointerEvents: "none", whiteSpace: "nowrap" }}>{f.unit}</span>
               </div>
+              {invalid[f.key] && <div id={`${id}-err`} style={{ marginTop: 4, fontSize: 12, lineHeight: "16px", color: "var(--negative)", fontWeight: 500 }}>{invalid[f.key]}</div>}
               <div id={`${id}-hint`} style={{ marginTop: 4, fontSize: 12, lineHeight: "16px", color: "var(--muted)" }}>{f.hint}</div>
             </div>
           );
@@ -125,6 +127,9 @@ export function ScopeDetails({ runInputs, dataPeriod, mode }) {
     <details style={{ ...panel, padding: 0 }}>
       <summary style={{ padding: "16px 20px", cursor: "pointer", fontSize: "var(--fs-section)", fontWeight: 500 }}>
         Inputs and model scope
+        <svg className="chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
       </summary>
       <div style={{ padding: "0 20px 20px" }}>
         <RunInputs runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} bare />

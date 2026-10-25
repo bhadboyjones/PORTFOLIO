@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getRunStatus } from "../api/client";
 import ProgressBar from "../components/ProgressBar";
+import WarningsNotice from "../components/WarningsNotice";
+import { progressLabel } from "../lib/results";
 import useReducedMotion from "../hooks/useReducedMotion";
 
 export default function ProgressScreen({ jobId, onComplete, onFailed }) {
@@ -26,7 +28,7 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
           }, reduced ? 0 : 400);
           return;
         }
-        if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error."); return; }
+        if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error.", data.error_code ?? null); return; }
         setTimeout(poll, 3000);
       } catch (e) {
         if (cancelled) return;
@@ -73,25 +75,12 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         </p>
         {current && !isBuilding && (
           <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--muted)" }}>
-            Now: <span className="tnum">{current}</span>
+            Now: <span className="tnum">{progressLabel(current)}</span>
           </p>
         )}
       </div>
 
-      {csvWarns?.length > 0 && (
-        <div role="status" style={{
-          marginTop: "var(--gap)",
-          padding: "12px 16px",
-          background: "var(--pill-warning-bg)",
-          border: "1px solid var(--pill-warning-line)",
-          borderRadius: "var(--radius-card)",
-          color: "var(--pill-warning-ink)",
-          fontSize: 14,
-        }}>
-          <p style={{ margin: "0 0 4px", fontWeight: 500 }}>Check your data</p>
-          {csvWarns.map((w, i) => <p key={i} style={{ margin: i ? "4px 0 0" : 0 }}>{w}</p>)}
-        </div>
-      )}
+      <WarningsNotice warnings={csvWarns} title="Check your data" style={{ marginTop: "var(--gap)" }} />
     </div>
   );
 }

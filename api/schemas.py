@@ -54,6 +54,7 @@ class RunStatusResponse(BaseModel):
     current_scenario: Optional[str] = None
     results: Optional[dict] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
     mode: Optional[str] = None
     validation_warnings: Optional[list[str]] = None
     data_period: Optional[dict] = None
@@ -146,6 +147,9 @@ class CsvRunParams:
         ),
         power_factor: float = Form(
             1.0, description="Site power factor (kW = kVA × PF). Default 1.0 when unknown.",
+        ),
+        confirm_data: bool = Form(
+            False, description="Run even if the data check flags implausible units or a spike.",
         ),
         chp_toggle: bool = Form(False, description="True if site has CHP generation."),
         input_unit: str = Form(
@@ -298,6 +302,7 @@ class CsvRunParams:
         self.contracted_kva  = contracted_kva
         self.mic_unit        = mic_unit
         self.power_factor    = power_factor
+        self.confirm_data    = confirm_data
         self.chp_toggle      = chp_toggle
         self.input_unit      = input_unit
         self.price_exposure  = price_exposure

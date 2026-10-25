@@ -15,6 +15,28 @@ export const INVESTMENT_FIELDS = [
   { key: "dispatch_efficiency_pct", label: "Dispatch efficiency", unit: "%", def: 85, step: 1, hint: "Share of the perfect-foresight saving a real operator keeps. 100% is the backtest ceiling." },
 ];
 
+// Bounds mirror api/schemas.py InvestmentAssumptions, so a value the server
+// would reject is caught here and the figures are marked stale instead.
+const BOUNDS = {
+  capex_gbp_per_kw: [0, 1e6], capex_gbp_per_kwh: [0, 1e6], capex_fixed_gbp: [0, 1e9],
+  opex_pct_of_capex: [0, 10], lifetime_yrs: [1, 40], discount_rate_pct: [0, 30],
+  fade_pct_yr: [0, 10], escalation_pct_yr: [-5, 15], dispatch_efficiency_pct: [0, 100],
+};
+
+/** { key: message } for every field the server would reject. */
+export function validateAssumptions(form) {
+  const errs = {};
+  for (const f of INVESTMENT_FIELDS) {
+    const raw = String(form[f.key] ?? "").trim();
+    const v = Number(raw);
+    const [lo, hi] = BOUNDS[f.key];
+    if (raw === "" || !Number.isFinite(v)) errs[f.key] = "Enter a number";
+    else if (f.int && !Number.isInteger(v)) errs[f.key] = "Whole years only";
+    else if (v < lo || v > hi) errs[f.key] = `Between ${lo.toLocaleString("en-GB")} and ${hi.toLocaleString("en-GB")}`;
+  }
+  return errs;
+}
+
 export const defaultInvestmentForm = () =>
   Object.fromEntries(INVESTMENT_FIELDS.map((f) => [f.key, String(f.def)]));
 
@@ -48,15 +70,13 @@ export default function useInvestment(scenarios, nDays, form) {
   const [loading, setLoading] = useState(false);
   const reqRef = useRef(0);
 
+  const invalid = useMemo(() => validateAssumptions(form), [form]);
   const assumptions = useMemo(() => {
-    const out = {};
-    for (const f of INVESTMENT_FIELDS) {
-      const v = f.int ? parseInt(form[f.key], 10) : parseFloat(form[f.key]);
-      if (!Number.isFinite(v)) return null;
-      out[f.key] = v;
-    }
-    return out;
-  }, [form]);
+    if (Object.keys(invalid).length) return null;
+    return Object.fromEntries(INVESTMENT_FIELDS.map((f) => [f.key, Number(form[f.key])]));
+  }, [form, invalid]);
+  // The assumptions the figures on screen were priced with.
+  const [priced, setPriced] = useState(null);
 
   const scenariosIn = useMemo(() =>
     scenarios
@@ -84,7 +104,7 @@ export default function useInvestment(scenarios, nDays, form) {
       setLoading(true);
       try {
         const data = await postInvestmentEvaluate({ n_days: nDays, scenarios: scenariosIn, assumptions });
-        if (reqRef.current === id) { setResult(data); setError(null); }
+        if (reqRef.current === id) { setResult(data); setPriced(assumptions); setError(null); }
       } catch (e) {
         if (reqRef.current === id) setError(e.message);
       } finally {
@@ -101,5 +121,13 @@ export default function useInvestment(scenarios, nDays, form) {
     return m;
   }, [result]);
 
-  return { result, byKey, error, loading, assumptions, available: scenariosIn.length > 0 && !!nDays };
+  const invalidCount = Object.keys(invalid).length;
+  // Stale: the figures on screen no longer match the inputs (being re-priced,
+  // or the inputs are invalid, or the last request failed).
+  const stale = !!result && (loading || invalidCount > 0 || !!error);
+  return {
+    result, byKey, error, loading, invalid, stale,
+    assumptions: priced ?? assumptions,   // what the shown figures are based on
+    available: scenariosIn.length > 0 && !!nDays,
+  };
 }

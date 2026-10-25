@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
-import { parseCsvMeta, peakKw } from "../lib/csvMeta";
+import { parseCsvMeta, peakKw, dataIssues } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
   { key: "UKPN", label: "UK Power Networks (SE / East / London)" },
@@ -38,7 +38,7 @@ const INPUT_UNIT_OPTIONS = [
   { value: "kwh", label: "kWh per interval (energy)" },
 ];
 
-export default function CsvConfigPage({ onRunStarted, jobError }) {
+export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) {
   const uid = useId();
   const fileInputRef = useRef(null);
 
@@ -98,9 +98,17 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const scenarioCount    = selectedCount * validExportCount;
   const thermalGenWarning = thermalGenToggle && parsedMeta?.headers?.length > 0 && !parsedMeta.headers.includes("thermal_gen_mw");
   const resolutionError   = parsedMeta?.resolution?.valid === false;
+  const [confirmData, setConfirmData] = useState(false);
+  useEffect(() => { setConfirmData(false); }, [file, inputUnit]);
   const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
   const micValid          = micKva === "" || parseFloat(micKva) > 0;
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid;
+  // Data check (mirrors the server): a unit mistake or a meter spike blocks the
+  // run until fixed or confirmed; an export-only site needs its MIC entered.
+  const issues            = dataIssues(parsedMeta, inputUnit, micKva !== "");
+  const needsMic          = issues.some((i) => i.code === "mic_required") || jobErrorCode === "mic_required";
+  const needsConfirm      = issues.some((i) => i.code === "data_check") || jobErrorCode === "data_check";
+  const dataOk            = !needsMic && (!needsConfirm || confirmData);
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid && dataOk;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -216,6 +224,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       if (micKva) fd.append("contracted_kva", micKva);
       fd.append("mic_unit", micUnit);
       fd.append("power_factor", powerFactor || "1");
+      if (confirmData) fd.append("confirm_data", "true");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
       fd.append("rag_red_start",           advanced.ragRedStart           || "16:00");
@@ -312,7 +321,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               padding: "1.75rem 1.5rem",
               textAlign: "center",
               cursor: "pointer",
-              background: dragOver ? "var(--signal-a05)" : file ? "#fafafa" : "var(--bg-surface)",
+              background: dragOver ? "var(--signal-a05)" : file ? "var(--well)" : "var(--bg-surface)",
             }}
           >
             <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls"
@@ -320,12 +329,12 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               style={{ display: "none" }} />
             {file ? (
               <div>
-                <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-pri)" }}>{file.name}</div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>
-                  {(file.size / 1024).toFixed(0)} KB · click to replace
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-pri)" }}>{file.name}</div>
+                <div style={{ fontSize: 14, color: "var(--text-dim)", marginTop: "0.25rem" }}>
+                  {file.size < 1024 ? `${file.size} bytes` : `${Math.round(file.size / 1024).toLocaleString("en-GB")} KB`} · click to replace
                 </div>
                 {thermalGenWarning && (
-                  <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "var(--warn)",
+                  <div style={{ marginTop: "0.75rem", fontSize: 14, color: "var(--warn)",
                     background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)",
                     borderRadius: 5, padding: "0.4rem 0.75rem", display: "inline-block" }}>
                     Thermal generation is enabled but <code style={{ color: "var(--warn)" }}>thermal_gen_mw</code> column not found in this CSV
@@ -335,15 +344,15 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             ) : (
               <div>
                 <div style={{ fontSize: "1.4rem", marginBottom: "0.5rem", color: "var(--text-dim)" }}>↑</div>
-                <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-sec)" }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-sec)" }}>
                   Drop CSV or XLSX here, or click to browse
                 </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+                <div style={{ fontSize: 14, color: "var(--text-dim)", marginTop: "0.35rem" }}>
                   Required: <code style={{ color: "var(--accent)" }}>timestamp</code>,{" "}
                   <code style={{ color: "var(--accent)" }}>net_demand_mw</code>
                   {" "}· Optional: <code style={{ color: "var(--accent)" }}>thermal_gen_mw</code>
                 </div>
-                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.4rem", lineHeight: 1.7 }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.4rem", lineHeight: 1.7 }}>
                   <code style={{ color: "var(--text-dim)" }}>net_demand_mw</code> is your boundary/grid meter reading – positive when the site is importing from the grid, negative when exporting.
                   {" "}If your metering records grid flow directly, use that column as-is. If you only have submetered data, calculate it as:
                   <br />
@@ -365,7 +374,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.35rem", lineHeight: 1.6 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.35rem", lineHeight: 1.6 }}>
               Applies to <code>net_demand_mw</code> and <code>thermal_gen_mw</code>. Half-hourly meter exports
               are usually kWh or MWh per half-hour; they are converted to average MW on upload.
             </div>
@@ -376,7 +385,17 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               meta={parsedMeta}
               inputUnit={inputUnit}
               dnoLabel={DNO_OPTIONS.find((d) => d.key === dnoKey)?.label}
+              issues={issues}
             />
+          )}
+          {needsConfirm && !needsMic && (
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 12, fontSize: 14 }}>
+              <input type="checkbox" checked={confirmData} onChange={(e) => setConfirmData(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>
+                <strong style={{ fontWeight: 500 }}>My data is correct.</strong>{" "}
+                <span style={{ color: "var(--muted)" }}>Run it anyway; results will be based on these readings as they are.</span>
+              </span>
+            </label>
           )}
         </Card>
 
@@ -394,14 +413,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 ))}
               </select>
               {dnoRatesLoading && (
-                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.3rem" }}>
                   Loading DNO rates…
                 </div>
               )}
               {dnoRateError && (
                 <div style={{
-                  fontSize: "0.72rem", color: "var(--negative)", marginTop: "0.3rem",
-                  background: "var(--pill-negative-bg)", border: "1px solid #f3c3bf",
+                  fontSize: 12, color: "var(--negative)", marginTop: "0.3rem",
+                  background: "var(--pill-negative-bg)", border: "1px solid var(--pill-negative-line)",
                   borderRadius: 5, padding: "0.4rem 0.6rem",
                 }}>
                   Couldn’t load DNO rates, so band windows would fall back to generic
@@ -424,13 +443,13 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       borderRadius: 6,
                       background: active ? "var(--signal-a10)" : "var(--bg-surface)",
                       color: active ? "var(--accent)" : "var(--text-dim)",
-                      cursor: "pointer", fontSize: "0.82rem", fontWeight: active ? 700 : 500,
+                      cursor: "pointer", fontSize: 14, fontWeight: active ? 700 : 500,
                     }}>{label}</button>
                   );
                 })}
               </div>
               {voltageLevel === "unknown" && (
-                <div style={{ marginTop: "0.4rem", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                <div style={{ marginTop: "0.4rem", fontSize: 12, color: "var(--text-dim)" }}>
                   Defaults to HV: lower DUoS rates give a conservative savings estimate. Select LV or HV if known.
                 </div>
               )}
@@ -456,12 +475,12 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       borderRadius: 6,
                       background: active ? "var(--signal-a10)" : "var(--bg-surface)",
                       color: active ? "var(--accent)" : "var(--text-dim)",
-                      cursor: "pointer", fontSize: "0.78rem", fontWeight: active ? 700 : 500,
+                      cursor: "pointer", fontSize: 14, fontWeight: active ? 700 : 500,
                     }}>{label}</button>
                   );
                 })}
               </div>
-              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" }}>
                 {!micKva
                   ? "Blank = assumed equal to the peak import in your data, which hides any capacity headroom."
                   : micUnit === "kva"
@@ -477,7 +496,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 value={powerFactor}
                 onChange={(e) => setPowerFactor(e.target.value)}
                 suffix="PF" />
-              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" }}>
                 {!pfValid
                   ? "Power factor must be between 0.5 and 1.0."
                   : parseFloat(powerFactor) === 1
@@ -499,7 +518,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       borderRadius: 6,
                       background: active ? "var(--signal-a10)" : "var(--bg-surface)",
                       color: active ? "var(--accent)" : "var(--text-dim)",
-                      cursor: "pointer", fontSize: "0.82rem", fontWeight: active ? 700 : 500,
+                      cursor: "pointer", fontSize: 14, fontWeight: active ? 700 : 500,
                     }}>{label}</button>
                   );
                 })}
@@ -517,7 +536,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   </div>
                   <div style={{
                     marginTop: "0.75rem",
-                    fontSize: "0.72rem",
+                    fontSize: 12,
                     color: "var(--text-dim)",
                     background: "var(--pill-warning-bg)",
                     border: "1px solid var(--pill-warning-line)",
@@ -540,15 +559,12 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
           {/* 3×3 power × capacity matrix */}
           <div className="bess-matrix-scroll" style={{ marginBottom: "1rem" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "112px repeat(3, 1fr)", gap: "0.4rem" }}>
+            <div className="bess-grid" style={{ display: "grid", gridTemplateColumns: "112px repeat(3, minmax(0, 1fr))", gap: "0.4rem" }}>
 
               {/* Top-left corner */}
               <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "0.3rem" }}>
-                <span
-                  title="Power (MW): max rate the battery can charge or discharge&#10;Capacity (MWh): total energy the battery can store"
-                  style={{ fontSize: "0.62rem", color: "var(--text-dim)", lineHeight: 1.4, cursor: "help", borderBottom: "1px dotted var(--border-bright)" }}
-                >
-                  Power ↓<br />Capacity →
+                <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: "16px" }}>
+                  Rows: power<br />Columns: capacity
                 </span>
               </div>
 
@@ -594,6 +610,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       key={key}
                       className="lift"
                       aria-pressed={isSelected}
+                      disabled={!cellValid}
+                      aria-label={cellValid ? `${pwVal} MW / ${capVal} MWh, ${dur.toFixed(1)} hours` : `${pw} MW / ${cap} MWh, duration outside 0.5 to 6 hours`}
                       onClick={() => {
                         if (!cellValid) return;
                         setSelectedCells(prev => {
@@ -607,9 +625,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                         border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
                         borderRadius: 6,
                         background: !cellValid ? "var(--bg-base)" : isSelected ? "var(--signal-a10)" : "var(--bg-surface)",
-                        color: !cellValid ? "var(--border)" : isSelected ? "var(--accent)" : "var(--text-dim)",
+                        color: !cellValid ? "var(--faint)" : isSelected ? "var(--ink)" : "var(--muted)",
                         cursor: cellValid ? "pointer" : "not-allowed",
-                        fontSize: "0.8rem",
+                        fontSize: 12,
                         fontWeight: isSelected ? 700 : 500,
                         textAlign: "center",
                         width: "100%",
@@ -621,8 +639,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 }),
               ])}
             </div>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.4rem" }}>
-              Click cells to select/deselect. Grey cells have duration outside 0.5–6 h.
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.4rem" }}>
+              Select the sizes to compare. Each cell shows the battery's duration (capacity ÷ power); sizes outside 0.5 to 6 hours can't be selected.
             </div>
           </div>
 
@@ -662,9 +680,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
           {/* Scenario count */}
           <div style={{
             marginTop: "0.75rem",
-            fontSize: "0.82rem",
+            fontSize: 14,
             padding: "0.45rem 0.85rem",
-            background: "#fafafa",
+            background: "var(--well)",
             border: `1px solid ${scenarioCount > 12 ? "var(--negative-a30)" : "var(--border)"}`,
             borderRadius: 5,
             display: "flex",
@@ -677,7 +695,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {" "}({selectedCount} config{selectedCount !== 1 ? "s" : ""} × {validExportCount} export limit{validExportCount !== 1 ? "s" : ""})
             </span>
             {scenarioCount > 12 && (
-              <span style={{ fontSize: "0.72rem", color: "var(--negative)" }}>max 12. Deselect some configs</span>
+              <span style={{ fontSize: 12, color: "var(--negative)" }}>max 12. Deselect some configs</span>
             )}
           </div>
 
@@ -732,7 +750,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             }}
           >
             <span>Advanced settings{advancedDirty ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> (edited)</span> : ""}</span>
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ transform: showAdvanced ? "rotate(180deg)" : "none" }}>
+            <svg className="chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ transform: showAdvanced ? "rotate(180deg)" : "none" }}>
               <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </button>
@@ -760,7 +778,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   gap: "1rem",
                   flexWrap: "wrap",
                 }}>
-                  <span style={{ fontSize: "0.82rem", color: "var(--warn)" }}>
+                  <span style={{ fontSize: 14, color: "var(--warn)" }}>
                     DNO changed to <strong>{pendingDnoChange.dno}</strong>. Reset rates to new DNO defaults?
                   </span>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -775,7 +793,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               )}
 
               {ragWarning && (
-                <div style={{ marginBottom: "1rem", fontSize: "0.75rem", color: "var(--warn)",
+                <div style={{ marginBottom: "1rem", fontSize: 14, color: "var(--warn)",
                   background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)",
                   borderRadius: 5, padding: "0.4rem 0.75rem" }}>
                   {ragWarning}
@@ -791,7 +809,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       value={advanced.necGbpMwh}
                       onChange={(e) => updateAdv("necGbpMwh", e.target.value)}
                       suffix="£/MWh" />
-                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>EII-exempt sites: 43.75</div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" }}>EII-exempt sites: 43.75</div>
                   </div>
                 </div>
               </AdvancedSection>
@@ -861,7 +879,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     <FieldLabel htmlFor={`${uid}-ragRed`}>Red band (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput id={`${uid}-ragRed`} label="Red band (weekday), start" value={advanced.ragRedStart} onChange={(v) => updateAdv("ragRedStart", v)} />
-                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: 14 }}>to</span>
                       <TimeInput label="Red band (weekday), end" value={advanced.ragRedEnd} onChange={(v) => updateAdv("ragRedEnd", v)} />
                     </div>
                   </div>
@@ -870,7 +888,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     <FieldLabel htmlFor={`${uid}-ragAmberMorning`}>Amber band, morning (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput id={`${uid}-ragAmberMorning`} label="Amber band, morning (weekday), start" value={advanced.ragAmberMorningStart} onChange={(v) => updateAdv("ragAmberMorningStart", v)} />
-                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: 14 }}>to</span>
                       <TimeInput label="Amber band, morning (weekday), end" value={advanced.ragAmberMorningEnd} onChange={(v) => updateAdv("ragAmberMorningEnd", v)} />
                     </div>
                   </div>
@@ -879,7 +897,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     <FieldLabel htmlFor={`${uid}-ragAmberEvening`}>Amber band, evening (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <TimeInput id={`${uid}-ragAmberEvening`} label="Amber band, evening (weekday), start" value={advanced.ragAmberEveningStart} onChange={(v) => updateAdv("ragAmberEveningStart", v)} />
-                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: 14 }}>to</span>
                       <TimeInput label="Amber band, evening (weekday), end" value={advanced.ragAmberEveningEnd} onChange={(v) => updateAdv("ragAmberEveningEnd", v)} />
                     </div>
                   </div>
@@ -892,7 +910,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                         onChange={(v) => updateAdv("ragWeekendAmberStart", v)}
                         placeholder="–"
                       />
-                      <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
+                      <span style={{ color: "var(--text-dim)", fontSize: 14 }}>to</span>
                       <TimeInput label="Amber band, weekend (optional), end"
                         value={advanced.ragWeekendAmberEnd}
                         onChange={(v) => updateAdv("ragWeekendAmberEnd", v)}
@@ -955,7 +973,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Errors ──────────────────────────────────── */}
         {jobError && (
-          <div role="alert" style={errorBox}>Run failed: {jobError}</div>
+          <div role="alert" style={errorBox}>
+            {jobErrorCode === "data_check" || jobErrorCode === "mic_required" ? "Check your data: " : "Run failed: "}{jobError}
+          </div>
         )}
         {runError && (
           <div role="alert" style={errorBox}>{runError}</div>
@@ -963,7 +983,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Run button ──────────────────────────────── */}
         <button
-          className="btn-primary"
+          className="btn-primary btn-wide"
           onClick={handleRun}
           disabled={!canRun}
           style={{ width: "100%", height: 44, fontSize: 16 }}
@@ -979,10 +999,12 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               resolutionError && "use 30-minute or hourly data",
               !dnoKey && "choose a DNO",
               selectedCount === 0 && "select at least one battery size",
-              validExportCount === 0 && "enter at least one export limit (0 for none)",
+              exportLimits.some((v) => v !== "" && parseFloat(v) < 0) ? "export limits can't be negative" : validExportCount === 0 && "enter at least one export limit (0 for none)",
               scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
               !pfValid && "set the power factor between 0.5 and 1.0",
               !micValid && "enter a MIC above zero, or leave it blank",
+              needsMic && "enter the site's MIC (it never imports in this data)",
+              needsConfirm && !needsMic && !confirmData && "fix the data or tick \u201cMy data is correct\u201d",
             ].filter(Boolean).join(", ")}.
           </div>
         )}
@@ -1105,7 +1127,7 @@ const errorBox = {
   marginBottom: "var(--gap)",
   padding: "10px 14px",
   background: "var(--pill-negative-bg)",
-  border: "1px solid #f3c3bf",
+  border: "1px solid var(--pill-negative-line)",
   borderRadius: "var(--radius-card)",
   color: "var(--pill-negative-ink)",
   fontSize: 14,
@@ -1113,7 +1135,7 @@ const errorBox = {
 
 const smallBtn = {
   padding: "0.3rem 0.75rem",
-  fontSize: "0.78rem",
+  fontSize: 14,
   fontWeight: 600,
   border: "1px solid",
   borderRadius: 5,
@@ -1124,7 +1146,7 @@ const smallBtn = {
 
 // What flexiq read from the file, echoed before the run so a wrong unit,
 // a gap or the wrong DNO shows up now rather than in the results.
-function FileEcho({ file, meta, inputUnit, dnoLabel }) {
+function FileEcho({ file, meta, inputUnit, dnoLabel, issues = [] }) {
   const isCsv = file.name.toLowerCase().endsWith(".csv");
   const peak = peakKw(meta, inputUnit);
   const nf = (v, d = 0) => v == null ? "\u2013" : v.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -1132,13 +1154,13 @@ function FileEcho({ file, meta, inputUnit, dnoLabel }) {
     ["Intervals", nf(meta.rows)],
     ["Period", meta.dateRange ? `${meta.dateRange.start} to ${meta.dateRange.end}` : "\u2013"],
     ["Resolution", meta.resolution?.label ?? "\u2013", meta.resolution && !meta.resolution.valid],
-    ["Coverage", meta.coverageDays != null ? `${nf(meta.coverageDays, 1)} days${meta.gaps ? `, ${nf(meta.gaps)} missing interval${meta.gaps === 1 ? "" : "s"}` : ", no gaps"}` : "\u2013", !!meta.gaps],
-    ["Peak import", peak != null ? `${nf(peak)} kW in the selected unit` : "\u2013", peak != null && (peak > 100000 || peak < 1)],
+    ["Coverage", meta.coverageDays != null && meta.resolution?.valid !== false ? `${nf(meta.coverageDays, 1)} days${meta.gaps ? `, ${nf(meta.gaps)} missing interval${meta.gaps === 1 ? "" : "s"}` : ", no gaps"}` : "\u2013", !!meta.gaps],
+    ["Peak import", peak == null ? "\u2013" : peak <= 0 ? "No import (the site exports throughout)" : `${nf(peak)} kW in the selected unit`, peak != null && peak > 0 && (peak > 100000 || peak < 1)],
     ["DNO tariff", dnoLabel ?? "Choose below"],
     ["Columns", meta.headers.join(", ")],
   ] : [];
   return (
-    <div aria-live="polite" style={{ marginTop: 16, padding: 16, borderRadius: "var(--radius-card)", background: "#fafafa" }}>
+    <div aria-live="polite" style={{ marginTop: 16, padding: 16, borderRadius: "var(--radius-card)", background: "var(--well)" }}>
       <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 500 }}>What flexiq read from {file.name}</p>
       {isCsv ? (
         <dl className="tnum" style={{ margin: 0, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 16px", fontSize: 14 }}>
@@ -1154,7 +1176,12 @@ function FileEcho({ file, meta, inputUnit, dnoLabel }) {
           XLSX files are read on the server. Coverage, gaps and the peak appear on the results page.
         </p>
       )}
-      {isCsv && peak != null && (
+      {issues.map((i) => (
+        <p key={i.code} role="alert" style={{ margin: "8px 0 0", fontSize: 14, padding: "8px 12px", borderRadius: 6, background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)", color: "var(--pill-warning-ink)" }}>
+          {i.text}
+        </p>
+      ))}
+      {isCsv && peak != null && !issues.length && (
         <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--muted)" }}>
           If the peak looks 1,000 times too big or small, change the unit above.
         </p>

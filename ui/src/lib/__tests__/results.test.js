@@ -133,3 +133,29 @@ describe("finding", () => {
     expect(labelOf({ scenario_label: "1MW_2h", export_limit_mw: 0 })).toBe("1 MW / 2 MWh, 0 MW export");
   });
 });
+
+import { niceCeil, niceTicks, progressLabel } from "../results";
+describe("axis ticks", () => {
+  it("rounds up to 1, 2, 2.5 or 5 times a power of ten", () => {
+    expect(niceCeil(0.38)).toBeCloseTo(0.5, 12);
+    expect(niceCeil(0.21)).toBeCloseTo(0.25, 12);
+    expect(niceCeil(7)).toBe(10);
+  });
+  it("lands every tick on a whole step, with the decimals it needs", () => {
+    const t = niceTicks(-0.42, 0.42, 4);
+    expect(t.ticks).toEqual([-0.5, -0.25, 0, 0.25, 0.5]);
+    expect(t.decimals).toBe(2);
+    expect(niceTicks(0, 0.95, 4).ticks).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    expect(niceTicks(0, 46449, 4).ticks).toEqual([0, 20000, 40000, 60000]);
+    expect(niceTicks(0, 46449, 4).decimals).toBe(0);
+  });
+  it("draws a sensible axis for all-zero data", () => {
+    expect(niceTicks(0, 0, 4).ticks.length).toBeGreaterThan(1);
+  });
+});
+describe("progressLabel", () => {
+  it("formats the backend's scenario label", () => {
+    expect(progressLabel("2MW / 1MWh | Export 0 MW")).toBe("2 MW / 1 MWh, 0 MW export");
+    expect(progressLabel("something else")).toBe("something else");
+  });
+});

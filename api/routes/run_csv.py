@@ -68,6 +68,74 @@ def _build_bess_params(
     }
 
 
+def _user_warnings(caught, already=()):
+    """
+    flexiq's own data warnings from a catch_warnings record, deduplicated.
+
+    catch_warnings swaps the process-wide warning handler, so while one job
+    builds its input it also records warnings raised by other jobs' threads
+    (e.g. a library DeprecationWarning per optimiser variable). Keep only
+    UserWarning, which is what csv_pipeline raises for the user.
+    """
+    seen = set(already)
+    out = []
+    for w in caught:
+        if not issubclass(w.category, UserWarning):
+            continue
+        msg = str(w.message)
+        if msg not in seen:
+            seen.add(msg)
+            out.append(msg)
+    return out
+
+
+# A C&I site's demand sits roughly between these, in kW. Outside them the
+# unit is almost certainly wrong (kW read as MW, or the reverse).
+PLAUSIBLE_PEAK_KW = (5.0, 50_000.0)
+SPIKE_RATIO = 5.0
+
+
+def _data_check(csv_df, mic_value, confirmed: bool):
+    """
+    Return (error_code, message) when the data looks wrong, else (None, None).
+
+    - "data_check": one reading more than SPIKE_RATIO × the 99th percentile
+      (checked first: the more specific cause), or the largest reading outside
+      PLAUSIBLE_PEAK_KW. The user may confirm and rerun.
+    - "mic_required": the site never imports and no MIC was entered, so the
+      MIC can't be assumed from the data. Not overridable.
+    """
+    nd = csv_df["net_demand_mw"].astype(float)
+    absolute = nd.abs()
+    peak_kw = float(absolute.max()) * 1000
+    p99_kw = float(absolute.quantile(0.99)) * 1000
+
+    if mic_value is None and float(nd.clip(lower=0).max()) <= 0:
+        return "mic_required", (
+            "This site never imports in the data, so its agreed import capacity (MIC) "
+            "can't be assumed. Enter the MIC from the connection agreement and run again."
+        )
+    if confirmed:
+        return None, None
+    if p99_kw > 0 and peak_kw > SPIKE_RATIO * p99_kw:
+        i = absolute.idxmax()
+        when = csv_df["timestamp"].iloc[absolute.index.get_loc(i)] if "timestamp" in csv_df else None
+        at = f" at {when.tz_convert('Europe/London'):%d %b %Y %H:%M}" if when is not None and hasattr(when, "tz_convert") else ""
+        return "data_check", (
+            f"One reading ({peak_kw:,.0f} kW{at}) is more than {SPIKE_RATIO:g} times the site's "
+            f"usual peak ({p99_kw:,.0f} kW). It looks like a meter error and would distort the "
+            "MIC and the bill. Fix the file, or tick \u201cMy data is correct\u201d and run again."
+        )
+    lo, hi = PLAUSIBLE_PEAK_KW
+    if not (lo <= peak_kw <= hi):
+        return "data_check", (
+            f"The largest reading is {peak_kw:,.0f} kW, outside the {lo:,.0f} kW to {hi:,.0f} kW "
+            "range a C&I site normally sits in. Check the unit chosen for the meter values "
+            "(kW or MW, kWh or MWh). If the data is right, tick \u201cMy data is correct\u201d and run again."
+        )
+    return None, None
+
+
 def _resolve_mic(net_demand_mw, mic_value, mic_unit: str, power_factor: float):
     """
     Return (import_cap_kw, billing_kva, source, warning) for the run.
@@ -187,6 +255,13 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             except OSError:
                 pass
 
+        # Plausibility check before any optimisation: a unit mistake or a single
+        # meter spike would otherwise produce a confident, wrong appraisal.
+        code, message = _data_check(csv_df, params.contracted_kva, params.confirm_data)
+        if code:
+            update_job(job_id, status="failed", error=message, error_code=code)
+            return
+
         import_cap_kw, contracted_kva, mic_source, mic_warning = _resolve_mic(
             csv_df["net_demand_mw"], params.contracted_kva, params.mic_unit, params.power_factor,
         )
@@ -234,7 +309,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 sp_duration_hrs=sp_duration_hrs,
                 n_sps_per_day=n_sps_per_day,
             )
-        warnings.extend(str(w.message) for w in caught)
+        warnings.extend(_user_warnings(caught, already=warnings))
         data_start = df["startTime"].min().date()
         data_end   = df["startTime"].max().date()
         n_days     = (data_end - data_start).days + 1
