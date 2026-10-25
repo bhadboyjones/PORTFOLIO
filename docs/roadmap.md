@@ -118,7 +118,7 @@ schedule on DA prices needs only the site forecast.
 | Export saturation curve | See investment_case.md §9. Test on a PV/CHP site. |
 | Reinforcement capex | Per-export-limit cost row; needs saturation curve first. |
 | Seasonality | Precision/range display for short periods; charge-stack decomposition; wholesale-only index. |
-| Archetype-mode investment card | Archetype runs need to emit a data period. |
+| ~~Archetype-mode investment card~~ | Done 2026-10-25: the UI derives coverage days from the timeseries ([ui_ledger.md §3.1](ui_ledger.md)). |
 | UI input tiering | Primary vs advanced investment inputs. |
 | XLSX investment sheet | Needs `src/report.py` sign-off. |
 | PV value reporting | Needs gross demand and PV as separate columns. |

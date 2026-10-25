@@ -56,7 +56,7 @@ export default function TimeframePicker({ startDate, endDate, onChange }) {
           { label: "To",   value: endDate,   onChange: (v) => onChange(startDate, v) },
         ].map(({ label, value, onChange: handleChange }) => (
           <label key={label} style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
               {label}
             </span>
             <input

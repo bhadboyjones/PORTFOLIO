@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from "react";
 import LandingPage from "./pages/LandingPage";
+import TopBar from "./components/TopBar";
 
 const ConfigPage    = lazy(() => import("./pages/ConfigPage"));
 const CsvConfigPage = lazy(() => import("./pages/CsvConfigPage"));
@@ -17,6 +18,7 @@ export default function App() {
   const [csvWarnings, setCsvWarnings] = useState(null);
   const [dataPeriod, setDataPeriod] = useState(null);
   const [csvBands, setCsvBands] = useState(null);
+  const [runInputs, setRunInputs] = useState(null);
 
   function handleModeChange(m) {
     setMode(m);
@@ -28,18 +30,19 @@ export default function App() {
     setCsvBands(null);
   }
 
-  function handleRunStarted(id, bands) {
+  function handleRunStarted(id, bands, inputs) {
     setJobId(id);
     setResults(null);
     setRunError(null);
     setCsvWarnings(null);
     setDataPeriod(null);
     setCsvBands(bands ?? null);
+    setRunInputs(inputs ?? null);
     setView("progress");
   }
 
   function handleComplete(payload, warns, period) {
-    // CSV mode returns { csv_run: [...] } — normalise to archetype-compatible shape
+    // CSV mode returns { csv_run: [...] }; normalise to the archetype shape
     let norm = payload;
     if (mode === "csv" && payload.csv_run) {
       norm = { "CSV Upload": payload.csv_run };
@@ -62,47 +65,18 @@ export default function App() {
     setDataPeriod(null);
   }
 
-  const modeBar = (
-    <div style={{
-      position: "sticky",
-      top: 0,
-      zIndex: 100,
-      background: "var(--bg-base)",
-      borderBottom: "1px solid var(--border)",
-      display: "flex",
-      alignItems: "center",
-      padding: "0 1.5rem",
-      gap: "1rem",
-      minHeight: 40,
-    }}>
-      <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
-        Mode: <span style={{ color: mode === "csv" ? "var(--accent)" : "var(--text-sec)", fontWeight: 700 }}>
-          {mode === "csv" ? "CSV Upload" : "Archetypes"}
-        </span>
-      </span>
-      <button
-        onClick={() => handleModeChange(null)}
-        style={{
-          background: "none",
-          border: "none",
-          color: "var(--text-dim)",
-          fontSize: "0.72rem",
-          cursor: "pointer",
-          padding: "0.15rem 0",
-          textDecoration: "underline",
-        }}
-      >
-        change
-      </button>
-    </div>
+  const changeSource = (
+    <button className="btn-text" onClick={() => handleModeChange(null)}>
+      Change data source
+    </button>
   );
 
-  let viewKey;
   let content;
-  let showModeBar = false;
+  let step = null;
+  let action = null;
 
   if (view === "progress") {
-    viewKey = "progress";
+    step = "Running";
     content = (
       <ProgressScreen
         jobId={jobId}
@@ -111,7 +85,8 @@ export default function App() {
       />
     );
   } else if (view === "results") {
-    viewKey = "results";
+    step = "Results";
+    action = <button className="btn-secondary" onClick={handleBack}>New run</button>;
     content = (
       <ResultsPage
         results={results}
@@ -121,24 +96,25 @@ export default function App() {
         validationWarnings={csvWarnings}
         dataPeriod={dataPeriod}
         bands={csvBands}
+        runInputs={runInputs}
       />
     );
   } else if (mode === null) {
-    viewKey = "landing";
     content = <LandingPage onSelectMode={handleModeChange} />;
   } else {
-    viewKey = `config-${mode}`;
-    showModeBar = true;
+    step = mode === "csv" ? "Site meter data" : "Archetype sites";
+    action = changeSource;
     content = mode === "archetype"
       ? <ConfigPage onRunStarted={handleRunStarted} jobError={runError} />
       : <CsvConfigPage onRunStarted={handleRunStarted} jobError={runError} />;
   }
 
-  // Keyed wrapper re-mounts per view, replaying the entrance animation
   return (
-    <div key={viewKey} className="view-enter">
-      {showModeBar && modeBar}
-      <Suspense fallback={<PageShell />}>{content}</Suspense>
-    </div>
+    <>
+      <TopBar step={step} action={action} />
+      <main id="main">
+        <Suspense fallback={<PageShell />}>{content}</Suspense>
+      </main>
+    </>
   );
 }

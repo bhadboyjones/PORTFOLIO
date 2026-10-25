@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
 
@@ -64,7 +64,33 @@ async function parseCsvMeta(file) {
         }
       }
     }
-    return { rows, headers, dateRange, resolution };
+    // Coverage and gaps from every timestamp; peak import in the file's own
+    // unit (converted for display once the unit is known).
+    let gaps = null, coverageDays = null, intervalMin = null, peakRaw = null;
+    const ndIdx = headers.indexOf("net_demand_mw");
+    if (tsIdx >= 0) {
+      const times = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cells = lines[i].split(",");
+        const t = new Date((cells[tsIdx] || "").replace(/^"|"$/g, "").trim()).getTime();
+        if (!Number.isNaN(t)) times.push(t);
+        if (ndIdx >= 0) {
+          const v = parseFloat(cells[ndIdx]);
+          if (Number.isFinite(v) && (peakRaw == null || v > peakRaw)) peakRaw = v;
+        }
+      }
+      times.sort((a, b) => a - b);
+      if (times.length >= 2) {
+        intervalMin = (times[1] - times[0]) / 60000;
+        if (intervalMin > 0) {
+          const expected = Math.round((times[times.length - 1] - times[0]) / (intervalMin * 60000)) + 1;
+          const unique = new Set(times).size;
+          gaps = Math.max(0, expected - unique);
+          coverageDays = (unique * intervalMin) / 1440;
+        }
+      }
+    }
+    return { rows, headers, dateRange, resolution, gaps, coverageDays, intervalMin, peakRaw };
   } catch {
     return { rows: null, headers: [], dateRange: null, resolution: null };
   }
@@ -79,6 +105,7 @@ const INPUT_UNIT_OPTIONS = [
 ];
 
 export default function CsvConfigPage({ onRunStarted, jobError }) {
+  const uid = useId();
   const fileInputRef = useRef(null);
 
   const [file, setFile]           = useState(null);
@@ -296,7 +323,19 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       });
 
       const { job_id } = await postRunCsv(fd);
-      onRunStarted(job_id, tapeBands);
+      const ce = parseFloat(advanced.chargeEffPct), de = parseFloat(advanced.dischargeEffPct);
+      onRunStarted(job_id, tapeBands, {
+        fileName: file?.name,
+        dnoLabel: DNO_OPTIONS.find((d) => d.key === dnoKey)?.label ?? dnoKey,
+        voltage: voltageLevel === "unknown" ? "HV (assumed)" : voltageLevel,
+        priceExposure,
+        rtePct: Number.isFinite(ce) && Number.isFinite(de) ? (ce * de) / 100 : 90,
+        maxCycles: parseFloat(bessMaxCycles || "1.5"),
+        socMin: parseFloat(advanced.socMinPct || "5"),
+        socMax: parseFloat(advanced.socMaxPct || "95"),
+        degCost: parseFloat(advanced.degCostGbpMwh || "8"),
+        nec: parseFloat(advanced.necGbpMwh || "103.75"),
+      });
     } catch (e) {
       setRunError(e.message);
     } finally {
@@ -305,48 +344,22 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
+    <div style={{ paddingBottom: 64 }}>
 
-      {/* Hero */}
-      <div style={{
-        background: "var(--bg-surface)",
-        backgroundImage: `
-          linear-gradient(rgba(0,200,232,0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0,200,232,0.04) 1px, transparent 1px)
-        `,
-        backgroundSize: "48px 48px",
-        borderBottom: "1px solid var(--border)",
-        padding: "2.5rem 1.5rem 2rem",
-      }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem" }}>
-            <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--text-pri)", letterSpacing: "-0.02em" }}>
-              flex<span style={{ color: "var(--accent)" }}>iq</span>
-            </h1>
-            <span style={{
-              fontSize: "0.62rem", fontWeight: 700, color: "var(--accent)",
-              background: "var(--signal-a10)", border: "1px solid var(--signal-a25)",
-              borderRadius: 3, padding: "0.12rem 0.4rem", letterSpacing: "0.1em", textTransform: "uppercase",
-            }}>BETA</span>
-          </div>
-          <p style={{ margin: "0 0 1rem", color: "var(--text-sec)", fontSize: "0.9rem" }}>
-            BTM BESS optimisation: site meter data upload
-          </p>
-          <p style={{
-            margin: 0, color: "var(--text-dim)", fontSize: "0.8rem",
-            background: "var(--signal-a05)", border: "1px solid rgba(0,200,232,0.12)",
-            borderRadius: 5, padding: "0.45rem 0.85rem", display: "inline-block",
-          }}>
-            Upload your half-hourly or hourly meter data. flexiq will optimise dispatch against real market prices and your DNO tariff.
-          </p>
-        </div>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px 0" }}>
+        <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+          Site meter data
+        </h1>
+        <p style={{ margin: "4px 0 0", fontSize: 16, lineHeight: "24px", color: "var(--muted)" }}>
+          Upload half-hourly or hourly meter data, choose the tariff and the battery sizes to compare.
+        </p>
       </div>
 
       {/* Body */}
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "1.75rem 1rem" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 24px 0" }}>
 
         {/* ── File Upload ─────────────────────────────── */}
-        <Card label="Meter Data">
+        <Card label="Meter data">
           <div
             className="lift"
             role="button"
@@ -365,7 +378,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               padding: "1.75rem 1.5rem",
               textAlign: "center",
               cursor: "pointer",
-              background: dragOver ? "var(--signal-a05)" : file ? "rgba(0,200,232,0.03)" : "var(--bg-surface)",
+              background: dragOver ? "var(--signal-a05)" : file ? "#fafafa" : "var(--bg-surface)",
             }}
           >
             <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls"
@@ -373,34 +386,13 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               style={{ display: "none" }} />
             {file ? (
               <div>
-                <div style={{ fontSize: "1.1rem", marginBottom: "0.35rem" }}>📄</div>
                 <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-pri)" }}>{file.name}</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>
                   {(file.size / 1024).toFixed(0)} KB · click to replace
                 </div>
-                {parsedMeta && (
-                  <div style={{ marginTop: "0.75rem", display: "flex", gap: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
-                    {parsedMeta.rows !== null && (
-                      <Chip label="Time intervals" value={parsedMeta.rows.toLocaleString()} />
-                    )}
-                    {parsedMeta.dateRange && (
-                      <Chip label="Date range" value={`${parsedMeta.dateRange.start} → ${parsedMeta.dateRange.end}`} />
-                    )}
-                    {parsedMeta.resolution && (
-                      <Chip
-                        label="Resolution"
-                        value={parsedMeta.resolution.label}
-                        error={!parsedMeta.resolution.valid}
-                      />
-                    )}
-                    {parsedMeta.headers.length > 0 && (
-                      <Chip label="Columns" value={parsedMeta.headers.join(", ")} mono />
-                    )}
-                  </div>
-                )}
                 {thermalGenWarning && (
                   <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "var(--warn)",
-                    background: "rgba(255,176,58,0.08)", border: "1px solid rgba(255,176,58,0.2)",
+                    background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)",
                     borderRadius: 5, padding: "0.4rem 0.75rem", display: "inline-block" }}>
                     Thermal generation is enabled but <code style={{ color: "var(--warn)" }}>thermal_gen_mw</code> column not found in this CSV
                   </div>
@@ -433,8 +425,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
           {/* Units — meters usually export energy per interval, but the model works
               in average MW. Picking the wrong unit halves (or 1000×) every number. */}
           <div style={{ marginTop: "1rem", maxWidth: 360 }}>
-            <FieldLabel>Units of your meter values</FieldLabel>
-            <select value={inputUnit} onChange={(e) => setInputUnit(e.target.value)} style={selectStyle(true)}>
+            <FieldLabel htmlFor={`${uid}-f1`}>Units of your meter values</FieldLabel>
+            <select id={`${uid}-f1`} value={inputUnit} onChange={(e) => setInputUnit(e.target.value)} style={selectStyle(true)}>
               {INPUT_UNIT_OPTIONS.map(({ value, label }) => (
                 <option key={value} value={value}>{label}</option>
               ))}
@@ -444,16 +436,24 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               are usually kWh or MWh per half-hour; they are converted to average MW on upload.
             </div>
           </div>
+          {file && (
+            <FileEcho
+              file={file}
+              meta={parsedMeta}
+              inputUnit={inputUnit}
+              dnoLabel={DNO_OPTIONS.find((d) => d.key === dnoKey)?.label}
+            />
+          )}
         </Card>
 
         {/* ── Site Configuration ──────────────────────── */}
-        <Card label="Site Configuration">
+        <Card label="Site and tariff">
           <div className="adv-grid-2" style={{ gap: "1rem" }}>
 
             {/* DNO */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <FieldLabel>Network operator (DNO)</FieldLabel>
-              <select value={dnoKey} onChange={(e) => handleDnoChange(e.target.value)} style={selectStyle(dnoKey !== "")}>
+              <FieldLabel htmlFor={`${uid}-f2`}>Network operator (DNO)</FieldLabel>
+              <select id={`${uid}-f2`} value={dnoKey} onChange={(e) => handleDnoChange(e.target.value)} style={selectStyle(dnoKey !== "")}>
                 <option value="">Select your DNO</option>
                 {DNO_OPTIONS.map(({ key, label }) => (
                   <option key={key} value={key}>{label}</option>
@@ -467,7 +467,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {dnoRateError && (
                 <div style={{
                   fontSize: "0.72rem", color: "var(--negative)", marginTop: "0.3rem",
-                  background: "rgba(255,85,119,0.08)", border: "1px solid rgba(255,85,119,0.25)",
+                  background: "var(--pill-negative-bg)", border: "1px solid #f3c3bf",
                   borderRadius: 5, padding: "0.4rem 0.6rem",
                 }}>
                   Couldn’t load DNO rates, so band windows would fall back to generic
@@ -479,8 +479,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
             {/* Voltage */}
             <div>
-              <FieldLabel>Connection voltage</FieldLabel>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <FieldLabel id={`${uid}-volt`}>Connection voltage</FieldLabel>
+              <div role="group" aria-labelledby={`${uid}-volt`} style={{ display: "flex", gap: "0.5rem" }}>
                 {[{ value: "LV", label: "LV" }, { value: "HV", label: "HV" }, { value: "unknown", label: "Not sure" }].map(({ value, label }) => {
                   const active = voltageLevel === value;
                   return (
@@ -504,14 +504,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
             {/* Agreed import capacity (MIC) */}
             <div>
-              <FieldLabel>Agreed import capacity (MIC)</FieldLabel>
+              <FieldLabel htmlFor={`${uid}-mic`}>Agreed import capacity (MIC)</FieldLabel>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <div style={{ flex: 1 }}>
-                  <SuffixInput type="number" step="any" min="0"
-                    placeholder="From your connection agreement"
+                  <SuffixInput id={`${uid}-mic`} type="number" step="any" min="0"
+                    placeholder="From your agreement…"
                     value={micKva}
                     onChange={(e) => setMicKva(e.target.value)}
-                    suffix={{ kva: "kVA", kw: "kW", mw: "MW" }[micUnit]} />
+                    suffix="" />
                 </div>
                 {[["kva", "kVA"], ["kw", "kW"], ["mw", "MW"]].map(([value, label]) => {
                   const active = micUnit === value;
@@ -538,8 +538,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
             {/* Power factor */}
             <div>
-              <FieldLabel>Power factor</FieldLabel>
-              <SuffixInput type="number" step="0.01" min="0.5" max="1"
+              <FieldLabel htmlFor={`${uid}-f3`}>Power factor</FieldLabel>
+              <SuffixInput id={`${uid}-f3`} type="number" step="0.01" min="0.5" max="1"
                 value={powerFactor}
                 onChange={(e) => setPowerFactor(e.target.value)}
                 suffix="PF" />
@@ -554,8 +554,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
             {/* Thermal generation toggle */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <FieldLabel>On-site thermal generation? (CHP, genset, gas engine)</FieldLabel>
-              <div style={{ display: "flex", gap: "0.5rem", maxWidth: 240 }}>
+              <FieldLabel id={`${uid}-chp`}>On-site thermal generation? (CHP, genset, gas engine)</FieldLabel>
+              <div role="group" aria-labelledby={`${uid}-chp`} style={{ display: "flex", gap: "0.5rem", maxWidth: 240 }}>
                 {[{ value: false, label: "No" }, { value: true, label: "Yes" }].map(({ value, label }) => {
                   const active = thermalGenToggle === value;
                   return (
@@ -573,8 +573,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {thermalGenToggle && (
                 <div style={{ marginTop: "0.75rem" }}>
                   <div style={{ maxWidth: 240 }}>
-                    <FieldLabel>Thermal generation marginal cost</FieldLabel>
-                    <SuffixInput
+                    <FieldLabel htmlFor={`${uid}-f4`}>Thermal generation marginal cost</FieldLabel>
+                    <SuffixInput id={`${uid}-f4`}
                       type="number" step="0.5" min="0"
                       value={thermalMcGbpMwh}
                       onChange={(e) => setThermalMcGbpMwh(e.target.value)}
@@ -585,8 +585,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     marginTop: "0.75rem",
                     fontSize: "0.72rem",
                     color: "var(--text-dim)",
-                    background: "rgba(255,176,58,0.05)",
-                    border: "1px solid rgba(255,176,58,0.15)",
+                    background: "var(--pill-warning-bg)",
+                    border: "1px solid var(--pill-warning-line)",
                     borderRadius: 5,
                     padding: "0.5rem 0.75rem",
                     lineHeight: 1.6,
@@ -602,7 +602,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
         </Card>
 
         {/* ── BESS Configuration ──────────────────────── */}
-        <Card label="BESS Configuration">
+        <Card label="Battery sizes">
 
           {/* 3×3 power × capacity matrix */}
           <div className="bess-matrix-scroll" style={{ marginBottom: "1rem" }}>
@@ -622,6 +622,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {capacities.map((cap, c) => (
                 <SuffixInput
                   key={c}
+                  aria-label={`Capacity, column ${c + 1}, MWh`}
                   type="number" min="0.1" step="0.5"
                   value={cap}
                   onChange={(e) => {
@@ -637,6 +638,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               {powers.map((pw, r) => [
                 <SuffixInput
                   key={`pw-${r}`}
+                  aria-label={`Power, row ${r + 1}, MW`}
                   type="number" min="0.1" step="0.5"
                   value={pw}
                   onChange={(e) => {
@@ -692,8 +694,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
           {/* Global BESS params */}
           <div style={{ maxWidth: 240, marginBottom: "1rem" }}>
-            <FieldLabel>Max cycles / day</FieldLabel>
-            <input
+            <FieldLabel htmlFor={`${uid}-f5`}>Maximum cycles a day</FieldLabel>
+            <input id={`${uid}-f5`}
               type="number" min="0.5" max="4" step="0.5"
               value={bessMaxCycles}
               onChange={(e) => setBessMaxCycles(e.target.value)}
@@ -703,13 +705,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
           {/* Export limits */}
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-            <FieldLabel>Export limits (up to 4 scenarios)</FieldLabel>
-            <div className="export-grid">
+            <FieldLabel id={`${uid}-exp`}>Export limits (up to 4 scenarios)</FieldLabel>
+            <div className="export-grid" role="group" aria-labelledby={`${uid}-exp`}>
               {exportLimits.map((v, i) => (
                 <SuffixInput
                   key={i}
+                  aria-label={`Export limit ${i + 1}, MW${i === 0 ? "" : ", optional"}`}
                   type="number" min="0" step="0.25"
-                  placeholder={i === 0 ? "e.g. 1.0 (0 = none)" : "optional"}
+                  placeholder={i === 0 ? "e.g. 1.0 (0 for none)" : "Optional"}
                   value={v}
                   onChange={(e) => setExportLimits(prev => {
                     const next = [...prev];
@@ -727,7 +730,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             marginTop: "0.75rem",
             fontSize: "0.82rem",
             padding: "0.45rem 0.85rem",
-            background: "rgba(0,200,232,0.03)",
+            background: "#fafafa",
             border: `1px solid ${scenarioCount > 12 ? "var(--negative-a30)" : "var(--border)"}`,
             borderRadius: 5,
             display: "flex",
@@ -747,26 +750,25 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
         </Card>
 
         {/* ── Price Exposure ──────────────────────────── */}
-        <Card label="Price Exposure">
+        <Card label="Price signal">
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             {[
-              { value: "da",        label: "Day-Ahead (DA)",     desc: "Settled against day-ahead market price" },
-              { value: "imbalance", label: "Imbalance (System)", desc: "Settled against system imbalance price" },
+              { value: "da",        label: "Day-ahead (DA)",     desc: "Elexon market index, a day-ahead proxy" },
+              { value: "imbalance", label: "Imbalance (system)", desc: "Settled against the system imbalance price" },
             ].map(({ value, label, desc }) => {
               const active = priceExposure === value;
               return (
                 <button key={value} className="lift" aria-pressed={active} onClick={() => setPriceExposure(value)} style={{
                   flex: 1, minWidth: 220, padding: "0.85rem 1rem",
-                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  borderRadius: 7,
-                  background: active ? "var(--signal-a08)" : "var(--bg-surface)",
-                  cursor: "pointer", textAlign: "left",
-                  boxShadow: active ? "0 0 16px var(--signal-a10)" : "none",
+                  border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
+                  borderRadius: "var(--radius-control)",
+                  background: active ? "var(--raised)" : "var(--surface)",
+                  cursor: "pointer", textAlign: "left", font: "inherit",
                 }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: active ? "var(--accent)" : "var(--text-sec)", marginBottom: "0.25rem" }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{desc}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{desc}</div>
                 </button>
               );
             })}
@@ -780,14 +782,14 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
             onClick={() => setShowAdvanced((v) => !v)}
             aria-expanded={showAdvanced}
             style={{
-              background: "none",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              padding: "0.5rem 1rem",
-              color: advancedDirty ? "var(--accent)" : "var(--text-dim)",
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--radius-card)",
+              padding: "12px 24px",
+              color: "var(--ink)",
               cursor: "pointer",
-              fontSize: "0.8rem",
-              fontWeight: 600,
+              font: "inherit",
+              fontWeight: 500,
               width: "100%",
               textAlign: "left",
               display: "flex",
@@ -795,8 +797,10 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               alignItems: "center",
             }}
           >
-            <span>⚙ Advanced settings{advancedDirty ? " (edited)" : ""}</span>
-            <span style={{ color: "var(--text-dim)" }}>{showAdvanced ? "▲" : "▼"}</span>
+            <span>Advanced settings{advancedDirty ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> (edited)</span> : ""}</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ transform: showAdvanced ? "rotate(180deg)" : "none" }}>
+              <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
           </button>
 
           {showAdvanced && (
@@ -813,8 +817,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 <div style={{
                   marginBottom: "1.25rem",
                   padding: "0.85rem 1rem",
-                  background: "rgba(255,176,58,0.08)",
-                  border: "1px solid rgba(255,176,58,0.3)",
+                  background: "var(--pill-warning-bg)",
+                  border: "1px solid var(--pill-warning-line)",
                   borderRadius: 7,
                   display: "flex",
                   alignItems: "center",
@@ -826,7 +830,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                     DNO changed to <strong>{pendingDnoChange.dno}</strong>. Reset rates to new DNO defaults?
                   </span>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button onClick={confirmDnoReset} style={{ ...smallBtn, borderColor: "var(--warn)", color: "var(--warn)", background: "rgba(255,176,58,0.1)" }}>
+                    <button onClick={confirmDnoReset} style={{ ...smallBtn, borderColor: "var(--warn)", color: "var(--warn)", background: "var(--surface)" }}>
                       Yes, reset
                     </button>
                     <button onClick={keepCurrentRates} style={{ ...smallBtn, borderColor: "var(--border)", color: "var(--text-dim)" }}>
@@ -838,7 +842,7 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
               {ragWarning && (
                 <div style={{ marginBottom: "1rem", fontSize: "0.75rem", color: "var(--warn)",
-                  background: "rgba(255,176,58,0.06)", border: "1px solid rgba(255,176,58,0.2)",
+                  background: "var(--pill-warning-bg)", border: "1px solid var(--pill-warning-line)",
                   borderRadius: 5, padding: "0.4rem 0.75rem" }}>
                   {ragWarning}
                 </div>
@@ -848,8 +852,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               <AdvancedSection label="Site Assumptions">
                 <div className="adv-grid-2">
                   <div>
-                    <FieldLabel>Non-energy charges</FieldLabel>
-                    <SuffixInput type="number" step="0.01" min="0"
+                    <FieldLabel htmlFor={`${uid}-f6`}>Non-energy charges</FieldLabel>
+                    <SuffixInput id={`${uid}-f6`} type="number" step="0.01" min="0"
                       value={advanced.necGbpMwh}
                       onChange={(e) => updateAdv("necGbpMwh", e.target.value)}
                       suffix="£/MWh" />
@@ -863,8 +867,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 <div className="adv-grid-3">
                   {[["Red", "duosRed"], ["Amber", "duosAmber"], ["Green", "duosGreen"]].map(([band, key]) => (
                     <div key={key}>
-                      <FieldLabel>{band}</FieldLabel>
-                      <SuffixInput type="number" step="0.01" min="0"
+                      <FieldLabel htmlFor={`${uid}-f7-${key}`}>{band}</FieldLabel>
+                      <SuffixInput id={`${uid}-f7-${key}`} type="number" step="0.01" min="0"
                         value={advanced[key]}
                         onChange={(e) => updateAdv(key, e.target.value)}
                         suffix="£/MWh" />
@@ -878,8 +882,8 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 <div className="adv-grid-3">
                   {[["Red", "gduosRed"], ["Amber", "gduosAmber"], ["Green", "gduosGreen"]].map(([band, key]) => (
                     <div key={key}>
-                      <FieldLabel>{band}</FieldLabel>
-                      <SuffixInput type="number" step="0.01" min="0"
+                      <FieldLabel htmlFor={`${uid}-f8-${key}`}>{band}</FieldLabel>
+                      <SuffixInput id={`${uid}-f8-${key}`} type="number" step="0.01" min="0"
                         value={advanced[key]}
                         onChange={(e) => updateAdv(key, e.target.value)}
                         suffix="£/MWh" />
@@ -892,22 +896,22 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               <AdvancedSection label="Standing Charges">
                 <div className="adv-grid-3">
                   <div>
-                    <FieldLabel>DUoS fixed</FieldLabel>
-                    <SuffixInput type="number" step="0.01" min="0"
+                    <FieldLabel htmlFor={`${uid}-f9`}>DUoS fixed</FieldLabel>
+                    <SuffixInput id={`${uid}-f9`} type="number" step="0.01" min="0"
                       value={advanced.fixedGbpPerDay}
                       onChange={(e) => updateAdv("fixedGbpPerDay", e.target.value)}
                       suffix="£/day" />
                   </div>
                   <div>
-                    <FieldLabel>DUoS capacity</FieldLabel>
-                    <SuffixInput type="number" step="0.0001" min="0"
+                    <FieldLabel htmlFor={`${uid}-f10`}>DUoS capacity</FieldLabel>
+                    <SuffixInput id={`${uid}-f10`} type="number" step="0.0001" min="0"
                       value={advanced.capacityRate}
                       onChange={(e) => updateAdv("capacityRate", e.target.value)}
                       suffix="£/kVA/day" />
                   </div>
                   <div>
-                    <FieldLabel>GDUoS fixed credit</FieldLabel>
-                    <SuffixInput type="number" step="0.01" min="0"
+                    <FieldLabel htmlFor={`${uid}-f11`}>GDUoS fixed credit</FieldLabel>
+                    <SuffixInput id={`${uid}-f11`} type="number" step="0.01" min="0"
                       value={advanced.gduosFixed}
                       onChange={(e) => updateAdv("gduosFixed", e.target.value)}
                       suffix="£/day" />
@@ -920,42 +924,42 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 <div className="adv-grid-2" style={{ gap: "1rem" }}>
 
                   <div>
-                    <FieldLabel style={{ color: "var(--negative)" }}>Red band (weekday)</FieldLabel>
+                    <FieldLabel htmlFor={`${uid}-ragRed`}>Red band (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      <TimeInput value={advanced.ragRedStart} onChange={(v) => updateAdv("ragRedStart", v)} />
+                      <TimeInput id={`${uid}-ragRed`} label="Red band (weekday), start" value={advanced.ragRedStart} onChange={(v) => updateAdv("ragRedStart", v)} />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
-                      <TimeInput value={advanced.ragRedEnd} onChange={(v) => updateAdv("ragRedEnd", v)} />
+                      <TimeInput label="Red band (weekday), end" value={advanced.ragRedEnd} onChange={(v) => updateAdv("ragRedEnd", v)} />
                     </div>
                   </div>
 
                   <div>
-                    <FieldLabel>Amber band, morning (weekday)</FieldLabel>
+                    <FieldLabel htmlFor={`${uid}-ragAmberMorning`}>Amber band, morning (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      <TimeInput value={advanced.ragAmberMorningStart} onChange={(v) => updateAdv("ragAmberMorningStart", v)} />
+                      <TimeInput id={`${uid}-ragAmberMorning`} label="Amber band, morning (weekday), start" value={advanced.ragAmberMorningStart} onChange={(v) => updateAdv("ragAmberMorningStart", v)} />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
-                      <TimeInput value={advanced.ragAmberMorningEnd} onChange={(v) => updateAdv("ragAmberMorningEnd", v)} />
+                      <TimeInput label="Amber band, morning (weekday), end" value={advanced.ragAmberMorningEnd} onChange={(v) => updateAdv("ragAmberMorningEnd", v)} />
                     </div>
                   </div>
 
                   <div>
-                    <FieldLabel>Amber band, evening (weekday)</FieldLabel>
+                    <FieldLabel htmlFor={`${uid}-ragAmberEvening`}>Amber band, evening (weekday)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      <TimeInput value={advanced.ragAmberEveningStart} onChange={(v) => updateAdv("ragAmberEveningStart", v)} />
+                      <TimeInput id={`${uid}-ragAmberEvening`} label="Amber band, evening (weekday), start" value={advanced.ragAmberEveningStart} onChange={(v) => updateAdv("ragAmberEveningStart", v)} />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
-                      <TimeInput value={advanced.ragAmberEveningEnd} onChange={(v) => updateAdv("ragAmberEveningEnd", v)} />
+                      <TimeInput label="Amber band, evening (weekday), end" value={advanced.ragAmberEveningEnd} onChange={(v) => updateAdv("ragAmberEveningEnd", v)} />
                     </div>
                   </div>
 
                   <div>
-                    <FieldLabel>Amber band, weekend (optional)</FieldLabel>
+                    <FieldLabel htmlFor={`${uid}-ragWeekendAmber`}>Amber band, weekend (optional)</FieldLabel>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      <TimeInput
+                      <TimeInput id={`${uid}-ragWeekendAmber`} label="Amber band, weekend (optional), start"
                         value={advanced.ragWeekendAmberStart}
                         onChange={(v) => updateAdv("ragWeekendAmberStart", v)}
                         placeholder="–"
                       />
                       <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>to</span>
-                      <TimeInput
+                      <TimeInput label="Amber band, weekend (optional), end"
                         value={advanced.ragWeekendAmberEnd}
                         onChange={(v) => updateAdv("ragWeekendAmberEnd", v)}
                         placeholder="–"
@@ -970,24 +974,24 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
               <AdvancedSection label="BESS Technical Parameters">
                 <div className="adv-grid-3" style={{ marginBottom: "0.75rem" }}>
                   <div>
-                    <FieldLabel>Charge efficiency</FieldLabel>
-                    <SuffixInput type="number" step="0.5" min="50" max="100"
+                    <FieldLabel htmlFor={`${uid}-f12`}>Charge efficiency</FieldLabel>
+                    <SuffixInput id={`${uid}-f12`} type="number" step="0.5" min="50" max="100"
                       placeholder="90"
                       value={advanced.chargeEffPct}
                       onChange={(e) => updateAdv("chargeEffPct", e.target.value)}
                       suffix="%" />
                   </div>
                   <div>
-                    <FieldLabel>Discharge efficiency</FieldLabel>
-                    <SuffixInput type="number" step="0.5" min="50" max="100"
+                    <FieldLabel htmlFor={`${uid}-f13`}>Discharge efficiency</FieldLabel>
+                    <SuffixInput id={`${uid}-f13`} type="number" step="0.5" min="50" max="100"
                       placeholder="90"
                       value={advanced.dischargeEffPct}
                       onChange={(e) => updateAdv("dischargeEffPct", e.target.value)}
                       suffix="%" />
                   </div>
                   <div>
-                    <FieldLabel>Degradation cost</FieldLabel>
-                    <SuffixInput type="number" step="0.5" min="0"
+                    <FieldLabel htmlFor={`${uid}-f14`}>Degradation cost</FieldLabel>
+                    <SuffixInput id={`${uid}-f14`} type="number" step="0.5" min="0"
                       value={advanced.degCostGbpMwh}
                       onChange={(e) => updateAdv("degCostGbpMwh", e.target.value)}
                       suffix="£/MWh" />
@@ -995,15 +999,15 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                 </div>
                 <div className="adv-grid-2">
                   <div>
-                    <FieldLabel>Minimum SOC</FieldLabel>
-                    <SuffixInput type="number" step="1" min="0" max="50"
+                    <FieldLabel htmlFor={`${uid}-f15`}>Minimum SOC</FieldLabel>
+                    <SuffixInput id={`${uid}-f15`} type="number" step="1" min="0" max="50"
                       value={advanced.socMinPct}
                       onChange={(e) => updateAdv("socMinPct", e.target.value)}
                       suffix="%" />
                   </div>
                   <div>
-                    <FieldLabel>Maximum SOC</FieldLabel>
-                    <SuffixInput type="number" step="1" min="50" max="100"
+                    <FieldLabel htmlFor={`${uid}-f16`}>Maximum SOC</FieldLabel>
+                    <SuffixInput id={`${uid}-f16`} type="number" step="1" min="50" max="100"
                       value={advanced.socMaxPct}
                       onChange={(e) => updateAdv("socMaxPct", e.target.value)}
                       suffix="%" />
@@ -1017,44 +1021,35 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
         {/* ── Errors ──────────────────────────────────── */}
         {jobError && (
-          <div style={errorBox}>Run failed: {jobError}</div>
+          <div role="alert" style={errorBox}>Run failed: {jobError}</div>
         )}
         {runError && (
-          <div style={errorBox}>{runError}</div>
+          <div role="alert" style={errorBox}>{runError}</div>
         )}
 
         {/* ── Run button ──────────────────────────────── */}
         <button
-          className="lift lift-glow"
+          className="btn-primary"
           onClick={handleRun}
           disabled={!canRun}
-          style={{
-            width: "100%",
-            padding: "0.9rem",
-            border: canRun ? "1px solid var(--accent)" : "1px solid var(--border)",
-            borderRadius: 8,
-            background: canRun
-              ? "linear-gradient(135deg, var(--signal-a15), var(--signal-a08))"
-              : "var(--bg-surface)",
-            color: canRun ? "var(--accent)" : "var(--text-dim)",
-            fontSize: "0.95rem",
-            fontWeight: 700,
-            cursor: canRun ? "pointer" : "not-allowed",
-            letterSpacing: "0.03em",
-            boxShadow: canRun ? "0 0 24px rgba(0,200,232,0.12)" : "none",
-          }}
+          style={{ width: "100%", height: 44, fontSize: 16 }}
         >
-          {submitting ? "Submitting…" : "Run Optimisation"}
+          {submitting ? "Starting the run…" : `Run optimisation${scenarioCount > 0 && scenarioCount <= 12 ? ` (${scenarioCount} scenario${scenarioCount === 1 ? "" : "s"})` : ""}`}
         </button>
 
         {!canRun && !submitting && (
-          <div style={{ marginTop: "0.6rem", fontSize: "0.75rem", color: "var(--text-dim)", textAlign: "center" }}>
-            {!file && "Upload a CSV or XLSX · "}
-            {resolutionError && <span style={{ color: "var(--negative)" }}>{parsedMeta.resolution.label} · </span>}
-            {!dnoKey && "Select a DNO · "}
-            {selectedCount === 0 && "Select at least one BESS configuration · "}
-            {validExportCount === 0 && "Enter at least one export limit (0 or more) · "}
-            {scenarioCount > 12 && <span style={{ color: "var(--negative)" }}>Reduce scenarios to ≤ 12 (currently {scenarioCount})</span>}
+          <div aria-live="polite" style={{ marginTop: 8, fontSize: 14, color: "var(--muted)" }}>
+            To run:{" "}
+            {[
+              !file && "upload a CSV or XLSX",
+              resolutionError && "use 30-minute or hourly data",
+              !dnoKey && "choose a DNO",
+              selectedCount === 0 && "select at least one battery size",
+              validExportCount === 0 && "enter at least one export limit (0 for none)",
+              scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
+              !pfValid && "set the power factor between 0.5 and 1.0",
+              !micValid && "enter a MIC above zero, or leave it blank",
+            ].filter(Boolean).join(", ")}.
           </div>
         )}
 
@@ -1068,58 +1063,57 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
 
 function Card({ label, children }) {
   return (
-    <div style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border)",
-      borderRadius: 10,
-      padding: "1.5rem",
-      marginBottom: "1rem",
+    <section style={{
+      background: "var(--surface)",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--radius-card)",
+      padding: 24,
+      marginBottom: "var(--gap)",
     }}>
-      <div style={{
-        fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)",
-        textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.1rem",
-      }}>
+      <h2 style={{ margin: "0 0 16px", fontSize: "var(--fs-section)", lineHeight: "24px", fontWeight: 500 }}>
         {label}
-      </div>
+      </h2>
       {children}
-    </div>
+    </section>
   );
 }
 
 function AdvancedSection({ label, children }) {
   return (
-    <div style={{ marginBottom: "1.25rem" }}>
-      <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+    <div style={{ marginBottom: 20 }}>
+      <h3 style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
         {label}
-      </div>
+      </h3>
       {children}
     </div>
   );
 }
 
-function FieldLabel({ children }) {
-  return (
-    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "0.35rem" }}>
-      {children}
-    </div>
-  );
+function FieldLabel({ children, htmlFor, id, style }) {
+  const st = { display: "block", fontSize: 14, fontWeight: 500, color: "var(--ink)", marginBottom: 6, ...style };
+  return htmlFor
+    ? <label htmlFor={htmlFor} id={id} style={st}>{children}</label>
+    : <span id={id} style={st}>{children}</span>;
 }
 
 function SuffixInput({ suffix, ...props }) {
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <input
+        inputMode="decimal"
+        autoComplete="off"
         {...props}
+        className="tnum"
         style={{
           ...inputStyle,
-          paddingRight: suffix.length > 4 ? "5.5rem" : "3.5rem",
+          paddingRight: !suffix ? 10 : suffix.length > 4 ? "5.5rem" : "3.25rem",
         }}
       />
-      <span style={{
+      <span aria-hidden="true" style={{
         position: "absolute",
-        right: "0.65rem",
-        fontSize: "0.72rem",
-        color: "var(--text-dim)",
+        right: 10,
+        fontSize: 12,
+        color: "var(--muted)",
         pointerEvents: "none",
         userSelect: "none",
         whiteSpace: "nowrap",
@@ -1130,64 +1124,57 @@ function SuffixInput({ suffix, ...props }) {
   );
 }
 
-function TimeInput({ value, onChange, placeholder = "HH:MM" }) {
+function TimeInput({ value, onChange, placeholder = "HH:MM", label, id }) {
   return (
     <input
       type="text"
+      id={id}
+      aria-label={label}
+      autoComplete="off"
+      inputMode="numeric"
       pattern="[0-2][0-9]:[0-5][0-9]"
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, width: 72, textAlign: "center", padding: "0.45rem 0.5rem" }}
+      style={{ ...inputStyle, width: 80, textAlign: "center", padding: "0 8px" }}
     />
   );
 }
 
-function Chip({ label, value, mono, error }) {
-  return (
-    <div style={{ textAlign: "left" }}>
-      <div style={{ fontSize: "0.65rem", color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: "0.75rem", color: error ? "var(--negative)" : "var(--text-sec)", fontFamily: mono ? "monospace" : undefined }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function selectStyle(hasValue) {
+function selectStyle() {
   return {
     width: "100%",
-    padding: "0.55rem 0.75rem",
-    background: "var(--bg-surface)",
-    border: hasValue ? "1px solid rgba(0,200,232,0.3)" : "1px solid var(--border)",
-    borderRadius: 6,
-    color: hasValue ? "var(--text-pri)" : "var(--text-dim)",
-    fontSize: "0.875rem",
+    height: 36,
+    padding: "0 10px",
+    background: "var(--surface)",
+    border: "1px solid var(--control)",
+    borderRadius: "var(--radius-control)",
+    color: "var(--ink)",
+    fontSize: 14,
     cursor: "pointer",
   };
 }
 
 const inputStyle = {
   width: "100%",
-  padding: "0.55rem 0.75rem",
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  color: "var(--text-pri)",
-  fontSize: "0.875rem",
+  height: 36,
+  padding: "0 10px",
+  background: "var(--surface)",
+  border: "1px solid var(--control)",
+  borderRadius: "var(--radius-control)",
+  color: "var(--ink)",
+  fontSize: 14,
   boxSizing: "border-box",
 };
 
 const errorBox = {
-  marginBottom: "1rem",
-  padding: "0.75rem 1rem",
-  background: "rgba(255,85,119,0.08)",
-  border: "1px solid var(--negative-a30)",
-  borderRadius: 6,
-  color: "var(--negative)",
-  fontSize: "0.875rem",
+  marginBottom: "var(--gap)",
+  padding: "10px 14px",
+  background: "var(--pill-negative-bg)",
+  border: "1px solid #f3c3bf",
+  borderRadius: "var(--radius-card)",
+  color: "var(--pill-negative-ink)",
+  fontSize: 14,
 };
 
 const smallBtn = {
@@ -1199,3 +1186,49 @@ const smallBtn = {
   cursor: "pointer",
   background: "none",
 };
+
+
+// What flexiq read from the file, echoed before the run so a wrong unit,
+// a gap or the wrong DNO shows up now rather than in the results.
+function FileEcho({ file, meta, inputUnit, dnoLabel }) {
+  const isCsv = file.name.toLowerCase().endsWith(".csv");
+  let peakKw = null;
+  if (meta?.peakRaw != null && meta.intervalMin) {
+    const h = meta.intervalMin / 60;
+    peakKw = { mw: meta.peakRaw * 1000, kw: meta.peakRaw, mwh: (meta.peakRaw / h) * 1000, kwh: meta.peakRaw / h }[inputUnit];
+  }
+  const nf = (v, d = 0) => v == null ? "\u2013" : v.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const rows = isCsv && meta ? [
+    ["Intervals", nf(meta.rows)],
+    ["Period", meta.dateRange ? `${meta.dateRange.start} to ${meta.dateRange.end}` : "\u2013"],
+    ["Resolution", meta.resolution?.label ?? "\u2013", meta.resolution && !meta.resolution.valid],
+    ["Coverage", meta.coverageDays != null ? `${nf(meta.coverageDays, 1)} days${meta.gaps ? `, ${nf(meta.gaps)} missing interval${meta.gaps === 1 ? "" : "s"}` : ", no gaps"}` : "\u2013", !!meta.gaps],
+    ["Peak import", peakKw != null ? `${nf(peakKw)} kW in the selected unit` : "\u2013", peakKw != null && (peakKw > 100000 || peakKw < 1)],
+    ["DNO tariff", dnoLabel ?? "Choose below"],
+    ["Columns", meta.headers.join(", ")],
+  ] : [];
+  return (
+    <div aria-live="polite" style={{ marginTop: 16, padding: 16, borderRadius: "var(--radius-card)", background: "#fafafa" }}>
+      <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 500 }}>What flexiq read from {file.name}</p>
+      {isCsv ? (
+        <dl className="tnum" style={{ margin: 0, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 16px", fontSize: 14 }}>
+          {rows.map(([k, v, warn]) => (
+            <div key={k} style={{ display: "contents" }}>
+              <dt style={{ color: "var(--muted)" }}>{k}</dt>
+              <dd style={{ margin: 0, overflowWrap: "anywhere", color: warn ? "var(--warning)" : "var(--ink)" }}>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>
+          XLSX files are read on the server. Coverage, gaps and the peak appear on the results page.
+        </p>
+      )}
+      {isCsv && peakKw != null && (
+        <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--muted)" }}>
+          If the peak looks 1,000 times too big or small, change the unit above.
+        </p>
+      )}
+    </div>
+  );
+}

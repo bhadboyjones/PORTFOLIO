@@ -1,67 +1,38 @@
 import { useMemo } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
-  Legend, ReferenceLine, CartesianGrid, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid, ResponsiveContainer,
 } from "recharts";
-import useReducedMotion from "../hooks/useReducedMotion";
-import {
-  CHART_COLORS, SERIES, tooltipProps, axisTick, axisLineProps,
-  gridProps, legendStyle, seriesAnimation,
-} from "./chartTheme";
+import { CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps } from "./chartTheme";
+import { gbp, gbpCompact } from "../format";
 
-function sampleDaily(timeseries) {
+// Backtest saving accumulated over the data period, for the selected scenario.
+export function dailyCumulative(timeseries) {
   const byDate = {};
   for (const row of timeseries) {
     if (!row.startTime) continue;
-    const date = row.startTime.slice(0, 10);
-    byDate[date] = row.cumulative_pnl_gbp;
+    byDate[row.startTime.slice(0, 10)] = row.cumulative_pnl_gbp;
   }
-  return byDate;
+  return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, cumulative]) => ({ date, cumulative }));
 }
 
-function fmtGbp(v) {
-  if (v == null) return "";
-  return Math.abs(v) >= 1000 ? `£${(v / 1000).toFixed(0)}k` : `£${Math.round(v)}`;
-}
+const fmtDate = (s) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(s + "T00:00:00"));
 
-function fmtDate(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-export default function CumulativePnlChart({ rankedScenarios }) {
-  const reduced = useReducedMotion();
-  const top3 = rankedScenarios.slice(0, 3);
-
-  const { chartData, keys } = useMemo(() => {
-    const perScenario = top3.map((s) => ({
-      key: `${s.scenario_label} | ${s.export_limit_mw} MW`,
-      daily: sampleDaily(s.dispatch_timeseries),
-    }));
-    const allDates = [...new Set(perScenario.flatMap((s) => Object.keys(s.daily)))].sort();
-    const chartData = allDates.map((date) => {
-      const point = { date };
-      for (const { key, daily } of perScenario) point[key] = daily[date] ?? null;
-      return point;
-    });
-    return { chartData, keys: perScenario.map((s) => s.key) };
-  }, [rankedScenarios]);
-
-  const tickInterval = Math.max(1, Math.floor(chartData.length / 8));
-
+export default function CumulativePnlChart({ scenario }) {
+  const data = useMemo(() => dailyCumulative(scenario?.dispatch_timeseries ?? []), [scenario]);
+  const step = Math.max(1, Math.ceil(data.length / 7));
+  const ticks = data.filter((_, i) => i % step === 0).map((d) => d.date);
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={chartData} margin={{ top: 8, right: 20, left: 10, bottom: 5 }}>
-        <CartesianGrid {...gridProps} />
-        <XAxis dataKey="date" tickFormatter={fmtDate} tick={axisTick} interval={tickInterval} axisLine={axisLineProps} tickLine={false} />
-        <YAxis tickFormatter={fmtGbp} tick={axisTick} width={62} axisLine={false} tickLine={false} />
-        <Tooltip formatter={(v) => (v != null ? fmtGbp(v) : "–")} labelFormatter={fmtDate} {...tooltipProps} />
-        <Legend wrapperStyle={legendStyle} />
-        <ReferenceLine y={0} stroke={CHART_COLORS.refLine} strokeDasharray="3 3" />
-        {keys.map((key, i) => (
-          <Line key={key} dataKey={key} stroke={SERIES[i]} dot={false} strokeWidth={2} connectNulls {...seriesAnimation(reduced)} />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
+    <div style={{ height: 300 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="date" tickFormatter={fmtDate} ticks={ticks} tick={axisTick} axisLine={axisLineProps} tickLine={false} />
+          <YAxis tickFormatter={gbpCompact} tick={axisTick} width={56} axisLine={false} tickLine={false} />
+          <Tooltip formatter={(v) => [gbp(v), "Saving to date"]} labelFormatter={fmtDate} {...tooltipProps} />
+          <ReferenceLine y={0} stroke={CHART_COLORS.grey} />
+          <Line dataKey="cumulative" stroke={CHART_COLORS.data} dot={false} strokeWidth={2} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

@@ -3,6 +3,7 @@ export default function ArchetypeCard({ archetype, selected, onToggle }) {
     <div
       className="lift lift-glow"
       role="button"
+      aria-label={`${sentenceCase(archetype.display_name)}, peak ${archetype.peak_mw} MW`}
       tabIndex={0}
       aria-pressed={selected}
       onClick={onToggle}
@@ -10,25 +11,23 @@ export default function ArchetypeCard({ archetype, selected, onToggle }) {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); }
       }}
       style={{
-        border: selected ? "1px solid var(--accent)" : "1px solid var(--border)",
+        border: selected ? "1px solid var(--ink)" : "1px solid var(--line)",
         borderRadius: 10,
         padding: "1.25rem",
         cursor: "pointer",
-        background: selected ? "rgba(0,200,232,0.07)" : "var(--bg-card)",
+        background: selected ? "var(--raised)" : "var(--surface)",
         flex: 1,
         minWidth: 200,
-        boxShadow: selected ? "0 0 0 1px var(--accent), 0 0 20px rgba(0,200,232,0.12)" : "none",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.9rem" }}>
-        <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: selected ? "var(--accent)" : "var(--text-pri)" }}>
-          {archetype.display_name}
+        <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 500, color: "var(--ink)" }}>
+          {sentenceCase(archetype.display_name)}
         </h3>
         {selected && (
           <span style={{
-            fontSize: "0.65rem", fontWeight: 700, color: "var(--bg-base)",
-            background: "var(--accent)", borderRadius: 3, padding: "0.15rem 0.45rem",
-            letterSpacing: "0.06em", textTransform: "uppercase",
+            fontSize: 12, fontWeight: 400, color: "var(--pill-neutral-ink)",
+            background: "var(--pill-neutral-bg)", borderRadius: 4, padding: "0 8px", lineHeight: "20px",
           }}>
             Selected
           </span>
@@ -57,4 +56,11 @@ function Row({ label, value }) {
       <td style={{ color: "var(--text-sec)", fontWeight: 500 }}>{value}</td>
     </tr>
   );
+}
+
+// Backend names arrive in Title Case ("Mid-Size Industrial"); the UI uses
+// sentence case throughout.
+function sentenceCase(t = "") {
+  const lower = t.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
