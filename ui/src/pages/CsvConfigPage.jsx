@@ -13,7 +13,6 @@ const DNO_OPTIONS = [
 
 
 const DEFAULT_ADV = {
-  contractedKva: "",
   necGbpMwh: "103.75",
   duosRed: "", duosAmber: "", duosGreen: "",
   gduosRed: "", gduosAmber: "", gduosGreen: "",
@@ -92,6 +91,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const [thermalGenToggle, setThermalGenToggle] = useState(false);
   const [inputUnit, setInputUnit] = useState("mw");
   const [thermalMcGbpMwh, setThermalMcGbpMwh] = useState("70");
+  const [micKva, setMicKva]           = useState("");
+  const [micUnit, setMicUnit]         = useState("kva");
+  const [powerFactor, setPowerFactor] = useState("1");
 
   const [powers, setPowers]           = useState(["1", "2", "3"]);
   const [capacities, setCapacities]   = useState(["1", "2", "4"]);
@@ -135,7 +137,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
   const scenarioCount    = selectedCount * validExportCount;
   const thermalGenWarning = thermalGenToggle && parsedMeta?.headers?.length > 0 && !parsedMeta.headers.includes("thermal_gen_mw");
   const resolutionError   = parsedMeta?.resolution?.valid === false;
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError;
+  const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
+  const micValid          = micKva === "" || parseFloat(micKva) > 0;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -248,7 +252,9 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
       fd.append("price_exposure", priceExposure);
       fd.append("nec_gbp_mwh", advanced.necGbpMwh || "103.75");
       fd.append("chp_mc_gbp_mwh", thermalMcGbpMwh || "70");
-      if (advanced.contractedKva) fd.append("contracted_kva", advanced.contractedKva);
+      if (micKva) fd.append("contracted_kva", micKva);
+      fd.append("mic_unit", micUnit);
+      fd.append("power_factor", powerFactor || "1");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
       fd.append("rag_red_start",           advanced.ragRedStart           || "16:00");
@@ -494,6 +500,56 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                   Defaults to HV — lower DUoS rates give a conservative savings estimate. Select LV or HV if known.
                 </div>
               )}
+            </div>
+
+            {/* Agreed import capacity (MIC) */}
+            <div>
+              <FieldLabel>Agreed import capacity (MIC)</FieldLabel>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div style={{ flex: 1 }}>
+                  <SuffixInput type="number" step="any" min="0"
+                    placeholder="From your connection agreement"
+                    value={micKva}
+                    onChange={(e) => setMicKva(e.target.value)}
+                    suffix={{ kva: "kVA", kw: "kW", mw: "MW" }[micUnit]} />
+                </div>
+                {[["kva", "kVA"], ["kw", "kW"], ["mw", "MW"]].map(([value, label]) => {
+                  const active = micUnit === value;
+                  return (
+                    <button key={value} className="lift" aria-pressed={active} onClick={() => setMicUnit(value)} style={{
+                      padding: "0.5rem 0.6rem",
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      borderRadius: 6,
+                      background: active ? "var(--signal-a10)" : "var(--bg-surface)",
+                      color: active ? "var(--accent)" : "var(--text-dim)",
+                      cursor: "pointer", fontSize: "0.78rem", fontWeight: active ? 700 : 500,
+                    }}>{label}</button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+                {!micKva
+                  ? "Blank = assumed equal to the peak import in your data, which hides any capacity headroom."
+                  : micUnit === "kva"
+                    ? "Use the unit written in your agreement. kVA: import cap = MIC × power factor."
+                    : "Use the unit written in your agreement. kW/MW: used as the import cap directly; power factor converts it to kVA for the capacity charge."}
+              </div>
+            </div>
+
+            {/* Power factor */}
+            <div>
+              <FieldLabel>Power factor</FieldLabel>
+              <SuffixInput type="number" step="0.01" min="0.5" max="1"
+                value={powerFactor}
+                onChange={(e) => setPowerFactor(e.target.value)}
+                suffix="PF" />
+              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+                {!pfValid
+                  ? "Power factor must be between 0.5 and 1.0."
+                  : parseFloat(powerFactor) === 1
+                  ? "Default 1.0 (kW = kVA). Use your meter's figure if known."
+                  : `Import cap = MIC × ${powerFactor} in kW.`}
+              </div>
             </div>
 
             {/* Thermal generation toggle */}
@@ -798,14 +854,6 @@ export default function CsvConfigPage({ onRunStarted, jobError }) {
                       onChange={(e) => updateAdv("necGbpMwh", e.target.value)}
                       suffix="£/MWh" />
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>EII-exempt sites: 43.75</div>
-                  </div>
-                  <div>
-                    <FieldLabel>Contracted capacity</FieldLabel>
-                    <SuffixInput type="number" step="1" min="0"
-                      placeholder="Auto from CSV peak"
-                      value={advanced.contractedKva}
-                      onChange={(e) => updateAdv("contractedKva", e.target.value)}
-                      suffix="kVA" />
                   </div>
                 </div>
               </AdvancedSection>

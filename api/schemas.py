@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 from src.csv_pipeline import INPUT_UNITS
 from src.duos_rates import VALID_DNOS, VALID_VOLTAGE_LEVELS
 
+MIC_UNITS = ("kva", "kw", "mw")
+
 
 class ArchetypeResponse(BaseModel):
     id: str
@@ -137,7 +139,13 @@ class CsvRunParams:
         bess_deg_cost_gbp_mwh: float = Form(8.0, description="Degradation cost (£/MWh throughput)."),
         # --- Site ---
         contracted_kva: Optional[float] = Form(
-            None, description="Contracted capacity (kVA). Defaults to peak CSV demand at unity PF.",
+            None, description="Agreed import capacity, MIC (kVA). Defaults to peak CSV import at the given power factor.",
+        ),
+        mic_unit: str = Form(
+            "kva", description="Unit of contracted_kva as written in the connection agreement: 'kva', 'kw' or 'mw'.",
+        ),
+        power_factor: float = Form(
+            1.0, description="Site power factor (kW = kVA × PF). Default 1.0 when unknown.",
         ),
         chp_toggle: bool = Form(False, description="True if site has CHP generation."),
         input_unit: str = Form(
@@ -183,6 +191,21 @@ class CsvRunParams:
             raise HTTPException(
                 status_code=422,
                 detail=f"input_unit must be one of {list(INPUT_UNITS)}, got '{input_unit}'.",
+            )
+        if contracted_kva is not None and contracted_kva <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"contracted_kva (MIC) must be > 0, got {contracted_kva}.",
+            )
+        if mic_unit not in MIC_UNITS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"mic_unit must be one of {list(MIC_UNITS)}, got '{mic_unit}'.",
+            )
+        if not (0.5 <= power_factor <= 1.0):
+            raise HTTPException(
+                status_code=422,
+                detail=f"power_factor must be between 0.5 and 1.0, got {power_factor}.",
             )
         if price_exposure not in ("da", "imbalance"):
             raise HTTPException(
@@ -270,7 +293,11 @@ class CsvRunParams:
         self.bess_soc_max_pct       = bess_soc_max_pct
         self.bess_deg_cost_gbp_mwh  = bess_deg_cost_gbp_mwh
 
+        # MIC as written in the agreement, in mic_unit. Converted to an import
+        # cap (kW) and a billing kVA by run_csv._resolve_mic().
         self.contracted_kva  = contracted_kva
+        self.mic_unit        = mic_unit
+        self.power_factor    = power_factor
         self.chp_toggle      = chp_toggle
         self.input_unit      = input_unit
         self.price_exposure  = price_exposure

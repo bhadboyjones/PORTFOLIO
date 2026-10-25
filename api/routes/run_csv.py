@@ -43,6 +43,7 @@ def _build_bess_params(
     max_cycles: float,
     export_limit_mw: float,
     contracted_kva: float,
+    import_cap_kw: float,
     charge_eff_pct: float = None,
     discharge_eff_pct: float = None,
     soc_min_pct: float = 5.0,
@@ -63,7 +64,36 @@ def _build_bess_params(
         "max_cycles_per_day":   max_cycles,
         "export_limit_mw":      export_limit_mw,
         "contracted_kva":       contracted_kva,
+        "import_cap_kw":        import_cap_kw,
     }
+
+
+def _resolve_mic(net_demand_mw, mic_value, mic_unit: str, power_factor: float):
+    """
+    Return (import_cap_kw, billing_kva, source, warning) for the run.
+
+    import_cap_kw : real-power limit at the meter, used by the optimiser.
+                    kVA MIC → × PF. kW/MW MIC → used as written.
+    billing_kva   : kVA the capacity charge is priced on (p/kVA/day).
+                    kVA MIC → as written. kW/MW MIC → ÷ PF. How a DNO bills a
+                    MIC agreed in kW is unverified; at PF 1.0 it doesn't matter.
+
+    Blank MIC: assume the site's own peak import is the cap. The warning is
+    surfaced because an assumed MIC hides any headroom and peak-shaving value.
+    """
+    if mic_value is None:
+        import_cap_kw = float(net_demand_mw.clip(lower=0).max()) * 1000
+        warning = (
+            f"No agreed import capacity (MIC) entered — assumed {import_cap_kw:,.0f} kW, "
+            "the site's peak import in this data. Enter the MIC from your "
+            "connection agreement for capacity-charge accuracy."
+        )
+        return import_cap_kw, import_cap_kw / power_factor, "assumed_peak", warning
+
+    if mic_unit == "kva":
+        return float(mic_value) * power_factor, float(mic_value), "user", None
+    import_cap_kw = float(mic_value) * (1000.0 if mic_unit == "mw" else 1.0)
+    return import_cap_kw, import_cap_kw / power_factor, "user", None
 
 
 def _serialise_scenario(
@@ -157,10 +187,11 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             except OSError:
                 pass
 
-        # Derive contracted_kva from peak positive demand if not provided
-        contracted_kva = params.contracted_kva
-        if contracted_kva is None:
-            contracted_kva = float(csv_df["net_demand_mw"].clip(lower=0).max()) * 1000
+        import_cap_kw, contracted_kva, mic_source, mic_warning = _resolve_mic(
+            csv_df["net_demand_mw"], params.contracted_kva, params.mic_unit, params.power_factor,
+        )
+        if mic_warning:
+            warnings.append(mic_warning)
 
         tmp_dir = tempfile.mkdtemp()
         update_job(job_id, tmp_dir=tmp_dir)
@@ -244,6 +275,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     params.bess_max_cycles,
                     export_lim,
                     contracted_kva,
+                    import_cap_kw,
                     charge_eff_pct=params.bess_charge_eff_pct,
                     discharge_eff_pct=params.bess_discharge_eff_pct,
                     soc_min_pct=params.bess_soc_min_pct,
@@ -322,6 +354,11 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 "n_days": n_days,
                 "coverage_days": round(coverage_days, 4),
                 "resolution": "hourly" if sp_duration_hrs == 1.0 else "half-hourly",
+                "import_cap_kw": round(import_cap_kw, 1),
+                "billing_kva": round(contracted_kva, 1),
+                "mic_source": mic_source,
+                "power_factor": params.power_factor,
+                "mic_unit_entered": params.mic_unit,
             },
         )
 
