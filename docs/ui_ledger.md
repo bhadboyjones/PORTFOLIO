@@ -102,12 +102,60 @@ discharge that falls in red-band slots.
   realistic efficiency.
 - **Ties** (two scenarios with the same NPV) are not called out; the
   "Best NPV" pill goes on whichever sorts first.
-- **Navigation state** is not in the URL: Back leaves the app and a refresh
-  loses results (Vercel guideline, not addressed).
+- Offline (server asleep or restarted), cached results show but NPV/IRR wait
+  for the server to recalculate.
 - The average day mixes weekdays and weekends, so the red-band share is
   slightly diluted.
 
-## 4. Upload echo
+## 4. Why this result (`lib/explain.js`)
+
+Four sentences computed from the figures, never generated text:
+
+1. **Source:** share of discharge energy in red-band slots (`redBandShare`),
+   or the export share of gross value when it is 20% or more.
+2. **Pays or not:** year-1 repayment, capex ÷ (saving − opex), against the life;
+   or "cannot pay" when the saving doesn't cover opex.
+3. **What would change it:** exact breakeven. Opex is a share of capex, so
+   ```
+   A = Σ_{n=1..N} (1+e)^(n−1) / (1+r)^n        (opexAnnuity, as in build_cashflows)
+   PV costs = capex × (1 + opex% × A);  PV savings = NPV + PV costs
+   breakeven capex = PV savings / (1 + opex% × A);  saving multiplier = PV costs / PV savings
+   ```
+   Cross-checked: re-pricing at the breakeven capex in `api/investment.py`
+   gives NPV 0.000000.
+4. **What it rests on:** days of data and months, dispatch efficiency.
+
+"This run" and the model scope fold into one collapsed "Inputs and model
+scope" section beneath the investment inputs.
+
+## 5. URLs, Back and refresh (`lib/route.js`, `lib/resultsCache.js`)
+
+| Screen | URL |
+|---|---|
+| Landing | `#/` |
+| Site meter data / archetype form | `#/upload`, `#/archetype` |
+| Progress | `#/run/<jobId>` |
+| Results | `#/results/<jobId>` |
+
+- Each step is a history entry; finishing a run *replaces* the progress
+  entry, so Back from results returns to the form.
+- Config pages stay mounted once opened (hidden when not shown), so Back keeps
+  the file and settings within a session.
+- Results load from memory, then IndexedDB (newest 5 runs), then
+  `GET /run/<id>`, else an "expired" screen. The server keeps the 20 newest
+  jobs in memory and loses all of them on restart (`api/jobs.py`).
+- A 404 while polling ends the progress screen with a plain message.
+
+## 6. Tests
+
+| Command | What | Count |
+|---|---|---|
+| `npm test` (Vitest 5) | Pure logic in `src/lib` and `format.js`: formatting, bill identity, average day, explanation and breakeven, CSV parse, routes, cache pruning | 54 |
+| `npm run test:e2e` (Playwright 1.64, system Chrome) | Upload → run → answer → no em dashes → refresh → Back. Starts the API and a production build itself | 1 (about 20 s) |
+
+A mutation check (one flipped sign in the import formula) fails 3 unit tests.
+
+## 7. Upload echo
 
 `CsvConfigPage` parses CSVs in the browser (`parseCsvMeta`) and shows "What
 flexiq read": intervals, period, resolution, coverage days, missing intervals
@@ -115,7 +163,7 @@ flexiq read": intervals, period, resolution, coverage days, missing intervals
 import converted to kW in the selected unit, the chosen DNO and the columns.
 XLSX files are parsed server-side, so the echo says so instead.
 
-## 5. Accessibility changes (Vercel guidelines)
+## 8. Accessibility changes (Vercel guidelines)
 
 - Every input has a linked `<label>` (`htmlFor`/`id` via `useId`), button
   groups use `role="group"` + `aria-labelledby`, matrix and export inputs
@@ -126,7 +174,7 @@ XLSX files are parsed server-side, so the echo says so instead.
 - Skip link, `theme-color`, `color-scheme: light`, `touch-action`.
 - Investment help text is visible under each input, not in `title` tooltips.
 
-## 6. Checks run (2026-10-25)
+## 9. Checks run (2026-10-25)
 
 - taste-skill lint: 12 FAIL / 9 WARN → 0 FAIL / 4 WARN (clock zero-padding,
   Geist Mono declared for code).
