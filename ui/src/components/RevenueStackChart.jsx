@@ -7,27 +7,10 @@ import {
   CHART_COLORS, STREAM_COLORS, STREAM_LABELS, tooltipProps, axisTick, axisLineProps, gridProps,
 } from "./chartTheme";
 import { gbp, gbpCompact } from "../format";
+import { aggregateDaily } from "../lib/results";
 
 // Daily value: what the battery earns above zero, what it costs below,
 // and the net as an ink line. Same stream colours as every other chart.
-export function aggregateDaily(timeseries) {
-  const byDate = {};
-  for (const row of timeseries) {
-    if (!row.startTime) continue;
-    const date = row.startTime.slice(0, 10);
-    if (!byDate[date]) byDate[date] = { date, demand: 0, export: 0, gridCharge: 0, surplus: 0, wear: 0 };
-    const d = byDate[date];
-    d.demand     += row.dis1_saving_gbp      ?? 0;
-    d.export     += row.dis2_revenue_gbp     ?? 0;
-    d.gridCharge -= row.charge2_cost_gbp     ?? 0;
-    d.surplus    -= row.charge1_opp_cost_gbp ?? 0;
-    d.wear       -= row.deg_cost_gbp         ?? 0;
-  }
-  return Object.values(byDate)
-    .map((d) => ({ ...d, net: d.demand + d.export + d.gridCharge + d.surplus + d.wear }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
 export const VALUE_SERIES = [
   ["demand",     STREAM_COLORS.demandOffset,  `${STREAM_LABELS.demandOffset} saving`],
   ["export",     STREAM_COLORS.export,        `${STREAM_LABELS.export} revenue`],

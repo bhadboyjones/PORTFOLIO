@@ -4,44 +4,13 @@ import {
   CartesianGrid, ResponsiveContainer, Cell,
 } from "recharts";
 import Card from "./Card";
+import { averageDay, bandRuns, hhmm } from "../../lib/results";
 import { BAND_COLORS, STREAM_COLORS, CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps } from "../chartTheme";
 import { DEFAULT_WEEKDAY_BANDS } from "../dayTapeBands";
 import { num } from "../../format";
 
 // The signature: how the battery runs on an average day, drawn over the
 // DUoS bands it is trading against. Discharge above zero, charge below.
-
-const hhmm = (mins) => `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
-
-export function averageDay(ts) {
-  const slots = new Map();
-  for (const r of ts) {
-    const t = r.startTime?.slice(11, 16);
-    if (!t) continue;
-    const [h, m] = t.split(":").map(Number);
-    const mins = h * 60 + m;
-    const e = slots.get(mins) || { mins, n: 0, dis: 0, chg: 0 };
-    e.n += 1;
-    e.dis += (r.dis1_mw ?? 0) + (r.dis2_mw ?? 0);
-    e.chg += (r.charge1_mw ?? 0) + (r.charge2_mw ?? 0);
-    slots.set(mins, e);
-  }
-  return [...slots.values()]
-    .sort((a, b) => a.mins - b.mins)
-    .map((e) => ({ time: hhmm(e.mins), mins: e.mins, net: (e.dis - e.chg) / e.n, discharge: e.dis / e.n, charge: e.chg / e.n }));
-}
-
-function bandRuns(bands) {
-  // contiguous runs of the same band, in minutes of the day
-  const step = 1440 / bands.length;
-  const runs = [];
-  bands.forEach((b, i) => {
-    const last = runs[runs.length - 1];
-    if (last && last.band === b) last.end = (i + 1) * step;
-    else runs.push({ band: b, start: i * step, end: (i + 1) * step });
-  });
-  return runs;
-}
 
 export default function TypicalDay({ scenario, label, bands }) {
   const data = useMemo(() => averageDay(scenario?.dispatch_timeseries ?? []), [scenario]);

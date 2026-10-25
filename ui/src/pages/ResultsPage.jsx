@@ -11,7 +11,8 @@ import OperationDetail from "../components/results/OperationDetail";
 import Card from "../components/results/Card";
 import { InvestmentInputs, RunInputs, ModelScope } from "../components/results/AssumptionsPanel";
 import useInvestment, { defaultInvestmentForm, scenarioKey, sizeLabel } from "../hooks/useInvestment";
-import { gbp, num, date } from "../format";
+import { num, date } from "../format";
+import { labelOf, coverageDays, finding } from "../lib/results";
 
 // Screen question: does a battery pay on this site, and which size?
 // The title row answers it; the lead strip carries the figures; the
@@ -22,29 +23,6 @@ const DISPLAY_NAMES = {
   medium_industrial: "Mid-size industrial",
   large_industrial:  "Large industrial",
 };
-
-const labelOf = (s) => `${sizeLabel(s)}, ${num(s.export_limit_mw, s.export_limit_mw % 1 ? 1 : 0)} MW export`;
-
-// Days of data actually covered: rows × interval. CSV runs send it; archetype
-// runs don't, so derive it from the timeseries the same way.
-function coverageDays(dataPeriod, scenarios) {
-  if (dataPeriod?.coverage_days) return dataPeriod.coverage_days;
-  const ts = scenarios[0]?.dispatch_timeseries ?? [];
-  if (ts.length < 2) return null;
-  const step = (new Date(ts[1].startTime.replace(" ", "T")) - new Date(ts[0].startTime.replace(" ", "T"))) / 3.6e6;
-  return step > 0 ? (ts.length * step) / 24 : null;
-}
-
-function finding(best, inv, lifetime) {
-  if (!best || !inv) return null;
-  const name = labelOf(best);
-  if (inv.npv_gbp >= 0) {
-    return inv.payback_yrs != null
-      ? `${name} pays back in ${num(inv.payback_yrs, 1)} years, with an NPV of ${gbp(inv.npv_gbp)}.`
-      : `${name} has the best NPV, ${gbp(inv.npv_gbp)}.`;
-  }
-  return `No size pays back over ${lifetime} years at these assumptions. The closest, ${name}, has an NPV of ${gbp(inv.npv_gbp)}.`;
-}
 
 export default function ResultsPage({ results, jobId, mode, validationWarnings, dataPeriod, bands, runInputs }) {
   const archetypeIds = Object.keys(results);

@@ -4,17 +4,9 @@ import {
 } from "recharts";
 import { CHART_COLORS, tooltipProps, axisTick, axisLineProps, gridProps } from "./chartTheme";
 import { gbp, gbpCompact } from "../format";
+import { dailyCumulative } from "../lib/results";
 
 // Backtest saving accumulated over the data period, for the selected scenario.
-export function dailyCumulative(timeseries) {
-  const byDate = {};
-  for (const row of timeseries) {
-    if (!row.startTime) continue;
-    byDate[row.startTime.slice(0, 10)] = row.cumulative_pnl_gbp;
-  }
-  return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, cumulative]) => ({ date, cumulative }));
-}
-
 const fmtDate = (s) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(s + "T00:00:00"));
 
 export default function CumulativePnlChart({ scenario }) {
