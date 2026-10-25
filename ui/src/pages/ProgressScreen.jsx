@@ -28,8 +28,12 @@ export default function ProgressScreen({ jobId, onComplete, onFailed }) {
         }
         if (data.status === "failed")   { onFailed(data.error || "Run failed: unknown error."); return; }
         setTimeout(poll, 3000);
-      } catch {
+      } catch (e) {
         if (cancelled) return;
+        if (e?.status === 404) {
+          onFailed("This run is no longer on the server, which may have restarted. Run it again.");
+          return;
+        }
         failures += 1;
         if (failures >= MAX_FAILURES) {
           onFailed(`Lost connection to API server after ${MAX_FAILURES} attempts. The job may still be running. Job ID: ${jobId}`);
