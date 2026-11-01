@@ -35,6 +35,11 @@ profit per 1 MWh bought = 0.9 × discharge rate − charge rate − £15.20
 Blank tariff is the old behaviour: full pass-through. Export always uses the
 wholesale price, even when import is flat. `apply_tariff` sets it first for that reason.
 
+Indexed types follow the price signal chosen above the card, so labels read
+"Day-ahead" or "Imbalance". The screen shows a 24-hour preview of fixed bands: the
+strip and the hours for each rate come from `bandRuns` in `ui/src/lib/tariff.js`,
+which applies the same rule as `_band_rates` in `src/tariff.py`.
+
 Rates are entered in p/kWh and sent in £/MWh. Percentages apply to negative prices
 too: 105% of −£20 is −£21.
 

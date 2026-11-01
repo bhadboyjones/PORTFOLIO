@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
-import { DEFAULT_TARIFF_FORM, ENERGY_OPTIONS, EXPORT_OPTIONS, tariffNote, tariffPayload, tariffProblem } from "../lib/tariff";
+import { DEFAULT_TARIFF_FORM, MAX_BANDS, bandRuns, energyOptions, exportOptions, tariffNote, tariffPayload, tariffProblem } from "../lib/tariff";
 import { parseCsvMeta, peakKw, dataIssues } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
@@ -592,7 +592,33 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
           </div>
         </Card>
 
-        <TariffCard tariff={tariff} onChange={setTariff} />
+        {/* ── Price Exposure ──────────────────────────── */}
+        <Card label="Price signal">
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            {[
+              { value: "da",        label: "Day-ahead (DA)",     desc: "Elexon market index, a day-ahead proxy" },
+              { value: "imbalance", label: "Imbalance (system)", desc: "Settled against the system imbalance price" },
+            ].map(({ value, label, desc }) => {
+              const active = priceExposure === value;
+              return (
+                <button key={value} className="lift" aria-pressed={active} onClick={() => setPriceExposure(value)} style={{
+                  flex: 1, minWidth: 220, padding: "0.85rem 1rem",
+                  border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
+                  borderRadius: "var(--radius-control)",
+                  background: active ? "var(--raised)" : "var(--surface)",
+                  cursor: "pointer", textAlign: "left", font: "inherit",
+                }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
+                    {label}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
+        <TariffCard tariff={tariff} onChange={setTariff} priceExposure={priceExposure} />
 
         {/* ── BESS Configuration ──────────────────────── */}
         <Card label="Battery sizes">
@@ -739,32 +765,6 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
             )}
           </div>
 
-        </Card>
-
-        {/* ── Price Exposure ──────────────────────────── */}
-        <Card label="Price signal">
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            {[
-              { value: "da",        label: "Day-ahead (DA)",     desc: "Elexon market index, a day-ahead proxy" },
-              { value: "imbalance", label: "Imbalance (system)", desc: "Settled against the system imbalance price" },
-            ].map(({ value, label, desc }) => {
-              const active = priceExposure === value;
-              return (
-                <button key={value} className="lift" aria-pressed={active} onClick={() => setPriceExposure(value)} style={{
-                  flex: 1, minWidth: 220, padding: "0.85rem 1rem",
-                  border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
-                  borderRadius: "var(--radius-control)",
-                  background: active ? "var(--raised)" : "var(--surface)",
-                  cursor: "pointer", textAlign: "left", font: "inherit",
-                }}>
-                  <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{desc}</div>
-                </button>
-              );
-            })}
-          </div>
         </Card>
 
         {/* ── Advanced ────────────────────────────────── */}
@@ -1059,11 +1059,13 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function TariffCard({ tariff, onChange }) {
+function TariffCard({ tariff, onChange, priceExposure }) {
   const uid = useId();
+  const index = priceExposure === "imbalance" ? "Imbalance" : "Day-ahead";
+  const energyOpts = energyOptions(index);
   const set = (patch) => onChange({ ...tariff, ...patch });
   const setBand = (i, patch) => set({ bands: tariff.bands.map((b, n) => (n === i ? { ...b, ...patch } : b)) });
-  const energy = ENERGY_OPTIONS.find((o) => o.value === tariff.energyType);
+  const energy = energyOpts.find((o) => o.value === tariff.energyType);
   const note = tariffNote(tariff);
   const hint = { fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" };
   const rateField = (id, label, value, key, suffix = "p/kWh") => (
@@ -1086,28 +1088,45 @@ function TariffCard({ tariff, onChange }) {
         <div style={{ gridColumn: "1 / -1" }}>
           <FieldLabel htmlFor={`${uid}-energy`}>How is your energy priced?</FieldLabel>
           <select id={`${uid}-energy`} value={tariff.energyType} onChange={(e) => set({ energyType: e.target.value })} style={selectStyle(true)}>
-            {ENERGY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {energyOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <div style={hint}>{energy.hint}</div>
         </div>
 
-        {tariff.energyType === "percent" && rateField("pct", "Share of day-ahead", tariff.energyPercent, "energyPercent", "%")}
+        {tariff.energyType === "percent" && rateField("pct", `Share of ${index.toLowerCase()}`, tariff.energyPercent, "energyPercent", "%")}
         {tariff.energyType === "adder" && rateField("adder", "Margin", tariff.energyAdder, "energyAdder")}
         {tariff.energyType === "flat" && rateField("flat", "Flat rate", tariff.energyFlat, "energyFlat")}
         {tariff.energyType === "time_bands" && (
           <>
             {tariff.bands.map((b, i) => (
-              <div key={i} style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", alignItems: "end" }}>
-                <TimeInput id={`${uid}-bs${i}`} label={`Band ${i + 1} start`} value={b.start} onChange={(v) => setBand(i, { start: v })} />
-                <TimeInput id={`${uid}-be${i}`} label={`Band ${i + 1} end`} value={b.end} onChange={(v) => setBand(i, { end: v })} />
+              <div key={i} style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "auto auto 1fr auto", gap: "0.5rem", alignItems: "end" }}>
+                <div>
+                  <FieldLabel htmlFor={`${uid}-bs${i}`}>Start</FieldLabel>
+                  <TimeInput id={`${uid}-bs${i}`} label={`Band ${i + 1} start`} value={b.start} onChange={(v) => setBand(i, { start: v })} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor={`${uid}-be${i}`}>End</FieldLabel>
+                  <TimeInput id={`${uid}-be${i}`} label={`Band ${i + 1} end`} value={b.end} onChange={(v) => setBand(i, { end: v })} />
+                </div>
                 <div>
                   <FieldLabel htmlFor={`${uid}-br${i}`}>{`Band ${i + 1} rate`}</FieldLabel>
                   <SuffixInput id={`${uid}-br${i}`} type="number" step="0.01" value={b.rate}
                     onChange={(e) => setBand(i, { rate: e.target.value })} suffix="p/kWh" />
                 </div>
+                {tariff.bands.length > 1 && (
+                  <button type="button" className="btn-secondary" aria-label={`Remove band ${i + 1}`}
+                    onClick={() => set({ bands: tariff.bands.filter((_, n) => n !== i) })}>Remove</button>
+                )}
               </div>
             ))}
+            {tariff.bands.length < MAX_BANDS && (
+              <div style={{ gridColumn: "1 / -1" }}>
+                <button type="button" className="btn-secondary"
+                  onClick={() => set({ bands: [...tariff.bands, { start: "", end: "", rate: "" }] })}>Add a band</button>
+              </div>
+            )}
             {rateField("other", "Rate at all other times", tariff.otherRate, "otherRate")}
+            <BandPreview tariff={tariff} />
           </>
         )}
 
@@ -1123,10 +1142,10 @@ function TariffCard({ tariff, onChange }) {
         <div style={{ gridColumn: "1 / -1" }}>
           <FieldLabel htmlFor={`${uid}-export`}>How are your exports paid?</FieldLabel>
           <select id={`${uid}-export`} value={tariff.exportType} onChange={(e) => set({ exportType: e.target.value })} style={selectStyle(true)}>
-            {EXPORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {exportOptions(index).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-        {tariff.exportType === "percent" && rateField("xpct", "Share of day-ahead", tariff.exportPercent, "exportPercent", "%")}
+        {tariff.exportType === "percent" && rateField("xpct", `Share of ${index.toLowerCase()}`, tariff.exportPercent, "exportPercent", "%")}
         {tariff.exportType === "fee" && rateField("xfee", "Fee", tariff.exportFee, "exportFee")}
         {tariff.exportType === "fixed" && rateField("xfix", "Fixed export rate", tariff.exportFixed, "exportFixed")}
         <div style={{ gridColumn: "1 / -1" }}>
@@ -1135,6 +1154,36 @@ function TariffCard({ tariff, onChange }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+// What the entered bands mean across a day, using the same rule as the API:
+// each half-hour takes the rate of the band it starts in; earlier bands win.
+function BandPreview({ tariff }) {
+  const { slots, runs } = bandRuns(tariff);
+  if (!runs.length) return null;
+  const rates = runs.map((r) => r.rate).filter((r) => r != null);
+  const lo = Math.min(...rates), hi = Math.max(...rates);
+  const shade = (r) => (r == null ? 0.08 : 0.25 + (hi > lo ? (0.75 * (r - lo)) / (hi - lo) : 0.4));
+  return (
+    <div style={{ gridColumn: "1 / -1" }}>
+      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Your day, half-hour by half-hour</div>
+      <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: "repeat(48, 1fr)", gap: 1 }}>
+        {slots.map((r, i) => <span key={i} style={{ height: 16, background: "var(--data)", opacity: shade(r) }} />)}
+      </div>
+      <div aria-hidden="true" style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+        <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+      </div>
+      <ul className="tnum" style={{ margin: "8px 0 0", padding: 0, listStyle: "none", fontSize: 14 }}>
+        {runs.map((r) => (
+          <li key={r.start} style={{ display: "flex", gap: 12 }}>
+            <span style={{ minWidth: 110 }}>{r.start} to {r.end}</span>
+            <span style={{ minWidth: 70 }}>{r.hours} h</span>
+            <span>{r.rate == null ? "Rate needed" : `${r.rate}p/kWh`}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

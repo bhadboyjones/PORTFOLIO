@@ -71,6 +71,13 @@ test("a flat all-inclusive tariff says the battery has nothing to trade", async 
   await page.getByLabel("DUoS unit and fixed charges").check();
   await page.getByLabel("Policy and system charges").check();
   await expect(page.getByText(/leaves the battery nothing to trade/)).toBeVisible();
+  await page.getByRole("button", { name: /Imbalance \(system\)/ }).click();
+  await expect(page.getByLabel("How is your energy priced?").locator("option", { hasText: "Imbalance plus a margin" })).toHaveCount(1);
+  await page.getByRole("button", { name: /Day-ahead \(DA\)/ }).click();
+  await page.getByLabel("How is your energy priced?").selectOption("time_bands");
+  await expect(page.getByText("Your day, half-hour by half-hour")).toBeVisible();
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(".png", "-bands.png"), fullPage: true });
+  await page.getByLabel("How is your energy priced?").selectOption("flat");
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(".png", "-config.png"), fullPage: true });
   await page.getByRole("button", { name: /Run optimisation/ }).click();
   await expect(page).toHaveURL(/#\/results\//, { timeout: 200_000 });
