@@ -27,6 +27,7 @@ against the sources listed at the end; re-check them before relying on them.*
 | 4 | Forecast engine and measured dispatch efficiency | M–L | — |
 | 5 | DA trading: rolling horizon, position + imbalance, intraday | L | 4 |
 | 6 | Capacity Market, ancillary services | L | 3 |
+| 7 | PPA structures | L | 2, 3 |
 
 Peak shaving goes first: it is the most bankable behind-the-meter value, uses
 data already in the app, and changes dispatch, which the degradation curves in
@@ -107,12 +108,32 @@ schedule on DA prices needs only the site forecast.
 
 ---
 
+### 7. PPA structures
+
+Not before multi-year investment and single and multi-year price curves (steps 2
+and 3), because PPAs run for years and their value depends on a price path.
+Research from 2026-11-01, to re-verify when picked up:
+
+| Side | Type | Model treatment |
+|---|---|---|
+| Buying | Private wire | Own rate, indicatively free of non-commodity costs except VAT; grid top-up still charged. Needs a generation profile |
+| Buying | Sleeved | Pass-through with fixed energy price plus supplier fee |
+| Buying | Virtual | Financial contract; likely no dispatch change (inference, unsourced) |
+| Selling | Fixed, % of index, index less fee, system price, baseload or shaped | Export rate by half-hour; GDUoS credit may or may not reach the site |
+
+Open: fee sizes, what each sleeved deal passes through, whether export PPAs accept
+battery exports, and battery routes such as tolls, floors and revenue share.
+
 ## Smaller queued items
 
 | Item | Notes |
 |---|---|
-| **Negative export rate → zero-dispatch chunks** | `opp` is unbounded; when price − GDUoS < 0 the chunk goes unbounded and dispatches nothing ([peak_shaving.md §4](peak_shaving.md)). Fix: bound `opp ≤ chr1` (approximate in negative-rate periods; settlement still prices it exactly), or a binary for the exact max. Found 2026-10-25. |
 | DNO rates refresh | `src/duos_rates.py` holds 2026-27. Final charges publish ~15 months ahead (EPN 2026/27 v1.0: 24 Dec 2024), so 2027/28 is likely already out — check. Refresh window is Dec–Jan, not April; fix the file comment. |
+| **Site bill view** | Results as a real bill: lines without/with battery/change (energy, DUoS, non-energy, standing and capacity), wear below the bill, then a "how the battery got there" panel. Needs energy, DUoS and non-energy split per scenario in the serialiser. Decide: backtest label or scaled to realistic. Numbers: [worked_examples.md §8](worked_examples.md). |
+| **Contract type input** | flexiq assumes full pass-through. Split the config screen into three groups: battery, network charges (current DUoS selection), tariff. Tariff asks two questions: how energy is priced (day-ahead indexed, % of day-ahead, day-ahead plus adder, fixed time-of-use blocks, flat) and whether network and policy charges are passed through or bundled. Users can type in their own rates. Dispatch and settlement both use the resulting import rate. Network charges always exist; each is either added as its own line or already inside the entered rate. Ask separately for unit DUoS, capacity and excess, and policy charges. Bundled lines must not be added again. A battery trades the import-rate spread the site actually sees, so a flat all-inclusive rate leaves no arbitrage. Export is a separate contract from import: fixed, % of day-ahead, day-ahead less a fee, system price, with its own choice of whether the GDUoS credit reaches the site (the DNO pays the supplier, and EDF's price guide passes it on; a PPA may not). SEG is floored above zero. Evidence and numbers: [worked_examples.md §9 and §10](worked_examples.md). |
+| **Bill lines from real samples** | kWh × rate = £ on each line; non-energy split into RO/FiT/CfD, CM, BSUoS, CCL; capacity in kVA-days; add fixed TNUoS residual by band; exclude VAT or show it separately. Refresh CCL (£7.75/MWh looks stale). |
+| **Licence-area tariffs** | Rates table has 6 DNOs; GB has 14 licence areas. UKPN is an average of EPN, LPN and SPN, and ENWL entries are marked unverified. Dropdown should list licence areas. Needed for accurate MIC savings. |
+| **2027/28 tariff year** | Published ahead of April 2027 (ENWL v1.0 31 Dec 2025, SSEN 31 Jan 2026); NPG not yet confirmed. Add as a selectable year; fix the "late March / early April 2027" comment in `src/duos_rates.py`. |
 | Staleness banner | Warn on results when today is outside the loaded charge year. |
 | 15-minute data | Resample to 30-minute in the pipeline (PV and some meter exports are 15-min). |
 | Export saturation curve | See investment_case.md §9. Test on a PV/CHP site. |

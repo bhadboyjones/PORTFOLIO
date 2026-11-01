@@ -274,7 +274,10 @@ def _solve_chunk(
         # actually have been exported. Constrained below; penalised in the
         # objective so it settles at max(chr1 − curtailable, 0). At export_limit=0
         # the whole surplus is curtailable, so charging from it costs nothing.
-        opp[i] = pulp.LpVariable(f"opp_{i}", lowBound=0.0)
+        # Bounded because a negative export rate turns the penalty into a reward:
+        # unbounded, the solver drives opp to infinity and the chunk dispatches zero.
+        ub_opp = min(ub_chr1, export_limit_mw)
+        opp[i] = pulp.LpVariable(f"opp_{i}", lowBound=0.0, upBound=ub_opp)
 
         # mode: 1 = battery may charge this period, 0 = battery may discharge.
         # A real battery cannot do both at once; without this the LP can charge

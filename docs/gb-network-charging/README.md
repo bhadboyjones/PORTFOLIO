@@ -500,9 +500,10 @@ April 2026. If SP reissues, the SPD and SPM year-on-year figures need recomputin
 bands were pulled only to test claimed ranges. LDNO, sub-LV, generation, EHV/EDCM
 and unmetered tariffs are not covered.
 
-**Excess capacity multiplier varies.** UK Power Networks 2026/27 charges excess at
-1 times the capacity rate. National Grid Electricity Distribution guidance says 2 to
-3 times. Check per DNO rather than assuming.
+**Excess capacity rate.** Eastern Power Networks and all four NGED areas publish
+excess at 1 times the capacity rate for 2026/27 (LC14 Annex 1, checked 2026-11-01).
+The earlier "2 to 3 times" note for NGED and trade claims of 3 times are not supported
+by those statements. The other 9 licence areas are unchecked.
 
 **No published evidence that C&I sites are actually reducing agreed capacity** in
 response to the capacity shift. Every source found is a consultancy marketing a kVA
