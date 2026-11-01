@@ -11,6 +11,7 @@ import TypicalDay from "../components/results/TypicalDay";
 import OperationDetail from "../components/results/OperationDetail";
 import Card from "../components/results/Card";
 import MicCard from "../components/results/MicCard";
+import SiteBill from "../components/results/SiteBill";
 import BreachTable from "../components/results/BreachTable";
 import { InvestmentInputs, ScopeDetails } from "../components/results/AssumptionsPanel";
 import WhyCard from "../components/results/WhyCard";
@@ -71,6 +72,11 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
   const selInv = selected ? inv.byKey.get(scenarioKey(selected)) : null;
   const selLabel = selected ? labelOf(selected) : "";
   const annual = nDays ? 365 / nDays : 1;
+  // The bill is the first view when the run has one; older runs and archetypes
+  // go straight to the analysis.
+  const [fullAnalysis, setFullAnalysis] = useState(false);
+  const hasBill = !!selected?.bill;
+  const showAnalysis = !hasBill || fullAnalysis;
 
   const subtitle = [
     runInputs?.fileName,
@@ -108,7 +114,7 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
 
       <WarningsNotice warnings={validationWarnings} style={{ marginTop: 16 }} />
 
-      <div className="results-grid" style={{ marginTop: 24 }}>
+      <div className={showAnalysis ? "results-grid" : undefined} style={{ marginTop: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
           {inv.available && inv.stale && !inv.loading && (
             <p role="status" style={{ margin: 0, fontSize: 14, color: "var(--pill-warning-ink)" }}>
@@ -125,6 +131,18 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
             </div>
           ) : null}
 
+          {hasBill && (
+            <>
+              <SiteBill bill={selected.bill} annual={annual} nDays={nDays ?? 0} sizeLabel={selLabel} runInputs={runInputs} dataPeriod={dataPeriod} />
+              <div>
+                <button className="btn-secondary" aria-expanded={fullAnalysis} onClick={() => setFullAnalysis((v) => !v)}>
+                  {fullAnalysis ? "Hide full analysis" : "Show full analysis"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {showAnalysis && <>
           <Card
             style={inv.stale ? { opacity: 0.5 } : undefined}
             id="sizes"
@@ -169,14 +187,15 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
           {selected?.capacity_breaches?.length > 0 && <BreachTable months={selected.capacity_breaches} label={selLabel} />}
 
           {selected && <OperationDetail scenario={selected} label={selLabel} />}
+          </>}
         </div>
 
-        <aside style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }} aria-label="Assumptions and model scope">
+        {showAnalysis && <aside style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }} aria-label="Assumptions and model scope">
           {inv.available && (
             <InvestmentInputs form={form} setForm={setForm} loading={inv.loading} error={inv.error} invalid={inv.invalid} warnings={inv.result?.warnings} />
           )}
           <ScopeDetails runInputs={runInputs} dataPeriod={dataPeriod} mode={mode} />
-        </aside>
+        </aside>}
       </div>
     </div>
   );

@@ -170,3 +170,46 @@ export function micRows(sweep, annual) {
     value: r.value_gbp * annual,
   }));
 }
+
+const RATE_UNIT = { kWh: "p", days: "p/day", "kVA-days": "p" };
+
+/** "120,000 kWh × 9.12p": average rate for a varying half-hourly price. */
+function working(line, qty, cost) {
+  if (!line.unit || !(qty > 0)) return null;
+  const pence = (Math.abs(cost) * 100) / qty;
+  return `${num(qty, 0)} ${line.unit} × ${num(pence, 2)}${RATE_UNIT[line.unit]}`;
+}
+
+/** The bill scaled to a year, with each line's sum, totals, VAT and battery panel. */
+export function billView(bill, annual) {
+  const sections = bill.sections
+    .map((s) => ({
+      title: s.title,
+      lines: s.lines
+        .filter((l) => l.included || Math.abs(l.cost_wo) > 0.005 || Math.abs(l.cost_w) > 0.005)
+        .map((l) => ({
+          ...l,
+          without: l.cost_wo * annual,
+          with: l.cost_w * annual,
+          change: (l.cost_w - l.cost_wo) * annual,
+          // Period-based quantities (days) scale to a year like everything else.
+          workingWo: working(l, l.qty_wo * annual, l.cost_wo * annual),
+          workingW: working(l, l.qty_w * annual, l.cost_w * annual),
+        })),
+    }))
+    .filter((s) => s.lines.length);
+  const totalWo = bill.total_wo_gbp * annual;
+  const totalW = bill.total_w_gbp * annual;
+  const b = bill.battery;
+  const battery = [
+    { label: "Discharge saved", value: b.saved_gbp * annual },
+    { label: "Charging cost", value: -b.charging_gbp * annual },
+    ...(Math.abs(b.excess_saved_gbp) > 0.005 ? [{ label: "Excess capacity avoided", value: b.excess_saved_gbp * annual }] : []),
+    { label: "Battery wear", value: -b.wear_gbp * annual },
+    { label: "Net saving", value: b.net_gbp * annual, strong: true },
+  ];
+  const csv = sections.flatMap((s) => s.lines.filter((l) => !l.included).map((l) => ({
+    section: s.title, label: l.label, without: l.without, with: l.with, change: l.change,
+  })));
+  return { sections, totalWo, totalW, vatWo: totalWo * bill.vat_rate, vatW: totalW * bill.vat_rate, battery, csv };
+}

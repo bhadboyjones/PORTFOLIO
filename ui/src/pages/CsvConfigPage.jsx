@@ -23,7 +23,7 @@ const DNO_OPTIONS = [
 
 
 const DEFAULT_ADV = {
-  necGbpMwh: "103.75",
+  necGbpMwh: "104.01",
   duosRed: "", duosAmber: "", duosGreen: "",
   gduosRed: "", gduosAmber: "", gduosGreen: "",
   fixedGbpPerDay: "", capacityRate: "", gduosFixed: "",
@@ -234,7 +234,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
       fd.append("chp_toggle", String(thermalGenToggle));
       fd.append("input_unit", inputUnit);
       fd.append("price_exposure", priceExposure);
-      fd.append("nec_gbp_mwh", advanced.necGbpMwh || "103.75");
+      fd.append("nec_gbp_mwh", advanced.necGbpMwh || "104.01");
       fd.append("chp_mc_gbp_mwh", thermalMcGbpMwh || "70");
       if (micKva) fd.append("contracted_kva", micKva);
       fd.append("mic_unit", micUnit);
@@ -301,7 +301,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         socMin: parseFloat(advanced.socMinPct || "5"),
         socMax: parseFloat(advanced.socMaxPct || "95"),
         degCost: parseFloat(advanced.degCostGbpMwh || "8"),
-        nec: parseFloat(advanced.necGbpMwh || "103.75"),
+        nec: parseFloat(advanced.necGbpMwh || "104.01"),
       });
     } catch (e) {
       setRunError(e.message);
