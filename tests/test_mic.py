@@ -41,11 +41,11 @@ def _params(**kw):
     """Build CsvRunParams with plain values (FastAPI Form defaults bypassed)."""
     from api.schemas import CsvRunParams
     base = dict(
-        dno_key="NPG", voltage_level="HV",
+        dno_key="NPGY", voltage_level="HV",
         bess_configs_json='[{"power_mw": 1, "capacity_mwh": 2}]', export_limits_json="[0]",
         bess_rte_pct=90.0, bess_max_cycles=1.5, bess_charge_eff_pct=None,
         bess_discharge_eff_pct=None, bess_soc_min_pct=5.0, bess_soc_max_pct=95.0,
-        bess_deg_cost_gbp_mwh=8.0, contracted_kva=None, mic_unit="kva", power_factor=1.0,
+        bess_deg_cost_gbp_mwh=8.0, contracted_kva=None, mic_unit="kva", power_factor=1.0, mic_margin_pct=5.0, tariff_json=None,
         chp_toggle=False, input_unit="mw", price_exposure="da", chp_mc_gbp_mwh=70.0,
         nec_gbp_mwh=103.75, rag_red_start="16:00", rag_red_end="19:00",
         rag_amber_morning_start="07:00", rag_amber_morning_end="16:00",
@@ -65,7 +65,8 @@ def test_schema_keeps_mic_as_written():
 
 
 @pytest.mark.parametrize("bad", [dict(mic_unit="amps"), dict(power_factor=1.2),
-                                 dict(power_factor=0.3), dict(contracted_kva=-5.0)])
+                                 dict(power_factor=0.3), dict(contracted_kva=-5.0),
+                                 dict(mic_margin_pct=-1.0), dict(mic_margin_pct=60.0)])
 def test_schema_rejects_bad_inputs(bad):
     with pytest.raises(HTTPException):
         _params(**{"contracted_kva": 1000.0, **bad})

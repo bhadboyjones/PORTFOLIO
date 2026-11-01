@@ -27,6 +27,7 @@ against the sources listed at the end; re-check them before relying on them.*
 | 4 | Forecast engine and measured dispatch efficiency | M–L | — |
 | 5 | DA trading: rolling horizon, position + imbalance, intraday | L | 4 |
 | 6 | Capacity Market, ancillary services | L | 3 |
+| 7 | PPA structures | L | 2, 3 |
 
 Peak shaving goes first: it is the most bankable behind-the-meter value, uses
 data already in the app, and changes dispatch, which the degradation curves in
@@ -107,12 +108,31 @@ schedule on DA prices needs only the site forecast.
 
 ---
 
+### 7. PPA structures
+
+Not before multi-year investment and single and multi-year price curves (steps 2
+and 3), because PPAs run for years and their value depends on a price path.
+Research from 2026-11-01, to re-verify when picked up:
+
+| Side | Type | Model treatment |
+|---|---|---|
+| Buying | Private wire | Own rate, indicatively free of non-commodity costs except VAT; grid top-up still charged. Needs a generation profile |
+| Buying | Sleeved | Pass-through with fixed energy price plus supplier fee |
+| Buying | Virtual | Financial contract; likely no dispatch change (inference, unsourced) |
+| Selling | Fixed, % of index, index less fee, system price, baseload or shaped | Export rate by half-hour; GDUoS credit may or may not reach the site |
+
+Open: fee sizes, what each sleeved deal passes through, whether export PPAs accept
+battery exports, and battery routes such as tolls, floors and revenue share.
+
 ## Smaller queued items
 
 | Item | Notes |
 |---|---|
-| **Negative export rate → zero-dispatch chunks** | `opp` is unbounded; when price − GDUoS < 0 the chunk goes unbounded and dispatches nothing ([peak_shaving.md §4](peak_shaving.md)). Fix: bound `opp ≤ chr1` (approximate in negative-rate periods; settlement still prices it exactly), or a binary for the exact max. Found 2026-10-25. |
 | DNO rates refresh | `src/duos_rates.py` holds 2026-27. Final charges publish ~15 months ahead (EPN 2026/27 v1.0: 24 Dec 2024), so 2027/28 is likely already out — check. Refresh window is Dec–Jan, not April; fix the file comment. |
+| **Site bill view** | Results as a real bill: lines without/with battery/change (energy, DUoS, non-energy, standing and capacity), wear below the bill, then a "how the battery got there" panel. Needs energy, DUoS and non-energy split per scenario in the serialiser. Decide: backtest label or scaled to realistic. Numbers: [worked_examples.md §8](worked_examples.md). |
+| Tariff follow-ups | Built: [tariff_types.md](tariff_types.md). Left: a SEG option with its above-zero floor, weekend time bands, and a saved tariff per site. |
+| **Bill lines from real samples** | kWh × rate = £ on each line; non-energy split into RO/FiT/CfD, CM, BSUoS, CCL; capacity in kVA-days; add fixed TNUoS residual by band; exclude VAT or show it separately. Refresh CCL (£7.75/MWh looks stale). |
+| **2027/28 tariff year** | Published ahead of April 2027 (ENWL v1.0 31 Dec 2025, SSEN 31 Jan 2026); NPG not yet confirmed. Add as a selectable year; fix the "late March / early April 2027" comment in `src/duos_rates.py`. |
 | Staleness banner | Warn on results when today is outside the loaded charge year. |
 | 15-minute data | Resample to 30-minute in the pipeline (PV and some meter exports are 15-min). |
 | Export saturation curve | See investment_case.md §9. Test on a PV/CHP site. |

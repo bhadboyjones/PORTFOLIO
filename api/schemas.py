@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from src.csv_pipeline import INPUT_UNITS
 from src.duos_rates import VALID_DNOS, VALID_VOLTAGE_LEVELS
+from src.tariff import normalise_tariff
 
 MIC_UNITS = ("kva", "kw", "mw")
 
@@ -72,6 +73,8 @@ class InvestmentScenarioIn(BaseModel):
     # period_benefit_gbp. Added back before the cashflow: the battery's cost
     # sits in year 0 as capex, so charging wear as well double-counts it.
     period_wear_cost_gbp: float = Field(0.0, ge=0)
+    # Capacity charge saved by a lower MIC: certain, so no efficiency cut or fade.
+    period_fixed_benefit_gbp: float = Field(0.0, ge=0)
 
 
 class InvestmentAssumptions(BaseModel):
@@ -148,6 +151,12 @@ class CsvRunParams:
         power_factor: float = Form(
             1.0, description="Site power factor (kW = kVA × PF). Default 1.0 when unknown.",
         ),
+        mic_margin_pct: float = Form(
+            5.0, description="Planning buffer below the MIC (%), for dispatch only. Ours, not a DNO allowance.",
+        ),
+        tariff_json: Optional[str] = Form(
+            None, description="Tariff structure as JSON; see src/tariff.py. Blank is full pass-through.",
+        ),
         confirm_data: bool = Form(
             False, description="Run even if the data check flags implausible units or a spike.",
         ),
@@ -210,6 +219,11 @@ class CsvRunParams:
             raise HTTPException(
                 status_code=422,
                 detail=f"power_factor must be between 0.5 and 1.0, got {power_factor}.",
+            )
+        if not (0.0 <= mic_margin_pct <= 50.0):
+            raise HTTPException(
+                status_code=422,
+                detail=f"mic_margin_pct must be between 0 and 50, got {mic_margin_pct}.",
             )
         if price_exposure not in ("da", "imbalance"):
             raise HTTPException(
@@ -302,6 +316,11 @@ class CsvRunParams:
         self.contracted_kva  = contracted_kva
         self.mic_unit        = mic_unit
         self.power_factor    = power_factor
+        self.mic_margin_pct  = mic_margin_pct
+        try:
+            self.tariff = normalise_tariff(_json.loads(tariff_json) if tariff_json else None)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid tariff: {exc}")
         self.confirm_data    = confirm_data
         self.chp_toggle      = chp_toggle
         self.input_unit      = input_unit

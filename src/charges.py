@@ -122,7 +122,7 @@ def build_network_charges(
             local,
             rag_override,
             weekends_green=True,
-            bank_holidays_green=True,
+            bank_holidays_green=False,
         )
     else:
         df["time_band"] = assign_rag_band(

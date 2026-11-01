@@ -217,6 +217,42 @@ def _write_detail_sheet(wb, scenario):
 # Public API
 # ---------------------------------------------------------------------------
 
+def _write_mic_sheets(wb, mic_sweep, capacity_breaches):
+    """MIC sweep and month-by-month excess. Values are over the data period."""
+    if mic_sweep and mic_sweep.get("rows"):
+        ws = wb.create_sheet(title="MIC sweep")
+        ws.sheet_format.defaultColWidth = 24
+        ws.append(_header_row(ws, ["Field", "Value"]))
+        ws.append(["Scenario", mic_sweep["scenario_label"]])
+        ws.append(["Current MIC (kVA)", mic_sweep["current_kva"]])
+        ws.append(["Natural peak (kVA)", mic_sweep["peak_kva"]])
+        ws.append(["Best MIC (kVA)", mic_sweep["best_mic_kva"] or "No cut pays"])
+        ws.append([])
+        ws.append(_header_row(ws, [
+            "MIC (kVA)", "Cut (kVA)", "Capacity saved (GBP)", "Dispatch change (GBP)",
+            "Excess paid (GBP)", "Excess change (GBP)", "Value (GBP)", "Months over MIC",
+        ]))
+        for r in mic_sweep["rows"]:
+            ws.append([_safe_float(r[k]) for k in (
+                "mic_kva", "reduction_kva", "capacity_saved_gbp", "dispatch_change_gbp",
+                "excess_gbp", "excess_change_gbp", "value_gbp", "months_breached",
+            )])
+
+    if capacity_breaches:
+        ws = wb.create_sheet(title="Months over MIC")
+        ws.sheet_format.defaultColWidth = 24
+        ws.append(_header_row(ws, [
+            "Scenario", "Export limit (MW)", "Month", "Days", "MIC (kVA)",
+            "Worst without battery (kVA)", "Worst with battery (kVA)",
+            "Excess without battery (GBP)", "Excess with battery (GBP)",
+        ]))
+        for b in capacity_breaches:
+            ws.append([_safe_float(b[k]) for k in (
+                "scenario", "export_limit_mw", "month", "days", "mic_kva", "worst_wo_bess_kva",
+                "worst_w_bess_kva", "excess_wo_bess_gbp", "excess_w_bess_gbp",
+            )])
+
+
 def _write_metadata_sheet(wb, job_id):
     """Write a Metadata sheet as the first tab — makes the file self-identifying."""
     ws = wb.create_sheet(title="Metadata")
@@ -227,7 +263,7 @@ def _write_metadata_sheet(wb, job_id):
     ws.append(["Generated", datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")])
 
 
-def build_report(all_results, output_path, job_id=None):
+def build_report(all_results, output_path, job_id=None, mic_sweep=None, capacity_breaches=None):
     """
     Build and save the full BESS scenario Excel report.
 
@@ -245,6 +281,9 @@ def build_report(all_results, output_path, job_id=None):
         job_id       : optional run identifier (YYYYMMDD_HHMMSS_xxxx).
                        When provided: appended to the output filename and
                        written to a Metadata sheet as the first tab.
+        mic_sweep    : optional sweep dict from the CSV run
+        capacity_breaches : optional month rows, each with scenario and
+                       export_limit_mw added
 
     Returns:
         str — the path the file was actually written to.
@@ -252,6 +291,7 @@ def build_report(all_results, output_path, job_id=None):
     Output sheets (in order):
         Metadata     : job_id + generated timestamp (only when job_id provided)
         Summary      : one row per scenario, full P&L stack, sorted by net benefit
+        MIC sweep, Months over MIC : only when a real MIC was entered
         <scenario>   : one interval-level detail sheet per scenario
     """
     if not all_results:
@@ -288,6 +328,7 @@ def build_report(all_results, output_path, job_id=None):
 
     # Summary sheet next
     _write_summary_sheet(wb, summary_df)
+    _write_mic_sheets(wb, mic_sweep, capacity_breaches)
 
     # Pass 2: stream detail sheets — one DF in memory at a time
     for item in all_results:

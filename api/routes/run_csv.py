@@ -164,6 +164,34 @@ def _resolve_mic(net_demand_mw, mic_value, mic_unit: str, power_factor: float):
     return import_cap_kw, import_cap_kw / power_factor, "user", None
 
 
+def _rag_windows(params) -> tuple:
+    """
+    Red and amber windows for the run, or (None, None) to use the DNO's own.
+
+    The form holds one red and two amber windows. London has more, so when the
+    form still shows the DNO's first windows, take the full schedule rather than
+    cutting it down to what the form could hold.
+    """
+    from src.duos_rates import get_duos_rates
+
+    sched = get_duos_rates(params.dno_key, params.voltage_level)["rag_schedule"]
+    form_red = [[params.rag_red_start, params.rag_red_end]]
+    form_amber = [
+        [params.rag_amber_morning_start, params.rag_amber_morning_end],
+        [params.rag_amber_evening_start, params.rag_amber_evening_end],
+    ]
+    if sched["red"]["weekday"][:1] == form_red and sched["amber"]["weekday"][:2] == form_amber:
+        return None, None
+    weekend = (
+        [[params.rag_weekend_amber_start, params.rag_weekend_amber_end]]
+        if params.rag_weekend_amber_start and params.rag_weekend_amber_end else []
+    )
+    return (
+        {"weekday": form_red, "weekend": []},
+        {"weekday": form_amber, "weekend": weekend},
+    )
+
+
 def _serialise_scenario(
     settled,
     scenario_label: str,
@@ -171,6 +199,7 @@ def _serialise_scenario(
     sp_duration_hrs: float = 0.5,
     power_mw: float = None,
     capacity_mwh: float = None,
+    capacity_breaches: list = None,
 ) -> dict:
     """Build summary stats and SP-level timeseries for one settled scenario."""
     net_benefit_gbp      = float(settled["net_settlement_gbp"].sum())
@@ -185,6 +214,7 @@ def _serialise_scenario(
         if total_throughput_mwh > 0 else 0.0
     )
 
+    priced = "excess_wo_bess_gbp" in settled.columns
     settled = settled.copy()
     settled["cumulative_pnl_gbp"] = settled["net_settlement_gbp"].cumsum()
 
@@ -221,10 +251,79 @@ def _serialise_scenario(
         "charge1_opp_cost_gbp":  _f(float(settled["charge1_opp_cost_gbp"].sum()), 2),
         "deg_cost_gbp":          _f(float(settled["deg_cost_gbp"].sum()), 2),
         "total_standing_gbp":    _f(total_standing_gbp, 2),
+        "excess_wo_bess_gbp":    _f(float(settled["excess_wo_bess_gbp"].sum()) if priced else 0.0, 2),
+        "excess_w_bess_gbp":     _f(float(settled["excess_w_bess_gbp"].sum()) if priced else 0.0, 2),
+        "capacity_breaches":     capacity_breaches or [],
         "total_throughput_mwh":  _f(total_throughput_mwh, 2),
         "peak_dispatch_mw":      _f(peak_dispatch_mw, 3),
         "gbp_per_kwh":           _f(gbp_per_kwh, 4),
         "dispatch_timeseries":   timeseries,
+    }
+
+
+def _sweep_mic(
+    df, best, bess_cfg, params, current_kva, current_cap_kw, excess_rate, capacity_rate,
+    coverage_days, actual_col, forecast_col, sp_duration_hrs, n_sps_per_day, job_id,
+) -> dict:
+    """Re-run the best scenario at lower MICs and value each one against today's."""
+    from src.mic_sweep import mic_candidates, mic_value
+    from src.optimiser import (
+        apply_excess_capacity, calculate_baseline, calculate_settlement, run_optimiser,
+    )
+
+    pf = params.power_factor
+    export_lim = best["export_limit_mw"]
+    baseline = calculate_baseline(
+        df, thermal_mc_gbp_mwh=params.chp_mc_gbp_mwh, export_limit_mw=export_lim,
+        actual_price_col=actual_col, sp_duration_hrs=sp_duration_hrs,
+    )
+
+    def solve(mic_kva, cap_kw):
+        bess_params = _build_bess_params(
+            bess_cfg["power_mw"], bess_cfg["capacity_mwh"], params.bess_rte_pct,
+            params.bess_max_cycles, export_lim, mic_kva, cap_kw,
+            charge_eff_pct=params.bess_charge_eff_pct,
+            discharge_eff_pct=params.bess_discharge_eff_pct,
+            soc_min_pct=params.bess_soc_min_pct, soc_max_pct=params.bess_soc_max_pct,
+            deg_cost_gbp_mwh=params.bess_deg_cost_gbp_mwh,
+        )
+        bess_params.update(
+            excess_rate_gbp_per_kva_day=excess_rate,
+            mic_margin_pct=params.mic_margin_pct, power_factor=pf,
+        )
+        out = run_optimiser(
+            baseline, bess_params, forecast_price_col=forecast_col, actual_price_col=actual_col,
+            sp_duration_hrs=sp_duration_hrs, n_sps_per_day=n_sps_per_day,
+        )
+        settled = calculate_settlement(
+            out, bess_params, actual_price_col=actual_col, sp_duration_hrs=sp_duration_hrs,
+        )
+        dispatch = float(settled["net_settlement_gbp"].sum())
+        _, months = apply_excess_capacity(settled, mic_kva, excess_rate, pf, sp_duration_hrs)
+        return {
+            "mic_kva": mic_kva,
+            "dispatch_gbp": dispatch,
+            "excess_gbp": sum(m["excess_w_bess_gbp"] for m in months),
+            "months_breached": sum(m["excess_w_bess_gbp"] > 0 for m in months),
+        }
+
+    peak_kva = float(df["net_demand_mw"].clip(lower=0).max()) * 1000.0 / pf
+    candidates = mic_candidates(peak_kva, bess_cfg["power_mw"], pf, current_kva)
+    current = solve(current_kva, current_cap_kw)
+    rows = []
+    for n, c in enumerate(candidates, 1):
+        update_job(job_id, current_scenario=f"MIC sweep {n} of {len(candidates)}")
+        result = solve(c["mic_kva"], c["mic_kva"] * pf)
+        rows.append(mic_value(current, {**result, "share": c["share"]}, capacity_rate, coverage_days))
+
+    best_row = max(rows, key=lambda r: r["value_gbp"], default=None)
+    return {
+        "scenario_label": best["scenario_label"],
+        "export_limit_mw": export_lim,
+        "current_kva": round(current_kva, 1),
+        "peak_kva": round(peak_kva, 1),
+        "rows": rows,
+        "best_mic_kva": best_row["mic_kva"] if best_row and best_row["value_gbp"] > 0 else None,
     }
 
 
@@ -234,7 +333,11 @@ def _serialise_scenario(
 
 def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> None:
     from src.csv_pipeline import load_and_validate_csv, build_csv_optimiser_input
-    from src.optimiser import run_optimiser, calculate_settlement, calculate_baseline
+    from src.duos_rates import excess_rate_gbp_per_kva_day, get_duos_rates
+    from src.tariff import apply_tariff, has_time_signal
+    from src.optimiser import (
+        apply_excess_capacity, calculate_baseline, calculate_settlement, run_optimiser,
+    )
     from src.report import build_report
 
     try:
@@ -271,24 +374,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
         tmp_dir = tempfile.mkdtemp()
         update_job(job_id, tmp_dir=tmp_dir)
 
-        # Build RAG override dicts from the eight request params.
-        # Frontend always sends these pre-populated from DNO defaults,
-        # so the backend never needs to fall back to guessing.
-        rag_red_windows = {
-            "weekday": [[params.rag_red_start, params.rag_red_end]],
-            "weekend": [],
-        }
-        rag_amber_windows = {
-            "weekday": [
-                [params.rag_amber_morning_start, params.rag_amber_morning_end],
-                [params.rag_amber_evening_start, params.rag_amber_evening_end],
-            ],
-            "weekend": (
-                [[params.rag_weekend_amber_start, params.rag_weekend_amber_end]]
-                if params.rag_weekend_amber_start and params.rag_weekend_amber_end
-                else []
-            ),
-        }
+        rag_red_windows, rag_amber_windows = _rag_windows(params)
 
         # 2. Build full MILP-ready input DataFrame.
         # Capture warnings.warn() calls (e.g. price-NaN fills) so they surface to
@@ -310,6 +396,15 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 n_sps_per_day=n_sps_per_day,
             )
         warnings.extend(_user_warnings(caught, already=warnings))
+        df = apply_tariff(df, params.tariff, forecast_col, actual_col)
+        if not has_time_signal(df, actual_col):
+            warnings.append(
+                "This tariff charges one import rate all year, so the battery has no "
+                "price difference to trade. It can only earn from surplus and capacity."
+            )
+        # Capacity inside the contract rate: a lower MIC saves the site nothing on
+        # this contract, so there is nothing to price or sweep.
+        price_mic = mic_source == "user" and not params.tariff["capacity_bundled"]
         data_start = df["startTime"].min().date()
         data_end   = df["startTime"].max().date()
         n_days     = (data_end - data_start).days + 1
@@ -331,6 +426,10 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             scenarios_complete=0,
             progress_pct=30,
             validation_warnings=warnings if warnings else None,
+        )
+
+        excess_rate = excess_rate_gbp_per_kva_day(
+            get_duos_rates(params.dno_key, params.voltage_level)
         )
 
         # 4. Multi-scenario BESS loop: configs × export limits
@@ -358,6 +457,13 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     deg_cost_gbp_mwh=params.bess_deg_cost_gbp_mwh,
                 )
 
+                # Breaches are only priced against a real MIC: an assumed one is
+                # the site's own peak, so it can't be breached.
+                if price_mic:
+                    bess_params["excess_rate_gbp_per_kva_day"] = excess_rate
+                    bess_params["mic_margin_pct"] = params.mic_margin_pct
+                    bess_params["power_factor"] = params.power_factor
+
                 # Baseline depends on this scenario's export limit (surplus above
                 # the limit is curtailed and earns no export revenue).
                 df_baseline = calculate_baseline(
@@ -384,6 +490,12 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 )
                 del results_df
 
+                capacity_breaches = []
+                if price_mic:
+                    settled, capacity_breaches = apply_excess_capacity(
+                        settled, contracted_kva, excess_rate, params.power_factor, sp_duration_hrs,
+                    )
+
                 settled = settled.copy()
                 settled["scenario_label"]  = label
                 settled["export_limit_mw"] = export_lim
@@ -393,6 +505,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     sp_duration_hrs=sp_duration_hrs,
                     power_mw=bess_cfg["power_mw"],
                     capacity_mwh=bess_cfg["capacity_mwh"],
+                    capacity_breaches=capacity_breaches,
                 ))
 
                 pkl_path = os.path.join(tmp_dir, f"scenario_{scenario_idx}.pkl")
@@ -406,11 +519,32 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 progress = 30 + int(60 * scenario_idx / total_scenarios)
                 update_job(job_id, scenarios_complete=scenario_idx, progress_pct=min(progress, 90))
 
+        # 5. MIC sweep on the best scenario. Needs a real MIC to compare against.
+        mic_sweep = None
+        if price_mic and all_results:
+            best = max(all_results, key=lambda r: r["net_benefit_gbp"] or 0)
+            cfg = next(c for c in params.bess_configs
+                       if c["power_mw"] == best["power_mw"] and c["capacity_mwh"] == best["capacity_mwh"])
+            rates = {**get_duos_rates(params.dno_key, params.voltage_level)}
+            capacity_rate = (params.rate_overrides or {}).get(
+                "capacity_gbp_per_kva_day", rates["capacity_p_per_kva_day"] / 100,
+            )
+            mic_sweep = _sweep_mic(
+                df, best, cfg, params, contracted_kva, import_cap_kw, excess_rate, capacity_rate,
+                coverage_days, actual_col, forecast_col, sp_duration_hrs, n_sps_per_day, job_id,
+            )
+
         del df
 
-        # 5. Build XLSX
+        # 6. Build XLSX
         xlsx_path = os.path.join(tmp_dir, "bess_csv_results.xlsx")
-        xlsx_path = build_report(pkl_paths, xlsx_path, job_id=job_id)
+        breaches = [
+            {**month, "scenario": r["scenario_label"], "export_limit_mw": r["export_limit_mw"]}
+            for r in all_results for month in r["capacity_breaches"]
+        ]
+        xlsx_path = build_report(
+            pkl_paths, xlsx_path, job_id=job_id, mic_sweep=mic_sweep, capacity_breaches=breaches,
+        )
         for p in pkl_paths:
             os.unlink(p)
 
@@ -434,6 +568,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 "mic_source": mic_source,
                 "power_factor": params.power_factor,
                 "mic_unit_entered": params.mic_unit,
+                "mic_sweep": mic_sweep,
             },
         )
 

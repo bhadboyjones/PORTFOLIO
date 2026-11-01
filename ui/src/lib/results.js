@@ -24,6 +24,11 @@ export function billRows(s, annual) {
     rows.push({ part: "Fuel", without: s.baseline_thermal_cost_gbp * k, with: s.baseline_thermal_cost_gbp * k });
   }
   rows.push({ part: "Standing", without: s.total_standing_gbp * k, with: s.total_standing_gbp * k });
+  const excessWo = s.excess_wo_bess_gbp ?? 0;
+  const excessW = s.excess_w_bess_gbp ?? 0;
+  if (excessWo > 0.5 || excessW > 0.5) {
+    rows.push({ part: "Excess", without: excessWo * k, with: excessW * k });
+  }
   rows.push({ part: "Wear", without: 0, with: (s.deg_cost_gbp ?? 0) * k });
   rows.push({ part: "Net bill", without: s.site_cost_wo_bess_gbp * k, with: s.site_cost_w_bess_gbp * k });
   for (const r of rows) {
@@ -152,4 +157,16 @@ export function niceTicks(min, max, count = 4) {
 export function progressLabel(raw) {
   const m = /([\d.]+)\s*MW\s*\/\s*([\d.]+)\s*MWh\s*\|\s*Export\s*([\d.]+)\s*MW/i.exec(raw || "");
   return m ? `${m[1]} MW / ${m[2]} MWh, ${m[3]} MW export` : raw;
+}
+
+/** MIC sweep rows scaled to a year; excess is shown as a cost change, so + is worse. */
+export function micRows(sweep, annual) {
+  return (sweep?.rows ?? []).map((r) => ({
+    ...r,
+    label: `${num(r.mic_kva, 0)} kVA`,
+    capacity: r.capacity_saved_gbp * annual,
+    dispatch: r.dispatch_change_gbp * annual,
+    excess: r.excess_change_gbp * annual,
+    value: r.value_gbp * annual,
+  }));
 }

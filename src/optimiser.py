@@ -73,6 +73,12 @@ Optional bess_params keys
                                 present it is used as-is (CSV mode resolves it
                                 from the MIC and its unit). When absent the cap
                                 is contracted_kva × power_factor.
+    excess_rate_gbp_per_kva_day
+                         float  turns on breach pricing: import above the cap
+                                becomes allowed but costs this rate on the
+                                month's worst breach, for every day in the month.
+    mic_margin_pct       float  planning buffer below the cap, % (default 0).
+                                Dispatch only; settlement uses the real MIC.
     power_factor         float  kW = kVA × PF, used only when import_cap_kw is
                                 absent (default 1.0).
 """
@@ -80,7 +86,7 @@ Optional bess_params keys
 import logging
 import math
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import pulp
@@ -176,6 +182,14 @@ def _validate_input_df(
         )
 
 
+def _billing_months(start_time: pd.Series) -> pd.Series:
+    """Calendar month of each period in UK local time, as a monthly Period."""
+    times = pd.to_datetime(start_time)
+    if times.dt.tz is not None:
+        times = times.dt.tz_convert("Europe/London").dt.tz_localize(None)
+    return times.dt.to_period("M")
+
+
 # ---------------------------------------------------------------------------
 # Core MILP solver — one chunk
 # ---------------------------------------------------------------------------
@@ -188,6 +202,7 @@ def _solve_chunk(
     chunk_idx: int,
     sp_duration_hrs: float = 0.5,
     n_sps_per_day: int = SPS_PER_DAY,
+    paid_mw: Optional[Dict[Any, float]] = None,
 ) -> pd.DataFrame:
     """
     Solve a single 3-day MILP chunk and return it with dispatch columns appended.
@@ -201,6 +216,8 @@ def _solve_chunk(
         forecast_price_col : column name used as optimiser price signal
         soc_start_mwh      : SOC (MWh) carried in from previous chunk
         chunk_idx          : 1-based index for logging only
+        paid_mw            : month → breach already priced in earlier chunks (MW).
+                             Updated in place. Only used with breach pricing on.
 
     Returns:
         chunk copy with columns: charge1_mw, charge2_mw, dis1_mw, dis2_mw, soc_mwh
@@ -230,6 +247,19 @@ def _solve_chunk(
         power_factor  = float(bess_params.get("power_factor", 1.0))
         import_cap_mw = float(bess_params["contracted_kva"]) * power_factor / 1000.0
 
+    excess_rate = bess_params.get("excess_rate_gbp_per_kva_day")
+    price_breach = excess_rate is not None
+    if price_breach:
+        margin = float(bess_params.get("mic_margin_pct", 0.0)) / 100.0
+        target_mw = import_cap_mw * (1.0 - margin)
+        power_factor = float(bess_params.get("power_factor", 1.0))
+        months = _billing_months(chunk["startTime"])
+        # £ per MW of new worst breach: kVA = kW ÷ PF, billed for the whole month.
+        breach_gbp_per_mw = {
+            m: float(excess_rate) * m.days_in_month * 1000.0 / power_factor
+            for m in months.unique()
+        }
+
     nd_mw = chunk["net_demand_mw"].values  # negative = on-site surplus
 
     # -----------------------------------------------------------------------
@@ -253,7 +283,7 @@ def _solve_chunk(
         # (Exogenous site demand may itself exceed capacity; we only bound the
         # controllable part, so this never makes the model infeasible.)
         import_headroom = max(import_cap_mw - demand_i, 0.0)
-        ub_chr2 = min(power_mw - ub_chr1, import_headroom)
+        ub_chr2 = power_mw - ub_chr1 if price_breach else min(power_mw - ub_chr1, import_headroom)
         chr2[i] = pulp.LpVariable(f"chr2_{i}", lowBound=0.0, upBound=ub_chr2)
 
         # dis1: offset site demand — zero when site has surplus
@@ -274,7 +304,10 @@ def _solve_chunk(
         # actually have been exported. Constrained below; penalised in the
         # objective so it settles at max(chr1 − curtailable, 0). At export_limit=0
         # the whole surplus is curtailable, so charging from it costs nothing.
-        opp[i] = pulp.LpVariable(f"opp_{i}", lowBound=0.0)
+        # Bounded because a negative export rate turns the penalty into a reward:
+        # unbounded, the solver drives opp to infinity and the chunk dispatches zero.
+        ub_opp = min(ub_chr1, export_limit_mw)
+        opp[i] = pulp.LpVariable(f"opp_{i}", lowBound=0.0, upBound=ub_opp)
 
         # mode: 1 = battery may charge this period, 0 = battery may discharge.
         # A real battery cannot do both at once; without this the LP can charge
@@ -330,6 +363,21 @@ def _solve_chunk(
         )
         prob += (opp[i] >= chr1[i] - curtailable_i, f"opp_def_{i}")
 
+    # C3d: Boundary import within the cap, plus any breach the month has paid
+    # for, plus any new breach. Only the month's worst breach is billed, so only
+    # the part above what is already paid costs anything.
+    new_breach = {}
+    if price_breach:
+        new_breach = {m: pulp.LpVariable(f"breach_{j}", lowBound=0.0)
+                      for j, m in enumerate(breach_gbp_per_mw)}
+        for i in range(n):
+            m = months.iloc[i]
+            prob += (
+                float(max(nd_mw[i], 0.0)) - dis1[i] + chr2[i]
+                <= target_mw + paid_mw.get(m, 0.0) + new_breach[m],
+                f"mic_{i}",
+            )
+
     # C4: End-of-chunk SOC target (±10% of capacity)
     prob += (soc[n] >= soc_target_mwh - soc_tol_mwh, "soc_end_lo")
     prob += (soc[n] <= soc_target_mwh + soc_tol_mwh, "soc_end_hi")
@@ -345,6 +393,8 @@ def _solve_chunk(
     # Objective
     # -----------------------------------------------------------------------
     terms = []
+    # Tariff runs price export separately; otherwise it follows the import price.
+    has_export_price = "export_forecast_gbp" in chunk.columns
     for i in range(n):
         price = chunk[forecast_price_col].iloc[i]
         duos  = chunk["duos_gbp_mwh"].iloc[i]
@@ -352,7 +402,8 @@ def _solve_chunk(
         nec   = chunk["nec_gbp_mwh"].iloc[i]
 
         import_rate = price + duos + nec
-        export_rate = price - gduos
+        export_price = chunk["export_forecast_gbp"].iloc[i] if has_export_price else price
+        export_rate = export_price - gduos
 
         terms.append( import_rate * dis1[i] * sp_duration_hrs)
         terms.append( export_rate * dis2[i] * sp_duration_hrs)
@@ -361,6 +412,9 @@ def _solve_chunk(
         # not all of it — surplus that could not be exported is free to absorb.
         terms.append(-export_rate * opp[i] * sp_duration_hrs)
         terms.append(-deg_cost * (total_chr(i) + total_dis(i)) * sp_duration_hrs)
+
+    for m, var in new_breach.items():
+        terms.append(-breach_gbp_per_mw[m] * var)
 
     prob += pulp.lpSum(terms)
 
@@ -394,6 +448,8 @@ def _solve_chunk(
     chunk["dis2_mw"]    = [_sv(dis2, i)     for i in range(n)]
     # Report end-of-period SOC for each row (soc[i+1] is the state leaving period i)
     chunk["soc_mwh"]    = [_sv(soc,  i + 1) for i in range(n)]
+    for m, var in new_breach.items():
+        paid_mw[m] = paid_mw.get(m, 0.0) + (pulp.value(var) or 0.0)
 
     logger.info(
         "Chunk %d solved: objective £%.2f, end SOC %.3f MWh",
@@ -467,7 +523,8 @@ def calculate_baseline(
 
     # Import rate and export rate — same convention as calculate_settlement()
     import_rate = price + df["duos_gbp_mwh"] + df["nec_gbp_mwh"]
-    export_rate = price - df["gduos_gbp_mwh"]
+    export_price = df["export_actual_gbp"] if "export_actual_gbp" in df.columns else price
+    export_rate = export_price - df["gduos_gbp_mwh"]
 
     # Import cost — only where site is net importing (net_demand_mwh > 0)
     df["baseline_import_cost_gbp"] = df["net_demand_mwh"].clip(lower=0) * import_rate
@@ -544,6 +601,7 @@ def run_optimiser(
 
     chunks_solved: List[pd.DataFrame] = []
     chunk_counter = 0
+    paid_mw: Dict[Any, float] = {}   # month's priced breach, carried across chunks
 
     for group in groups:
         group     = group.reset_index(drop=True)
@@ -565,6 +623,7 @@ def run_optimiser(
                 chunk_idx=chunk_counter,
                 sp_duration_hrs=sp_duration_hrs,
                 n_sps_per_day=n_sps_per_day,
+                paid_mw=paid_mw,
             )
 
             chunks_solved.append(solved)
@@ -579,6 +638,62 @@ def run_optimiser(
     out.attrs["forecast_price_col"] = forecast_price_col
 
     return out
+
+
+def apply_excess_capacity(
+    settled: pd.DataFrame,
+    mic_kva: float,
+    excess_rate_gbp_per_kva_day: float,
+    power_factor: float = 1.0,
+    sp_duration_hrs: float = 0.5,
+) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
+    """
+    Price excess capacity with and without the battery, month by month.
+
+    excess = (worst half-hour kVA − MIC) × days in month × excess rate
+
+    Uses the real MIC, never the planning margin. kVA = kW ÷ power factor, an
+    approximation of the statements' formula, which uses metered reactive power.
+
+    Each month's cost is booked on its last period, so every total that sums
+    these columns (bill, report, cumulative P&L) carries it:
+        baseline_net_gbp    += excess without the battery
+        net_settlement_gbp  += excess without − excess with
+
+    Returns (settled, one dict per month).
+    """
+    df = settled.copy()
+    months = _billing_months(df["startTime"])
+    without_mw = df["net_demand_mw"].clip(lower=0)
+    with_mw = without_mw - df["dis1_mw"] + df["charge2_mw"]
+
+    df["excess_wo_bess_gbp"] = 0.0
+    df["excess_w_bess_gbp"] = 0.0
+    rows = []
+    for month, idx in df.groupby(months, sort=True).groups.items():
+        # The DNO's test is half-hourly, so average any 15-minute data first.
+        hh = pd.to_datetime(df.loc[idx, "startTime"]).dt.floor("30min")
+        worst_wo = without_mw.loc[idx].groupby(hh).mean().max() * 1000.0 / power_factor
+        worst_w = with_mw.loc[idx].groupby(hh).mean().max() * 1000.0 / power_factor
+        days = month.days_in_month
+        cost_wo = max(worst_wo - mic_kva, 0.0) * days * excess_rate_gbp_per_kva_day
+        cost_w = max(worst_w - mic_kva, 0.0) * days * excess_rate_gbp_per_kva_day
+        last = idx[-1]
+        df.loc[last, "excess_wo_bess_gbp"] = cost_wo
+        df.loc[last, "excess_w_bess_gbp"] = cost_w
+        rows.append({
+            "month": str(month),
+            "days": days,
+            "mic_kva": mic_kva,
+            "worst_wo_bess_kva": round(float(worst_wo), 1),
+            "worst_w_bess_kva": round(float(worst_w), 1),
+            "excess_wo_bess_gbp": round(float(cost_wo), 2),
+            "excess_w_bess_gbp": round(float(cost_w), 2),
+        })
+
+    df["baseline_net_gbp"] += df["excess_wo_bess_gbp"]
+    df["net_settlement_gbp"] += df["excess_wo_bess_gbp"] - df["excess_w_bess_gbp"]
+    return df, rows
 
 
 def calculate_settlement(
@@ -692,8 +807,9 @@ def calculate_settlement(
 
     # Export rate: price - GDUoS (GDUoS stored negative — subtract adds the credit)
     # e.g. price=50, gduos=-88 → export_rate = 138 £/MWh
+    export_price = df["export_actual_gbp"] if "export_actual_gbp" in df.columns else df[actual_price_col]
     df["export_rate_gbp"] = (
-        df[actual_price_col]
+        export_price
         - df["gduos_gbp_mwh"]
     )
 

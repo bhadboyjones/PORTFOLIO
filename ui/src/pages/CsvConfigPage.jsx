@@ -1,15 +1,24 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
+import { DEFAULT_TARIFF_FORM, MAX_BANDS, bandRuns, energyOptions, exportOptions, tariffNote, tariffPayload, tariffProblem } from "../lib/tariff";
 import { parseCsvMeta, peakKw, dataIssues } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
-  { key: "UKPN", label: "UK Power Networks (SE / East / London)" },
-  { key: "NGED", label: "National Grid ED (SW / East Midlands)" },
-  { key: "NPG",  label: "Northern Powergrid (NE / Yorkshire)" },
-  { key: "ENWL", label: "Electricity North West (NW England)" },
-  { key: "SPEN", label: "SP Energy Networks (Scotland / Merseyside)" },
-  { key: "SSEN", label: "Scottish & Southern EN (N Scotland / South)" },
+  { key: "EPN",    label: "UK Power Networks: Eastern" },
+  { key: "LPN",    label: "UK Power Networks: London" },
+  { key: "SPN",    label: "UK Power Networks: South East" },
+  { key: "EMID",   label: "NGED: East Midlands" },
+  { key: "WMID",   label: "NGED: West Midlands" },
+  { key: "SWEST",  label: "NGED: South West" },
+  { key: "SWALES", label: "NGED: South Wales" },
+  { key: "NPGN",   label: "Northern Powergrid: Northeast" },
+  { key: "NPGY",   label: "Northern Powergrid: Yorkshire" },
+  { key: "ENWL",   label: "Electricity North West" },
+  { key: "SEPD",   label: "SSEN: Southern England" },
+  { key: "SHEPD",  label: "SSEN: North Scotland" },
+  { key: "SPD",    label: "SP Energy Networks: Central and South Scotland" },
+  { key: "SPM",    label: "SP Energy Networks: Merseyside and North Wales" },
 ];
 
 
@@ -55,6 +64,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const [micKva, setMicKva]           = useState("");
   const [micUnit, setMicUnit]         = useState("kva");
   const [powerFactor, setPowerFactor] = useState("1");
+  const [micMargin, setMicMargin]     = useState("5");
+  const [tariff, setTariff]           = useState(DEFAULT_TARIFF_FORM);
 
   const [powers, setPowers]           = useState(["1", "2", "3"]);
   const [capacities, setCapacities]   = useState(["1", "2", "4"]);
@@ -101,6 +112,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const [confirmData, setConfirmData] = useState(false);
   useEffect(() => { setConfirmData(false); }, [file, inputUnit]);
   const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
+  const marginValid       = parseFloat(micMargin) >= 0 && parseFloat(micMargin) <= 50;
+  const tariffError       = tariffProblem(tariff);
   const micValid          = micKva === "" || parseFloat(micKva) > 0;
   // Data check (mirrors the server): a unit mistake or a meter spike blocks the
   // run until fixed or confirmed; an export-only site needs its MIC entered.
@@ -108,7 +121,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const needsMic          = issues.some((i) => i.code === "mic_required") || jobErrorCode === "mic_required";
   const needsConfirm      = issues.some((i) => i.code === "data_check") || jobErrorCode === "data_check";
   const dataOk            = !needsMic && (!needsConfirm || confirmData);
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid && dataOk;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && marginValid && !tariffError && micValid && dataOk;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -135,6 +148,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         ragAmberEveningEnd:   d.rag_amber_evening_end    || "23:00",
         ragWeekendAmberStart: d.rag_weekend_amber_start  || "",
         ragWeekendAmberEnd:   d.rag_weekend_amber_end    || "",
+        ragWeekdayRed:        d.rag_weekday_red          ?? [],
+        ragWeekdayAmber:      d.rag_weekday_amber        ?? [],
       }));
       setAdvancedDirty(false);
       setRagWarning(d.rag_warning || null);
@@ -224,6 +239,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
       if (micKva) fd.append("contracted_kva", micKva);
       fd.append("mic_unit", micUnit);
       fd.append("power_factor", powerFactor || "1");
+      fd.append("mic_margin_pct", micMargin || "0");
+      fd.append("tariff_json", JSON.stringify(tariffPayload(tariff)));
       if (confirmData) fd.append("confirm_data", "true");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
@@ -256,6 +273,11 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
       fd.append("bess_deg_cost_gbp_mwh", advanced.degCostGbpMwh || "8");
 
       // Weekday DUoS band shape actually used — drives the results-page tape
+      // Same rule as the API: an untouched form means the DNO's full schedule.
+      const fullRed = advanced.ragWeekdayRed ?? [], fullAmber = advanced.ragWeekdayAmber ?? [];
+      const untouched = fullRed[0]?.join() === `${advanced.ragRedStart},${advanced.ragRedEnd}`
+        && fullAmber[0]?.join() === `${advanced.ragAmberMorningStart},${advanced.ragAmberMorningEnd}`
+        && fullAmber[1]?.join() === `${advanced.ragAmberEveningStart},${advanced.ragAmberEveningEnd}`;
       const tapeBands = bandsFromWindows({
         redStart:          advanced.ragRedStart          || "16:00",
         redEnd:            advanced.ragRedEnd            || "19:00",
@@ -263,6 +285,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         amberMorningEnd:   advanced.ragAmberMorningEnd   || "16:00",
         amberEveningStart: advanced.ragAmberEveningStart || "19:00",
         amberEveningEnd:   advanced.ragAmberEveningEnd   || "23:00",
+        extraRed:          untouched ? fullRed.slice(1) : [],
+        extraAmber:        untouched ? fullAmber.slice(2) : [],
       });
 
       const { job_id } = await postRunCsv(fd);
@@ -400,7 +424,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         </Card>
 
         {/* ── Site Configuration ──────────────────────── */}
-        <Card label="Site and tariff">
+        <Card label="Site and network charges">
           <div className="adv-grid-2" style={{ gap: "1rem" }}>
 
             {/* DNO */}
@@ -505,6 +529,20 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               </div>
             </div>
 
+            {/* MIC safety margin */}
+            <div>
+              <FieldLabel htmlFor={`${uid}-f4`}>MIC safety margin</FieldLabel>
+              <SuffixInput id={`${uid}-f4`} type="number" step="1" min="0" max="50"
+                value={micMargin}
+                onChange={(e) => setMicMargin(e.target.value)}
+                suffix="%" />
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" }}>
+                {!marginValid
+                  ? "Margin must be between 0 and 50%."
+                  : "Our planning buffer, not a DNO allowance. The battery aims to stay this far below the MIC."}
+              </div>
+            </div>
+
             {/* Thermal generation toggle */}
             <div style={{ gridColumn: "1 / -1" }}>
               <FieldLabel id={`${uid}-chp`}>On-site thermal generation? (CHP, genset, gas engine)</FieldLabel>
@@ -553,6 +591,34 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
 
           </div>
         </Card>
+
+        {/* ── Price Exposure ──────────────────────────── */}
+        <Card label="Price signal">
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            {[
+              { value: "da",        label: "Day-ahead (DA)",     desc: "Elexon market index, a day-ahead proxy" },
+              { value: "imbalance", label: "Imbalance (system)", desc: "Settled against the system imbalance price" },
+            ].map(({ value, label, desc }) => {
+              const active = priceExposure === value;
+              return (
+                <button key={value} className="lift" aria-pressed={active} onClick={() => setPriceExposure(value)} style={{
+                  flex: 1, minWidth: 220, padding: "0.85rem 1rem",
+                  border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
+                  borderRadius: "var(--radius-control)",
+                  background: active ? "var(--raised)" : "var(--surface)",
+                  cursor: "pointer", textAlign: "left", font: "inherit",
+                }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
+                    {label}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
+        <TariffCard tariff={tariff} onChange={setTariff} priceExposure={priceExposure} />
 
         {/* ── BESS Configuration ──────────────────────── */}
         <Card label="Battery sizes">
@@ -699,32 +765,6 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
             )}
           </div>
 
-        </Card>
-
-        {/* ── Price Exposure ──────────────────────────── */}
-        <Card label="Price signal">
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            {[
-              { value: "da",        label: "Day-ahead (DA)",     desc: "Elexon market index, a day-ahead proxy" },
-              { value: "imbalance", label: "Imbalance (system)", desc: "Settled against the system imbalance price" },
-            ].map(({ value, label, desc }) => {
-              const active = priceExposure === value;
-              return (
-                <button key={value} className="lift" aria-pressed={active} onClick={() => setPriceExposure(value)} style={{
-                  flex: 1, minWidth: 220, padding: "0.85rem 1rem",
-                  border: active ? "1px solid var(--ink)" : "1px solid var(--control)",
-                  borderRadius: "var(--radius-control)",
-                  background: active ? "var(--raised)" : "var(--surface)",
-                  cursor: "pointer", textAlign: "left", font: "inherit",
-                }}>
-                  <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{desc}</div>
-                </button>
-              );
-            })}
-          </div>
         </Card>
 
         {/* ── Advanced ────────────────────────────────── */}
@@ -1002,6 +1042,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               exportLimits.some((v) => v !== "" && parseFloat(v) < 0) ? "export limits can't be negative" : validExportCount === 0 && "enter at least one export limit (0 for none)",
               scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
               !pfValid && "set the power factor between 0.5 and 1.0",
+              !marginValid && "set the MIC safety margin between 0 and 50%",
+              tariffError && tariffError.toLowerCase(),
               !micValid && "enter a MIC above zero, or leave it blank",
               needsMic && "enter the site's MIC (it never imports in this data)",
               needsConfirm && !needsMic && !confirmData && "fix the data or tick \u201cMy data is correct\u201d",
@@ -1016,6 +1058,134 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
 
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+function TariffCard({ tariff, onChange, priceExposure }) {
+  const uid = useId();
+  const index = priceExposure === "imbalance" ? "Imbalance" : "Day-ahead";
+  const energyOpts = energyOptions(index);
+  const set = (patch) => onChange({ ...tariff, ...patch });
+  const setBand = (i, patch) => set({ bands: tariff.bands.map((b, n) => (n === i ? { ...b, ...patch } : b)) });
+  const energy = energyOpts.find((o) => o.value === tariff.energyType);
+  const note = tariffNote(tariff);
+  const hint = { fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" };
+  const rateField = (id, label, value, key, suffix = "p/kWh") => (
+    <div>
+      <FieldLabel htmlFor={`${uid}-${id}`}>{label}</FieldLabel>
+      <SuffixInput id={`${uid}-${id}`} type="number" step="0.01" value={value}
+        onChange={(e) => set({ [key]: e.target.value })} suffix={suffix} />
+    </div>
+  );
+  const bundle = (key, label) => (
+    <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+      <input type="checkbox" checked={tariff[key]} onChange={(e) => set({ [key]: e.target.checked })} />
+      {label}
+    </label>
+  );
+
+  return (
+    <Card label="Tariff">
+      <div className="adv-grid-2" style={{ gap: "1rem" }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <FieldLabel htmlFor={`${uid}-energy`}>How is your energy priced?</FieldLabel>
+          <select id={`${uid}-energy`} value={tariff.energyType} onChange={(e) => set({ energyType: e.target.value })} style={selectStyle(true)}>
+            {energyOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div style={hint}>{energy.hint}</div>
+        </div>
+
+        {tariff.energyType === "percent" && rateField("pct", `Share of ${index.toLowerCase()}`, tariff.energyPercent, "energyPercent", "%")}
+        {tariff.energyType === "adder" && rateField("adder", "Margin", tariff.energyAdder, "energyAdder")}
+        {tariff.energyType === "flat" && rateField("flat", "Flat rate", tariff.energyFlat, "energyFlat")}
+        {tariff.energyType === "time_bands" && (
+          <>
+            {tariff.bands.map((b, i) => (
+              <div key={i} style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "auto auto 1fr auto", gap: "0.5rem", alignItems: "end" }}>
+                <div>
+                  <FieldLabel htmlFor={`${uid}-bs${i}`}>Start</FieldLabel>
+                  <TimeInput id={`${uid}-bs${i}`} label={`Band ${i + 1} start`} value={b.start} onChange={(v) => setBand(i, { start: v })} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor={`${uid}-be${i}`}>End</FieldLabel>
+                  <TimeInput id={`${uid}-be${i}`} label={`Band ${i + 1} end`} value={b.end} onChange={(v) => setBand(i, { end: v })} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor={`${uid}-br${i}`}>{`Band ${i + 1} rate`}</FieldLabel>
+                  <SuffixInput id={`${uid}-br${i}`} type="number" step="0.01" value={b.rate}
+                    onChange={(e) => setBand(i, { rate: e.target.value })} suffix="p/kWh" />
+                </div>
+                {tariff.bands.length > 1 && (
+                  <button type="button" className="btn-secondary" aria-label={`Remove band ${i + 1}`}
+                    onClick={() => set({ bands: tariff.bands.filter((_, n) => n !== i) })}>Remove</button>
+                )}
+              </div>
+            ))}
+            {tariff.bands.length < MAX_BANDS && (
+              <div style={{ gridColumn: "1 / -1" }}>
+                <button type="button" className="btn-secondary"
+                  onClick={() => set({ bands: [...tariff.bands, { start: "", end: "", rate: "" }] })}>Add a band</button>
+              </div>
+            )}
+            {rateField("other", "Rate at all other times", tariff.otherRate, "otherRate")}
+            <BandPreview tariff={tariff} />
+          </>
+        )}
+
+        <fieldset style={{ gridColumn: "1 / -1", border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
+          <legend style={{ fontSize: 14, fontWeight: 500, padding: 0, marginBottom: 8 }}>Which charges are already inside your rate?</legend>
+          {bundle("duosBundled", "DUoS unit and fixed charges")}
+          {bundle("capacityBundled", "Capacity and excess capacity")}
+          {bundle("policyBundled", "Policy and system charges")}
+          <div style={hint}>Leave these unticked if they appear as separate lines on your bill. flexiq won't add a ticked charge again.</div>
+        </fieldset>
+        {note && <p role="status" style={{ gridColumn: "1 / -1", margin: 0, fontSize: 14, color: "var(--pill-warning-ink)" }}>{note}</p>}
+
+        <div style={{ gridColumn: "1 / -1" }}>
+          <FieldLabel htmlFor={`${uid}-export`}>How are your exports paid?</FieldLabel>
+          <select id={`${uid}-export`} value={tariff.exportType} onChange={(e) => set({ exportType: e.target.value })} style={selectStyle(true)}>
+            {exportOptions(index).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        {tariff.exportType === "percent" && rateField("xpct", `Share of ${index.toLowerCase()}`, tariff.exportPercent, "exportPercent", "%")}
+        {tariff.exportType === "fee" && rateField("xfee", "Fee", tariff.exportFee, "exportFee")}
+        {tariff.exportType === "fixed" && rateField("xfix", "Fixed export rate", tariff.exportFixed, "exportFixed")}
+        <div style={{ gridColumn: "1 / -1" }}>
+          {bundle("gduosPassedOn", "The GDUoS export credit reaches me")}
+          <div style={hint}>The DNO pays this to your supplier. Some export contracts pass it on and some don't.</div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// What the entered bands mean across a day, using the same rule as the API:
+// each half-hour takes the rate of the band it starts in; earlier bands win.
+function BandPreview({ tariff }) {
+  const { slots, runs } = bandRuns(tariff);
+  if (!runs.length) return null;
+  const rates = runs.map((r) => r.rate).filter((r) => r != null);
+  const lo = Math.min(...rates), hi = Math.max(...rates);
+  const shade = (r) => (r == null ? 0.08 : 0.25 + (hi > lo ? (0.75 * (r - lo)) / (hi - lo) : 0.4));
+  return (
+    <div style={{ gridColumn: "1 / -1" }}>
+      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Your day, half-hour by half-hour</div>
+      <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: "repeat(48, 1fr)", gap: 1 }}>
+        {slots.map((r, i) => <span key={i} style={{ height: 16, background: "var(--data)", opacity: shade(r) }} />)}
+      </div>
+      <div aria-hidden="true" style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+        <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+      </div>
+      <ul className="tnum" style={{ margin: "8px 0 0", padding: 0, listStyle: "none", fontSize: 14 }}>
+        {runs.map((r) => (
+          <li key={r.start} style={{ display: "flex", gap: 12 }}>
+            <span style={{ minWidth: 110 }}>{r.start} to {r.end}</span>
+            <span style={{ minWidth: 70 }}>{r.hours} h</span>
+            <span>{r.rate == null ? "Rate needed" : `${r.rate}p/kWh`}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function Card({ label, children }) {
   return (

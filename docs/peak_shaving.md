@@ -7,9 +7,9 @@ slice 1 commit, so check them against the code before relying on them.*
 | Slice | What | Status |
 |---|---|---|
 | 1 | Explicit MIC + power factor inputs; import cap = MIC × PF; no simultaneous charge/discharge | **Built 2026-10-25** |
-| 2 | Breach variable, monthly worst-breach carry across chunks, excess-capacity settlement | Queued, needs step 0 rates |
-| 3 | MIC sweep with pre-screen | Queued |
-| 4 | Results UI: value-vs-MIC curve, breach table, headroom vs battery split | Queued |
+| 2 | Breach variable, monthly worst-breach carry across chunks, excess-capacity settlement | **Built 2026-11-01** |
+| 3 | MIC sweep | **Built 2026-11-01** |
+| 4 | Results UI: value by MIC, breach table, headroom note, add to investment case | **Built 2026-11-01** |
 
 ---
 
@@ -126,22 +126,16 @@ model.
 The £1 gap is HiGHS's default MIP optimality gap. A 12-scenario run takes about
 35 s longer locally, and Render's free tier will be slower than that.
 
-## 4. Known wrong (found while building slice 1, not fixed)
+## 4. Fixed: negative export rate blanked whole chunks
 
-**Negative export rate makes a whole chunk unbounded, so it dispatches zero.**
+`opp[i]` had no upper bound and enters the objective as `−export_rate × opp`. When
+`export_rate = price − gduos` went negative, that penalty became a reward, the solver
+drove `opp` to infinity, HiGHS reported the problem unbounded, and `_solve_chunk`
+filled the whole 3-day chunk with zeros.
 
-- `opp[i]` has no upper bound (`src/optimiser.py:259`) and enters the objective
-  as `−export_rate × opp` (`src/optimiser.py:344`).
-- When `export_rate = price − gduos` goes negative (wholesale price below minus
-  the GDUoS credit, which happens on negative-price days), that penalty becomes
-  a reward and the solver drives `opp` to infinity.
-- HiGHS returns "primal infeasible or unbounded", and `_solve_chunk` fills the
-  **whole 3-day chunk with zeros**. The only trace is a log warning.
-- Effect: benefit is understated (conservative) for every chunk containing such
-  a period. The tests miss it because their prices are all positive.
-- Found by: a synthetic year with 3% of periods at −£20/MWh. Every chunk
-  failed, in the old model as well as the new one.
-- Fix options are in [roadmap.md](roadmap.md) (smaller queued items).
+Fixed 2026-11-01 with `opp ≤ min(ub_chr1, export_limit_mw)` in `src/optimiser.py`.
+Numbers: [worked_examples.md §7](worked_examples.md). Test:
+`test_negative_export_rate_does_not_blank_the_chunk`.
 
 ## 5. Tests
 
@@ -160,12 +154,87 @@ The £1 gap is HiGHS's default MIP optimality gap. A 12-scenario run takes about
 
 The first two fail against the pre-slice-1 optimiser.
 
-## 6. Next: slice 2 design (agreed 2026-10-25, not built)
+## 6. Slices 2 to 4 as built
+
+**Breach pricing** (`_solve_chunk`, `src/optimiser.py`). Only on when the user enters
+a MIC; an assumed MIC is the site's own peak, so it can't be breached.
+
+```
+demand − dis1 + chr2 ≤ MIC cap × (1 − margin) + month's paid breach + new breach
+cost of new breach = excess rate × days in month × kW ÷ PF
+```
+
+`paid_mw` carries each month's breach from chunk to chunk, so a smaller peak later in
+the month costs nothing. With pricing on, grid charging may cause a breach if that
+pays, because `chr2` is no longer capped by headroom.
+
+**Settlement** (`apply_excess_capacity`). Uses the real MIC, not the margin, and takes
+the worst half-hour per calendar month, with and without the battery. Each month's
+cost is booked on its last period so every total carries it.
+
+**Sweep** (`src/mic_sweep.py`, `_sweep_mic`). Runs on the scenario with the highest
+net benefit only. Candidates: natural peak minus 0, 25, 50, 75, 100% of the smaller of
+battery kVA and 40% of peak. The 40% limit is a change from the agreed design, made
+because a 2 MW battery on a 1,098 kVA peak gave 598 and 98 kVA.
+
+```
+value = capacity saved + change in dispatch value − change in excess paid
+```
+
+**Measured**, real year, NPG LV, 1 MW / 2 MWh, peak 1,098 kW, 3.82p excess, 5% margin:
+
+| MIC (kVA) | Dispatch | Excess without | Excess with | Months over, with |
+|---|---:|---:|---:|---:|
+| 1,043 | £32,211 | £821 | £90 | 2 |
+| 934 | £28,991 | £2,482 | £566 | 6 |
+| 769 | £25,507 | £4,974 | £2,227 | 11 |
+
+Excess at 1× is cheap against arbitrage, so the solver sometimes pays it. Solve time
+for that year rose from about 4 s to 7 to 10 s per scenario on a Mac.
+
+**Investment case.** The tickbox sends the capacity saving as a fixed benefit: no
+dispatch efficiency cut and no capacity fade, because a lower MIC is a contract term.
+It still escalates. Dispatch and excess changes stay with the backtest benefit.
+
+**Report.** The XLSX gains "MIC sweep" and "Months over MIC" sheets when a MIC is entered.
+
+**Known limits.**
+- Chunks are 3 days, so the battery can't hold charge for a peak in the next chunk.
+- kVA uses a fixed power factor; statements use metered reactive power.
+- Capacity saved by a lower MIC starts in the investment case from year 1, though a
+  real reduction starts the billing period after it's agreed.
+- The MEC is not priced.
+
+## 7. Original slice 2 design (agreed 2026-10-25)
 
 - **Step 0 (research):** excess capacity rate and billing period per DNO from
-  the 2026/27 LC14 statements. UKPN charges 1× the capacity rate; NGED guidance
-  says 2–3× ([gb-network-charging notes](gb-network-charging/README.md)).
-  Verify every one at the primary source.
+  the 2026/27 LC14 statements. Checked 2026-11-01: Eastern Power Networks and all
+  All 14 licence areas publish excess equal to capacity at LV and HV. This overrides
+  the "2 to 3×" trade claims.
+  Ofgem's DCP161 decision removed the customer-contribution discount from excess
+  charges and sets no multiple.
+  Verify every one at the primary source. Eastern Power Networks 2026/27 v1.5,
+  read 2026-11-01:
+  - §2.37: the chargeable capacity is the MIC, for each billing period.
+  - §2.41: excess is charged on MIC against actual capacity used, at the excess
+    p/kVA/day rate, "for the full duration of the billing period in which the
+    breach occurs".
+  - §2.41 to §2.43: for each half-hour, `max(2 × √(AI² + max(RI, RE)²) − MIC, 0)`,
+    with AI in kWh and RI, RE in kVArh. The highest value in the period applies.
+    This uses metered reactive power, so flexiq's fixed power factor is an
+    approximation.
+  - §2.38 and §2.39: one MIC reduction per 12 months, from the next billing period.
+    The old capacity may not come back without reinforcement charges.
+  - No statement read defines the billing period. UKPN, NGED, NPG and ENWL say "the
+    full duration of the billing period"; SSEN says "the full month". flexiq uses
+    calendar months. No statement gives a kW to kVA rule for a MIC.
+  - Annex 1 prices LV Site Specific capacity and excess capacity both at 8.04p/kVA/day
+    (1×); HV both at 5.31p. The excess rate is a published figure, so step 0 stores it
+    per tariff rather than as a multiple.
+  - The same section charges exceeded export capacity against the MEC, so the
+    export limit needs the same treatment.
+  NGED says a reduction is free, starts the month after agreement, and can't be
+  backdated ([NGED](https://connections.nationalgrid.co.uk/how-to-apply-for-a-reduction-in-capacity)).
 - **Constraint:** `demand − dis1 + chr2 ≤ MIC × PF × (1 − margin) + breach`,
   with `breach ≥ 0`. Breach is chosen by the solver and priced at
   `excess rate × days in the month` on the month's new worst breach only.

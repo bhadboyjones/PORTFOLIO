@@ -10,6 +10,8 @@ import SizeChart from "../components/results/SizeChart";
 import TypicalDay from "../components/results/TypicalDay";
 import OperationDetail from "../components/results/OperationDetail";
 import Card from "../components/results/Card";
+import MicCard from "../components/results/MicCard";
+import BreachTable from "../components/results/BreachTable";
 import { InvestmentInputs, ScopeDetails } from "../components/results/AssumptionsPanel";
 import WhyCard from "../components/results/WhyCard";
 import { explain } from "../lib/explain";
@@ -34,7 +36,19 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
   const nDays = coverageDays(dataPeriod, scenarios);
 
   const [form, setForm] = useState(defaultInvestmentForm);
-  const inv = useInvestment(scenarios, nDays, form);
+  const sweep = mode === "csv" ? dataPeriod?.mic_sweep : null;
+  const [micApplied, setMicApplied] = useState(false);
+  const micUplift = useMemo(() => {
+    const row = sweep?.rows.find((r) => r.mic_kva === sweep.best_mic_kva);
+    return micApplied && row
+      ? {
+          key: `${sweep.scenario_label}|${sweep.export_limit_mw}`,
+          dispatch: row.dispatch_change_gbp - row.excess_change_gbp,
+          capacity: row.capacity_saved_gbp,
+        }
+      : null;
+  }, [sweep, micApplied]);
+  const inv = useInvestment(scenarios, nDays, form, micUplift);
   const lifetime = inv.assumptions?.lifetime_yrs ?? 15;
   const effPct = inv.assumptions?.dispatch_efficiency_pct ?? 85;
 
@@ -150,6 +164,9 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
             <SizeChart scenarios={scenarios} byKey={inv.byKey} available={inv.available} />
             {selected && <TypicalDay scenario={selected} label={selLabel} bands={mode === "csv" ? bands : null} />}
           </div>
+
+          {sweep && sweep.rows.length > 0 && <MicCard sweep={sweep} annual={annual} applied={micApplied} onApply={setMicApplied} />}
+          {selected?.capacity_breaches?.length > 0 && <BreachTable months={selected.capacity_breaches} label={selLabel} />}
 
           {selected && <OperationDetail scenario={selected} label={selLabel} />}
         </div>

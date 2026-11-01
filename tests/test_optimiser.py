@@ -164,3 +164,29 @@ def test_explicit_import_cap_kw_overrides_kva_conversion():
     dfb = calculate_baseline(df, thermal_mc_gbp_mwh=70.0, export_limit_mw=0.5)
     out = run_optimiser(dfb, {**_bess(contracted_kva=1200.0), "import_cap_kw": 1080.0})
     assert 0 < _max_meter_import(out) <= 1.08 + 1e-6
+
+
+def _negative_export_frame(n=96):
+    # Midday surplus at −£20/MWh with a £5/MWh GDUoS credit, so the export rate
+    # is −£15/MWh, then an evening peak worth discharging into.
+    df = _frame(n=n)
+    midday = (np.arange(n) % 48 >= 20) & (np.arange(n) % 48 < 30)
+    evening = (np.arange(n) % 48 >= 34) & (np.arange(n) % 48 < 40)
+    df.loc[midday, ["da_forecast_gbp", "da_actual_gbp", "imb_forecast_gbp", "imb_actual_gbp"]] = -20.0
+    df.loc[evening, ["da_forecast_gbp", "da_actual_gbp", "imb_forecast_gbp", "imb_actual_gbp"]] = 200.0
+    df.loc[midday, "net_demand_mw"] = -0.6
+    df.loc[~midday, "net_demand_mw"] = 0.8
+    df["net_demand_mwh"] = df["net_demand_mw"] * 0.5
+    return df
+
+
+def test_negative_export_rate_does_not_blank_the_chunk():
+    # opp was unbounded, so a negative export rate rewarded it without limit:
+    # the solver reported unbounded and the whole 3-day chunk dispatched zero.
+    for export_limit in (0.0, 0.5):
+        df = _negative_export_frame()
+        bess = _bess(export_limit=export_limit)
+        dfb = calculate_baseline(df, thermal_mc_gbp_mwh=70.0, export_limit_mw=export_limit)
+        out = run_optimiser(dfb, bess, forecast_price_col="da_forecast_gbp", actual_price_col="da_actual_gbp")
+        assert (out["dis1_mw"] + out["dis2_mw"]).sum() > 0
+        assert (out["charge1_mw"] + out["charge2_mw"]).sum() > 0

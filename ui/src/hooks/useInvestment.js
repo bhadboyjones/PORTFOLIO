@@ -64,7 +64,7 @@ export function sizeLabel(s) {
 export const scenarioKey = (s) => `${s.scenario_label}|${s.export_limit_mw}`;
 
 /** Evaluates every scenario's investment case; re-runs 350ms after edits. */
-export default function useInvestment(scenarios, nDays, form) {
+export default function useInvestment(scenarios, nDays, form, micUplift = null) {
   const [result, setResult]   = useState(null);
   const [error, setError]     = useState(null);
   const [loading, setLoading] = useState(false);
@@ -87,14 +87,17 @@ export default function useInvestment(scenarios, nDays, form) {
           export_limit_mw:    s.export_limit_mw,
           power_mw:           d.power_mw,
           capacity_mwh:       d.capacity_mwh,
-          period_benefit_gbp: s.net_benefit_gbp,
+          // A chosen MIC cut adds to the scenario it was swept on: dispatch and
+          // excess changes with the backtest, the capacity saving as a fixed sum.
+          period_benefit_gbp: s.net_benefit_gbp + (micUplift?.key === scenarioKey(s) ? micUplift.dispatch : 0),
+          period_fixed_benefit_gbp: micUplift?.key === scenarioKey(s) ? micUplift.capacity : 0,
           // Wear is added back server-side: capex already pays for the
           // battery, so charging wear in the cashflow too would double-count.
           period_wear_cost_gbp: Math.max(s.deg_cost_gbp ?? 0, 0),
         };
       })
       .filter(Boolean),
-    [scenarios]
+    [scenarios, micUplift]
   );
 
   useEffect(() => {
