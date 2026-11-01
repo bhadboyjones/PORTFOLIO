@@ -77,3 +77,15 @@ test("a flat all-inclusive tariff says the battery has nothing to trade", async 
   await page.getByRole("button", { name: /warning/i }).first().click({ timeout: 3000 }).catch(() => {});
   await expect(page.getByText(/charges one import rate all year/)).toBeVisible({ timeout: 30_000 });
 });
+
+test("landing shows the live price, and works without it", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText(/GB market price £[\d,.]+\/MWh at \d\d:\d\d/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".live-line polyline")).toBeAttached();
+  if (process.env.SHOT) { await page.waitForTimeout(2600); await page.screenshot({ path: process.env.SHOT.replace(".png", "-live.png") }); }
+
+  await page.route("**/data.elexon.co.uk/**", (r) => r.abort());
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Upload meter data" })).toBeVisible();
+  await expect(page.locator(".live-line")).toHaveCount(0);
+});

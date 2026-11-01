@@ -131,7 +131,6 @@ battery exports, and battery routes such as tolls, floors and revenue share.
 | DNO rates refresh | `src/duos_rates.py` holds 2026-27. Final charges publish ~15 months ahead (EPN 2026/27 v1.0: 24 Dec 2024), so 2027/28 is likely already out — check. Refresh window is Dec–Jan, not April; fix the file comment. |
 | **Site bill view** | Results as a real bill: lines without/with battery/change (energy, DUoS, non-energy, standing and capacity), wear below the bill, then a "how the battery got there" panel. Needs energy, DUoS and non-energy split per scenario in the serialiser. Decide: backtest label or scaled to realistic. Numbers: [worked_examples.md §8](worked_examples.md). |
 | Tariff follow-ups | Built: [tariff_types.md](tariff_types.md). Left: a SEG option with its above-zero floor, weekend time bands, and a saved tariff per site. |
-| Live landing background | Idea from 2026-11-01: real GB grid data (price, demand or frequency) drawn behind the landing page only, never behind forms or results. |
 | **Bill lines from real samples** | kWh × rate = £ on each line; non-energy split into RO/FiT/CfD, CM, BSUoS, CCL; capacity in kVA-days; add fixed TNUoS residual by band; exclude VAT or show it separately. Refresh CCL (£7.75/MWh looks stale). |
 | **2027/28 tariff year** | Published ahead of April 2027 (ENWL v1.0 31 Dec 2025, SSEN 31 Jan 2026); NPG not yet confirmed. Add as a selectable year; fix the "late March / early April 2027" comment in `src/duos_rates.py`. |
 | Staleness banner | Warn on results when today is outside the loaded charge year. |

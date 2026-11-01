@@ -470,3 +470,25 @@ details[open] > summary .chevron { transform: rotate(180deg); }
   .recharts-tooltip-item, .recharts-tooltip-label { color: var(--ink) !important; }
   .recharts-label { fill: #a1a1a6; }
 }
+
+/* Landing: live price line behind the title. Slow first draw, then still. */
+.live-line {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: 36%;
+  height: 104px;
+  pointer-events: none;
+  opacity: 0.6;
+  overflow: visible;
+}
+.live-line polyline {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 1;
+  animation: live-draw 2.4s ease-out both;
+}
+@media (max-width: 760px) { .live-line { display: none; } }
+@keyframes live-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .live-line polyline { animation: none; }
+}
