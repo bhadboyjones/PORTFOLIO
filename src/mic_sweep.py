@@ -3,21 +3,24 @@ MIC sweep: how far can a site cut its agreed import capacity, and what is it wor
 
 Candidates are anchored on the site's natural peak, stepped down by shares of
 the battery's power. 0% is the natural peak: existing headroom, no battery needed.
+A battery can't usefully take more than MAX_CUT_SHARE off the peak in this sweep,
+so an oversized battery gets finer steps rather than candidates near zero.
 """
 
 from typing import Any, Dict, List
 
 SWEEP_SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)
+MAX_CUT_SHARE = 0.4
 
 
 def mic_candidates(
     peak_kva: float, power_mw: float, power_factor: float, current_kva: float,
 ) -> List[Dict[str, float]]:
     """Candidate MICs below the current one, as {"share", "mic_kva"}, highest first."""
-    battery_kva = power_mw * 1000.0 / power_factor
+    span_kva = min(power_mw * 1000.0 / power_factor, peak_kva * MAX_CUT_SHARE)
     out = []
     for share in SWEEP_SHARES:
-        kva = round(peak_kva - share * battery_kva)
+        kva = round(peak_kva - share * span_kva)
         if 0 < kva < current_kva:
             out.append({"share": share, "mic_kva": float(kva)})
     return out

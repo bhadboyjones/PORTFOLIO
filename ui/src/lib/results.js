@@ -158,3 +158,15 @@ export function progressLabel(raw) {
   const m = /([\d.]+)\s*MW\s*\/\s*([\d.]+)\s*MWh\s*\|\s*Export\s*([\d.]+)\s*MW/i.exec(raw || "");
   return m ? `${m[1]} MW / ${m[2]} MWh, ${m[3]} MW export` : raw;
 }
+
+/** MIC sweep rows scaled to a year; excess is shown as a cost change, so + is worse. */
+export function micRows(sweep, annual) {
+  return (sweep?.rows ?? []).map((r) => ({
+    ...r,
+    label: `${num(r.mic_kva, 0)} kVA`,
+    capacity: r.capacity_saved_gbp * annual,
+    dispatch: r.dispatch_change_gbp * annual,
+    excess: r.excess_change_gbp * annual,
+    value: r.value_gbp * annual,
+  }));
+}

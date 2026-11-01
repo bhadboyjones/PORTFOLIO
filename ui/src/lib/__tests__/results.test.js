@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   billRows, averageDay, bandRuns, aggregateDaily, dailyCumulative,
-  coverageDays, finding, labelOf,
+  coverageDays, finding, labelOf, micRows,
 } from "../results";
 import { MINUS } from "../../format";
 
@@ -157,5 +157,16 @@ describe("progressLabel", () => {
   it("formats the backend's scenario label", () => {
     expect(progressLabel("2MW / 1MWh | Export 0 MW")).toBe("2 MW / 1 MWh, 0 MW export");
     expect(progressLabel("something else")).toBe("something else");
+  });
+});
+
+describe("micRows", () => {
+  it("scales the sweep to a year", () => {
+    const sweep = { rows: [{ mic_kva: 800, capacity_saved_gbp: 100, dispatch_change_gbp: -20, excess_change_gbp: 5, value_gbp: 75 }] };
+    const [r] = micRows(sweep, 2);
+    expect(r).toMatchObject({ capacity: 200, dispatch: -40, excess: 10, value: 150, label: "800 kVA" });
+  });
+  it("is empty without a sweep", () => {
+    expect(micRows(null, 1)).toEqual([]);
   });
 });

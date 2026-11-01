@@ -41,3 +41,21 @@ test("upload, run, read the answer, refresh and go back", async ({ page }) => {
   await page.goBack();
   await expect(page).toHaveURL(/#\/upload$/);
 });
+
+test("a real MIC gets breach pricing and a MIC suggestion", async ({ page }) => {
+  await page.goto("/#/upload");
+  await page.locator('input[type="file"]').setInputFiles(CSV);
+  await expect(page.getByText("What flexiq read from small_office_hh.csv")).toBeVisible();
+  await page.getByLabel("Network operator (DNO)").selectOption("NPG");
+  await page.getByLabel("Export limit 1, MW").fill("0");
+  await page.getByLabel(/Agreed import capacity/).fill("1050");
+  await expect(page.getByLabel("MIC safety margin")).toHaveValue("5");
+  await page.getByRole("button", { name: /Run optimisation/ }).click();
+
+  await expect(page).toHaveURL(/#\/results\//, { timeout: 200_000 });
+  await expect(page.getByRole("heading", { name: "Months over the MIC" })).toBeVisible({ timeout: 30_000 });
+  const body = await page.locator("body").innerText();
+  expect(body).not.toContain("—");
+  expect(body).not.toMatch(/£-\d/);
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
+});

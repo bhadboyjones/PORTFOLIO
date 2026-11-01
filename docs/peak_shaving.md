@@ -7,9 +7,9 @@ slice 1 commit, so check them against the code before relying on them.*
 | Slice | What | Status |
 |---|---|---|
 | 1 | Explicit MIC + power factor inputs; import cap = MIC × PF; no simultaneous charge/discharge | **Built 2026-10-25** |
-| 2 | Breach variable, monthly worst-breach carry across chunks, excess-capacity settlement | Queued, needs step 0 rates |
-| 3 | MIC sweep with pre-screen | Queued |
-| 4 | Results UI: value-vs-MIC curve, breach table, headroom vs battery split | Queued |
+| 2 | Breach variable, monthly worst-breach carry across chunks, excess-capacity settlement | **Built 2026-11-01** |
+| 3 | MIC sweep | **Built 2026-11-01** |
+| 4 | Results UI: value by MIC, breach table, headroom note, add to investment case | **Built 2026-11-01** |
 
 ---
 
@@ -154,7 +154,53 @@ Numbers: [worked_examples.md §7](worked_examples.md). Test:
 
 The first two fail against the pre-slice-1 optimiser.
 
-## 6. Next: slice 2 design (agreed 2026-10-25, not built)
+## 6. Slices 2 to 4 as built
+
+**Breach pricing** (`_solve_chunk`, `src/optimiser.py`). Only on when the user enters
+a MIC; an assumed MIC is the site's own peak, so it can't be breached.
+
+```
+demand − dis1 + chr2 ≤ MIC cap × (1 − margin) + month's paid breach + new breach
+cost of new breach = excess rate × days in month × kW ÷ PF
+```
+
+`paid_mw` carries each month's breach from chunk to chunk, so a smaller peak later in
+the month costs nothing. With pricing on, grid charging may cause a breach if that
+pays, because `chr2` is no longer capped by headroom.
+
+**Settlement** (`apply_excess_capacity`). Uses the real MIC, not the margin, and takes
+the worst half-hour per calendar month, with and without the battery. Each month's
+cost is booked on its last period so every total carries it.
+
+**Sweep** (`src/mic_sweep.py`, `_sweep_mic`). Runs on the scenario with the highest
+net benefit only. Candidates: natural peak minus 0, 25, 50, 75, 100% of the smaller of
+battery kVA and 40% of peak. The 40% limit is a change from the agreed design, made
+because a 2 MW battery on a 1,098 kVA peak gave 598 and 98 kVA.
+
+```
+value = capacity saved + change in dispatch value − change in excess paid
+```
+
+**Measured**, real year, NPG LV, 1 MW / 2 MWh, peak 1,098 kW, 3.82p excess, 5% margin:
+
+| MIC (kVA) | Dispatch | Excess without | Excess with | Months over, with |
+|---|---:|---:|---:|---:|
+| 1,043 | £32,211 | £821 | £90 | 2 |
+| 934 | £28,991 | £2,482 | £566 | 6 |
+| 769 | £25,507 | £4,974 | £2,227 | 11 |
+
+Excess at 1× is cheap against arbitrage, so the solver sometimes pays it. Solve time
+for that year rose from about 4 s to 7 to 10 s per scenario on a Mac.
+
+**Known limits.**
+- Chunks are 3 days, so the battery can't hold charge for a peak in the next chunk.
+- kVA uses a fixed power factor; statements use metered reactive power.
+- Dispatch efficiency (85%) also cuts the capacity saving when added to the
+  investment case, though that saving is contractually certain.
+- The MEC is not priced.
+- The XLSX report has no MIC sweep sheet yet.
+
+## 7. Original slice 2 design (agreed 2026-10-25)
 
 - **Step 0 (research):** excess capacity rate and billing period per DNO from
   the 2026/27 LC14 statements. Checked 2026-11-01: Eastern Power Networks and all
