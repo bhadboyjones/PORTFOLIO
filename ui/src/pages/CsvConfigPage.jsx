@@ -55,6 +55,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const [micKva, setMicKva]           = useState("");
   const [micUnit, setMicUnit]         = useState("kva");
   const [powerFactor, setPowerFactor] = useState("1");
+  const [micMargin, setMicMargin]     = useState("5");
 
   const [powers, setPowers]           = useState(["1", "2", "3"]);
   const [capacities, setCapacities]   = useState(["1", "2", "4"]);
@@ -101,6 +102,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const [confirmData, setConfirmData] = useState(false);
   useEffect(() => { setConfirmData(false); }, [file, inputUnit]);
   const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
+  const marginValid       = parseFloat(micMargin) >= 0 && parseFloat(micMargin) <= 50;
   const micValid          = micKva === "" || parseFloat(micKva) > 0;
   // Data check (mirrors the server): a unit mistake or a meter spike blocks the
   // run until fixed or confirmed; an export-only site needs its MIC entered.
@@ -108,7 +110,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const needsMic          = issues.some((i) => i.code === "mic_required") || jobErrorCode === "mic_required";
   const needsConfirm      = issues.some((i) => i.code === "data_check") || jobErrorCode === "data_check";
   const dataOk            = !needsMic && (!needsConfirm || confirmData);
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && micValid && dataOk;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && marginValid && micValid && dataOk;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -224,6 +226,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
       if (micKva) fd.append("contracted_kva", micKva);
       fd.append("mic_unit", micUnit);
       fd.append("power_factor", powerFactor || "1");
+      fd.append("mic_margin_pct", micMargin || "0");
       if (confirmData) fd.append("confirm_data", "true");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
@@ -502,6 +505,20 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
                   : parseFloat(powerFactor) === 1
                   ? "Default 1.0 (kW = kVA). Use your meter's figure if known."
                   : `Import cap = MIC × ${powerFactor} in kW.`}
+              </div>
+            </div>
+
+            {/* MIC safety margin */}
+            <div>
+              <FieldLabel htmlFor={`${uid}-f4`}>MIC safety margin</FieldLabel>
+              <SuffixInput id={`${uid}-f4`} type="number" step="1" min="0" max="50"
+                value={micMargin}
+                onChange={(e) => setMicMargin(e.target.value)}
+                suffix="%" />
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" }}>
+                {!marginValid
+                  ? "Margin must be between 0 and 50%."
+                  : "Our planning buffer, not a DNO allowance. The battery aims to stay this far below the MIC."}
               </div>
             </div>
 
@@ -1002,6 +1019,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               exportLimits.some((v) => v !== "" && parseFloat(v) < 0) ? "export limits can't be negative" : validExportCount === 0 && "enter at least one export limit (0 for none)",
               scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
               !pfValid && "set the power factor between 0.5 and 1.0",
+              !marginValid && "set the MIC safety margin between 0 and 50%",
               !micValid && "enter a MIC above zero, or leave it blank",
               needsMic && "enter the site's MIC (it never imports in this data)",
               needsConfirm && !needsMic && !confirmData && "fix the data or tick \u201cMy data is correct\u201d",

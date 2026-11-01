@@ -24,6 +24,11 @@ export function billRows(s, annual) {
     rows.push({ part: "Fuel", without: s.baseline_thermal_cost_gbp * k, with: s.baseline_thermal_cost_gbp * k });
   }
   rows.push({ part: "Standing", without: s.total_standing_gbp * k, with: s.total_standing_gbp * k });
+  const excessWo = s.excess_wo_bess_gbp ?? 0;
+  const excessW = s.excess_w_bess_gbp ?? 0;
+  if (excessWo > 0.5 || excessW > 0.5) {
+    rows.push({ part: "Excess", without: excessWo * k, with: excessW * k });
+  }
   rows.push({ part: "Wear", without: 0, with: (s.deg_cost_gbp ?? 0) * k });
   rows.push({ part: "Net bill", without: s.site_cost_wo_bess_gbp * k, with: s.site_cost_w_bess_gbp * k });
   for (const r of rows) {

@@ -171,6 +171,7 @@ def _serialise_scenario(
     sp_duration_hrs: float = 0.5,
     power_mw: float = None,
     capacity_mwh: float = None,
+    capacity_breaches: list = None,
 ) -> dict:
     """Build summary stats and SP-level timeseries for one settled scenario."""
     net_benefit_gbp      = float(settled["net_settlement_gbp"].sum())
@@ -185,6 +186,7 @@ def _serialise_scenario(
         if total_throughput_mwh > 0 else 0.0
     )
 
+    priced = "excess_wo_bess_gbp" in settled.columns
     settled = settled.copy()
     settled["cumulative_pnl_gbp"] = settled["net_settlement_gbp"].cumsum()
 
@@ -221,6 +223,9 @@ def _serialise_scenario(
         "charge1_opp_cost_gbp":  _f(float(settled["charge1_opp_cost_gbp"].sum()), 2),
         "deg_cost_gbp":          _f(float(settled["deg_cost_gbp"].sum()), 2),
         "total_standing_gbp":    _f(total_standing_gbp, 2),
+        "excess_wo_bess_gbp":    _f(float(settled["excess_wo_bess_gbp"].sum()) if priced else 0.0, 2),
+        "excess_w_bess_gbp":     _f(float(settled["excess_w_bess_gbp"].sum()) if priced else 0.0, 2),
+        "capacity_breaches":     capacity_breaches or [],
         "total_throughput_mwh":  _f(total_throughput_mwh, 2),
         "peak_dispatch_mw":      _f(peak_dispatch_mw, 3),
         "gbp_per_kwh":           _f(gbp_per_kwh, 4),
@@ -234,7 +239,10 @@ def _serialise_scenario(
 
 def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> None:
     from src.csv_pipeline import load_and_validate_csv, build_csv_optimiser_input
-    from src.optimiser import run_optimiser, calculate_settlement, calculate_baseline
+    from src.duos_rates import excess_rate_gbp_per_kva_day, get_duos_rates
+    from src.optimiser import (
+        apply_excess_capacity, calculate_baseline, calculate_settlement, run_optimiser,
+    )
     from src.report import build_report
 
     try:
@@ -333,6 +341,10 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
             validation_warnings=warnings if warnings else None,
         )
 
+        excess_rate = excess_rate_gbp_per_kva_day(
+            get_duos_rates(params.dno_key, params.voltage_level)
+        )
+
         # 4. Multi-scenario BESS loop: configs × export limits
         all_results = []
         pkl_paths = []
@@ -357,6 +369,13 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     soc_max_pct=params.bess_soc_max_pct,
                     deg_cost_gbp_mwh=params.bess_deg_cost_gbp_mwh,
                 )
+
+                # Breaches are only priced against a real MIC: an assumed one is
+                # the site's own peak, so it can't be breached.
+                if mic_source == "user":
+                    bess_params["excess_rate_gbp_per_kva_day"] = excess_rate
+                    bess_params["mic_margin_pct"] = params.mic_margin_pct
+                    bess_params["power_factor"] = params.power_factor
 
                 # Baseline depends on this scenario's export limit (surplus above
                 # the limit is curtailed and earns no export revenue).
@@ -384,6 +403,12 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 )
                 del results_df
 
+                capacity_breaches = []
+                if mic_source == "user":
+                    settled, capacity_breaches = apply_excess_capacity(
+                        settled, contracted_kva, excess_rate, params.power_factor, sp_duration_hrs,
+                    )
+
                 settled = settled.copy()
                 settled["scenario_label"]  = label
                 settled["export_limit_mw"] = export_lim
@@ -393,6 +418,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     sp_duration_hrs=sp_duration_hrs,
                     power_mw=bess_cfg["power_mw"],
                     capacity_mwh=bess_cfg["capacity_mwh"],
+                    capacity_breaches=capacity_breaches,
                 ))
 
                 pkl_path = os.path.join(tmp_dir, f"scenario_{scenario_idx}.pkl")

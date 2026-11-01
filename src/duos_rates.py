@@ -312,6 +312,13 @@ def convert_rates_to_model_units(rates: dict) -> dict:
     }
 
 
+def excess_rate_gbp_per_kva_day(rates: dict) -> float:
+    """Excess capacity rate from a raw rate dict; defaults to the capacity rate,
+    which is what every statement checked so far publishes."""
+    p = rates.get("excess_capacity_p_per_kva_day", rates["capacity_p_per_kva_day"])
+    return p / 100
+
+
 def duos_rates_to_charges_config(rates: dict) -> dict:
     """
     Convert a raw get_duos_rates() dict into the config format expected by

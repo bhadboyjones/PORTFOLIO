@@ -148,6 +148,9 @@ class CsvRunParams:
         power_factor: float = Form(
             1.0, description="Site power factor (kW = kVA × PF). Default 1.0 when unknown.",
         ),
+        mic_margin_pct: float = Form(
+            5.0, description="Planning buffer below the MIC (%), for dispatch only. Ours, not a DNO allowance.",
+        ),
         confirm_data: bool = Form(
             False, description="Run even if the data check flags implausible units or a spike.",
         ),
@@ -210,6 +213,11 @@ class CsvRunParams:
             raise HTTPException(
                 status_code=422,
                 detail=f"power_factor must be between 0.5 and 1.0, got {power_factor}.",
+            )
+        if not (0.0 <= mic_margin_pct <= 50.0):
+            raise HTTPException(
+                status_code=422,
+                detail=f"mic_margin_pct must be between 0 and 50, got {mic_margin_pct}.",
             )
         if price_exposure not in ("da", "imbalance"):
             raise HTTPException(
@@ -302,6 +310,7 @@ class CsvRunParams:
         self.contracted_kva  = contracted_kva
         self.mic_unit        = mic_unit
         self.power_factor    = power_factor
+        self.mic_margin_pct  = mic_margin_pct
         self.confirm_data    = confirm_data
         self.chp_toggle      = chp_toggle
         self.input_unit      = input_unit
