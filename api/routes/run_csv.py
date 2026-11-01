@@ -334,6 +334,7 @@ def _sweep_mic(
 def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> None:
     from src.csv_pipeline import load_and_validate_csv, build_csv_optimiser_input
     from src.duos_rates import excess_rate_gbp_per_kva_day, get_duos_rates
+    from src.tariff import apply_tariff, has_time_signal
     from src.optimiser import (
         apply_excess_capacity, calculate_baseline, calculate_settlement, run_optimiser,
     )
@@ -395,6 +396,15 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 n_sps_per_day=n_sps_per_day,
             )
         warnings.extend(_user_warnings(caught, already=warnings))
+        df = apply_tariff(df, params.tariff, forecast_col, actual_col)
+        if not has_time_signal(df, actual_col):
+            warnings.append(
+                "This tariff charges one import rate all year, so the battery has no "
+                "price difference to trade. It can only earn from surplus and capacity."
+            )
+        # Capacity inside the contract rate: a lower MIC saves the site nothing on
+        # this contract, so there is nothing to price or sweep.
+        price_mic = mic_source == "user" and not params.tariff["capacity_bundled"]
         data_start = df["startTime"].min().date()
         data_end   = df["startTime"].max().date()
         n_days     = (data_end - data_start).days + 1
@@ -449,7 +459,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
 
                 # Breaches are only priced against a real MIC: an assumed one is
                 # the site's own peak, so it can't be breached.
-                if mic_source == "user":
+                if price_mic:
                     bess_params["excess_rate_gbp_per_kva_day"] = excess_rate
                     bess_params["mic_margin_pct"] = params.mic_margin_pct
                     bess_params["power_factor"] = params.power_factor
@@ -481,7 +491,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                 del results_df
 
                 capacity_breaches = []
-                if mic_source == "user":
+                if price_mic:
                     settled, capacity_breaches = apply_excess_capacity(
                         settled, contracted_kva, excess_rate, params.power_factor, sp_duration_hrs,
                     )
@@ -511,7 +521,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
 
         # 5. MIC sweep on the best scenario. Needs a real MIC to compare against.
         mic_sweep = None
-        if mic_source == "user" and all_results:
+        if price_mic and all_results:
             best = max(all_results, key=lambda r: r["net_benefit_gbp"] or 0)
             cfg = next(c for c in params.bess_configs
                        if c["power_mw"] == best["power_mw"] and c["capacity_mwh"] == best["capacity_mwh"])

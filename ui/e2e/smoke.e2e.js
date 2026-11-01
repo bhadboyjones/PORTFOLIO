@@ -59,3 +59,21 @@ test("a real MIC gets breach pricing and a MIC suggestion", async ({ page }) => 
   expect(body).not.toMatch(/£-\d/);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
 });
+
+test("a flat all-inclusive tariff says the battery has nothing to trade", async ({ page }) => {
+  await page.goto("/#/upload");
+  await page.locator('input[type="file"]').setInputFiles(CSV);
+  await expect(page.getByText("What flexiq read from small_office_hh.csv")).toBeVisible();
+  await page.getByLabel("Network operator (DNO)").selectOption("NPGY");
+  await page.getByLabel("Export limit 1, MW").fill("0");
+  await page.getByLabel("How is your energy priced?").selectOption("flat");
+  await page.getByLabel("Flat rate", { exact: true }).fill("15");
+  await page.getByLabel("DUoS unit and fixed charges").check();
+  await page.getByLabel("Policy and system charges").check();
+  await expect(page.getByText(/leaves the battery nothing to trade/)).toBeVisible();
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(".png", "-config.png"), fullPage: true });
+  await page.getByRole("button", { name: /Run optimisation/ }).click();
+  await expect(page).toHaveURL(/#\/results\//, { timeout: 200_000 });
+  await page.getByRole("button", { name: /warning/i }).first().click({ timeout: 3000 }).catch(() => {});
+  await expect(page.getByText(/charges one import rate all year/)).toBeVisible({ timeout: 30_000 });
+});

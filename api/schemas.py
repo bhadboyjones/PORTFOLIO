@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from src.csv_pipeline import INPUT_UNITS
 from src.duos_rates import VALID_DNOS, VALID_VOLTAGE_LEVELS
+from src.tariff import normalise_tariff
 
 MIC_UNITS = ("kva", "kw", "mw")
 
@@ -152,6 +153,9 @@ class CsvRunParams:
         ),
         mic_margin_pct: float = Form(
             5.0, description="Planning buffer below the MIC (%), for dispatch only. Ours, not a DNO allowance.",
+        ),
+        tariff_json: Optional[str] = Form(
+            None, description="Tariff structure as JSON; see src/tariff.py. Blank is full pass-through.",
         ),
         confirm_data: bool = Form(
             False, description="Run even if the data check flags implausible units or a spike.",
@@ -313,6 +317,10 @@ class CsvRunParams:
         self.mic_unit        = mic_unit
         self.power_factor    = power_factor
         self.mic_margin_pct  = mic_margin_pct
+        try:
+            self.tariff = normalise_tariff(_json.loads(tariff_json) if tariff_json else None)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid tariff: {exc}")
         self.confirm_data    = confirm_data
         self.chp_toggle      = chp_toggle
         self.input_unit      = input_unit

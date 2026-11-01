@@ -393,6 +393,8 @@ def _solve_chunk(
     # Objective
     # -----------------------------------------------------------------------
     terms = []
+    # Tariff runs price export separately; otherwise it follows the import price.
+    has_export_price = "export_forecast_gbp" in chunk.columns
     for i in range(n):
         price = chunk[forecast_price_col].iloc[i]
         duos  = chunk["duos_gbp_mwh"].iloc[i]
@@ -400,7 +402,8 @@ def _solve_chunk(
         nec   = chunk["nec_gbp_mwh"].iloc[i]
 
         import_rate = price + duos + nec
-        export_rate = price - gduos
+        export_price = chunk["export_forecast_gbp"].iloc[i] if has_export_price else price
+        export_rate = export_price - gduos
 
         terms.append( import_rate * dis1[i] * sp_duration_hrs)
         terms.append( export_rate * dis2[i] * sp_duration_hrs)
@@ -520,7 +523,8 @@ def calculate_baseline(
 
     # Import rate and export rate — same convention as calculate_settlement()
     import_rate = price + df["duos_gbp_mwh"] + df["nec_gbp_mwh"]
-    export_rate = price - df["gduos_gbp_mwh"]
+    export_price = df["export_actual_gbp"] if "export_actual_gbp" in df.columns else price
+    export_rate = export_price - df["gduos_gbp_mwh"]
 
     # Import cost — only where site is net importing (net_demand_mwh > 0)
     df["baseline_import_cost_gbp"] = df["net_demand_mwh"].clip(lower=0) * import_rate
@@ -803,8 +807,9 @@ def calculate_settlement(
 
     # Export rate: price - GDUoS (GDUoS stored negative — subtract adds the credit)
     # e.g. price=50, gduos=-88 → export_rate = 138 £/MWh
+    export_price = df["export_actual_gbp"] if "export_actual_gbp" in df.columns else df[actual_price_col]
     df["export_rate_gbp"] = (
-        df[actual_price_col]
+        export_price
         - df["gduos_gbp_mwh"]
     )
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { getDnoRates, postRunCsv } from "../api/client";
 import { bandsFromWindows } from "../components/dayTapeBands";
+import { DEFAULT_TARIFF_FORM, ENERGY_OPTIONS, EXPORT_OPTIONS, tariffNote, tariffPayload, tariffProblem } from "../lib/tariff";
 import { parseCsvMeta, peakKw, dataIssues } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
@@ -64,6 +65,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const [micUnit, setMicUnit]         = useState("kva");
   const [powerFactor, setPowerFactor] = useState("1");
   const [micMargin, setMicMargin]     = useState("5");
+  const [tariff, setTariff]           = useState(DEFAULT_TARIFF_FORM);
 
   const [powers, setPowers]           = useState(["1", "2", "3"]);
   const [capacities, setCapacities]   = useState(["1", "2", "4"]);
@@ -111,6 +113,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   useEffect(() => { setConfirmData(false); }, [file, inputUnit]);
   const pfValid           = parseFloat(powerFactor) >= 0.5 && parseFloat(powerFactor) <= 1;
   const marginValid       = parseFloat(micMargin) >= 0 && parseFloat(micMargin) <= 50;
+  const tariffError       = tariffProblem(tariff);
   const micValid          = micKva === "" || parseFloat(micKva) > 0;
   // Data check (mirrors the server): a unit mistake or a meter spike blocks the
   // run until fixed or confirmed; an export-only site needs its MIC entered.
@@ -118,7 +121,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
   const needsMic          = issues.some((i) => i.code === "mic_required") || jobErrorCode === "mic_required";
   const needsConfirm      = issues.some((i) => i.code === "data_check") || jobErrorCode === "data_check";
   const dataOk            = !needsMic && (!needsConfirm || confirmData);
-  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && marginValid && micValid && dataOk;
+  const canRun            = file != null && dnoKey !== "" && scenarioCount > 0 && scenarioCount <= 12 && !submitting && !resolutionError && !dnoRateError && pfValid && marginValid && !tariffError && micValid && dataOk;
 
   const fetchAndPopulateRates = useCallback(async (dno, voltage) => {
     if (!dno) return;
@@ -237,6 +240,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
       fd.append("mic_unit", micUnit);
       fd.append("power_factor", powerFactor || "1");
       fd.append("mic_margin_pct", micMargin || "0");
+      fd.append("tariff_json", JSON.stringify(tariffPayload(tariff)));
       if (confirmData) fd.append("confirm_data", "true");
 
       // RAG band windows — always send (pre-populated from DNO defaults)
@@ -420,7 +424,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         </Card>
 
         {/* ── Site Configuration ──────────────────────── */}
-        <Card label="Site and tariff">
+        <Card label="Site and network charges">
           <div className="adv-grid-2" style={{ gap: "1rem" }}>
 
             {/* DNO */}
@@ -587,6 +591,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
 
           </div>
         </Card>
+
+        <TariffCard tariff={tariff} onChange={setTariff} />
 
         {/* ── BESS Configuration ──────────────────────── */}
         <Card label="Battery sizes">
@@ -1037,6 +1043,7 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
               scenarioCount > 12 && `cut the scenarios to 12 or fewer (now ${scenarioCount})`,
               !pfValid && "set the power factor between 0.5 and 1.0",
               !marginValid && "set the MIC safety margin between 0 and 50%",
+              tariffError && tariffError.toLowerCase(),
               !micValid && "enter a MIC above zero, or leave it blank",
               needsMic && "enter the site's MIC (it never imports in this data)",
               needsConfirm && !needsMic && !confirmData && "fix the data or tick \u201cMy data is correct\u201d",
@@ -1051,6 +1058,85 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
 
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+function TariffCard({ tariff, onChange }) {
+  const uid = useId();
+  const set = (patch) => onChange({ ...tariff, ...patch });
+  const setBand = (i, patch) => set({ bands: tariff.bands.map((b, n) => (n === i ? { ...b, ...patch } : b)) });
+  const energy = ENERGY_OPTIONS.find((o) => o.value === tariff.energyType);
+  const note = tariffNote(tariff);
+  const hint = { fontSize: 12, color: "var(--text-dim)", marginTop: "0.2rem" };
+  const rateField = (id, label, value, key, suffix = "p/kWh") => (
+    <div>
+      <FieldLabel htmlFor={`${uid}-${id}`}>{label}</FieldLabel>
+      <SuffixInput id={`${uid}-${id}`} type="number" step="0.01" value={value}
+        onChange={(e) => set({ [key]: e.target.value })} suffix={suffix} />
+    </div>
+  );
+  const bundle = (key, label) => (
+    <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+      <input type="checkbox" checked={tariff[key]} onChange={(e) => set({ [key]: e.target.checked })} />
+      {label}
+    </label>
+  );
+
+  return (
+    <Card label="Tariff">
+      <div className="adv-grid-2" style={{ gap: "1rem" }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <FieldLabel htmlFor={`${uid}-energy`}>How is your energy priced?</FieldLabel>
+          <select id={`${uid}-energy`} value={tariff.energyType} onChange={(e) => set({ energyType: e.target.value })} style={selectStyle(true)}>
+            {ENERGY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div style={hint}>{energy.hint}</div>
+        </div>
+
+        {tariff.energyType === "percent" && rateField("pct", "Share of day-ahead", tariff.energyPercent, "energyPercent", "%")}
+        {tariff.energyType === "adder" && rateField("adder", "Margin", tariff.energyAdder, "energyAdder")}
+        {tariff.energyType === "flat" && rateField("flat", "Flat rate", tariff.energyFlat, "energyFlat")}
+        {tariff.energyType === "time_bands" && (
+          <>
+            {tariff.bands.map((b, i) => (
+              <div key={i} style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", alignItems: "end" }}>
+                <TimeInput id={`${uid}-bs${i}`} label={`Band ${i + 1} start`} value={b.start} onChange={(v) => setBand(i, { start: v })} />
+                <TimeInput id={`${uid}-be${i}`} label={`Band ${i + 1} end`} value={b.end} onChange={(v) => setBand(i, { end: v })} />
+                <div>
+                  <FieldLabel htmlFor={`${uid}-br${i}`}>{`Band ${i + 1} rate`}</FieldLabel>
+                  <SuffixInput id={`${uid}-br${i}`} type="number" step="0.01" value={b.rate}
+                    onChange={(e) => setBand(i, { rate: e.target.value })} suffix="p/kWh" />
+                </div>
+              </div>
+            ))}
+            {rateField("other", "Rate at all other times", tariff.otherRate, "otherRate")}
+          </>
+        )}
+
+        <fieldset style={{ gridColumn: "1 / -1", border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
+          <legend style={{ fontSize: 14, fontWeight: 500, padding: 0, marginBottom: 8 }}>Which charges are already inside your rate?</legend>
+          {bundle("duosBundled", "DUoS unit and fixed charges")}
+          {bundle("capacityBundled", "Capacity and excess capacity")}
+          {bundle("policyBundled", "Policy and system charges")}
+          <div style={hint}>Leave these unticked if they appear as separate lines on your bill. flexiq won't add a ticked charge again.</div>
+        </fieldset>
+        {note && <p role="status" style={{ gridColumn: "1 / -1", margin: 0, fontSize: 14, color: "var(--pill-warning-ink)" }}>{note}</p>}
+
+        <div style={{ gridColumn: "1 / -1" }}>
+          <FieldLabel htmlFor={`${uid}-export`}>How are your exports paid?</FieldLabel>
+          <select id={`${uid}-export`} value={tariff.exportType} onChange={(e) => set({ exportType: e.target.value })} style={selectStyle(true)}>
+            {EXPORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        {tariff.exportType === "percent" && rateField("xpct", "Share of day-ahead", tariff.exportPercent, "exportPercent", "%")}
+        {tariff.exportType === "fee" && rateField("xfee", "Fee", tariff.exportFee, "exportFee")}
+        {tariff.exportType === "fixed" && rateField("xfix", "Fixed export rate", tariff.exportFixed, "exportFixed")}
+        <div style={{ gridColumn: "1 / -1" }}>
+          {bundle("gduosPassedOn", "The GDUoS export credit reaches me")}
+          <div style={hint}>The DNO pays this to your supplier. Some export contracts pass it on and some don't.</div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function Card({ label, children }) {
   return (
