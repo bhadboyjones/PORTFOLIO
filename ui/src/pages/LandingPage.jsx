@@ -1,5 +1,5 @@
 import DayTape from "../components/DayTape";
-import { LivePriceCaption, LivePriceLine, usePrices } from "../components/LivePrice";
+import { LivePriceBackground, LivePriceCaption, usePrices } from "../components/LivePrice";
 
 const panel = {
   background: "var(--surface)",
@@ -14,20 +14,17 @@ const panel = {
 export default function LandingPage({ onSelectMode }) {
   const prices = usePrices();
   return (
-    <div style={{ maxWidth: 1088, margin: "0 auto", padding: "36px 24px 64px" }}>
-      <div style={{ position: "relative" }}>
-      <LivePriceLine points={prices} />
-      <div style={{ position: "relative" }}>
+    <>
+    <LivePriceBackground points={prices} />
+    <div style={{ position: "relative", maxWidth: 1088, margin: "0 auto", padding: "36px 24px 64px" }}>
       <h1 style={{ margin: 0, fontSize: "var(--fs-title)", lineHeight: "32px", fontWeight: 700, letterSpacing: "-0.01em" }}>
         Battery appraisal for C&amp;I sites
       </h1>
-      <p style={{ margin: "4px 0 0", fontSize: 16, lineHeight: "24px", color: "var(--muted)", maxWidth: 620 }}>
+      <p style={{ margin: "4px 0 0", fontSize: 16, lineHeight: "24px", color: "var(--muted)", maxWidth: 720 }}>
         flexiq optimises a behind-the-meter battery against your DNO&rsquo;s DUoS bands and
         wholesale prices, compares sizes, and prices the investment.
       </p>
       <LivePriceCaption points={prices} />
-      </div>
-      </div>
 
       <section aria-labelledby="tape-h" style={{ ...panel, marginTop: 24, gap: 8 }}>
         <h2 id="tape-h" style={{ margin: 0, fontSize: "var(--fs-section)", fontWeight: 500 }}>
@@ -72,6 +69,7 @@ export default function LandingPage({ onSelectMode }) {
         The results page lists what the model includes and leaves out.
       </p>
     </div>
+    </>
   );
 }
 

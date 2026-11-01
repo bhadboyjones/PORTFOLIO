@@ -168,7 +168,7 @@ class CsvRunParams:
         ),
         price_exposure: str = Form("da", description="'da' or 'imbalance'"),
         chp_mc_gbp_mwh: float = Form(70.0, description="CHP marginal fuel cost (£/MWh)."),
-        nec_gbp_mwh: float = Form(103.75, description="Non-energy charges (£/MWh)."),
+        nec_gbp_mwh: float = Form(104.01, description="Non-energy charges (£/MWh)."),
         # --- RAG band time overrides ---
         rag_red_start: str = Form("16:00"),
         rag_red_end: str = Form("19:00"),

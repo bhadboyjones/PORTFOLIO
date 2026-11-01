@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   billRows, averageDay, bandRuns, aggregateDaily, dailyCumulative,
-  coverageDays, finding, labelOf, micRows,
+  coverageDays, finding, labelOf, micRows, billView,
 } from "../results";
 import { MINUS } from "../../format";
 
@@ -178,5 +178,39 @@ describe("bandsFromWindows", () => {
     expect(bands[24]).toBe("red");   // 12:00
     expect(bands[34]).toBe("red");   // 17:00
     expect(bands[40]).toBe("amber"); // 20:00
+  });
+});
+
+describe("billView", () => {
+  const bill = {
+    sections: [
+      { title: "Energy", lines: [{ label: "Energy", unit: "kWh", qty_wo: 1000, qty_w: 900, cost_wo: 100, cost_w: 90 }] },
+      { title: "Network charges", lines: [
+        { label: "DUoS and TNUoS", included: true, cost_wo: 0, cost_w: 0 },
+        { label: "Capacity", unit: "kVA-days", qty_wo: 100, qty_w: 100, cost_wo: 3.82, cost_w: 3.82 },
+      ] },
+      { title: "Exports and on-site", lines: [{ label: "Export energy", unit: "kWh", qty_wo: 0, qty_w: 0, cost_wo: 0, cost_w: 0 }] },
+    ],
+    total_wo_gbp: 103.82, total_w_gbp: 93.82, vat_rate: 0.2,
+    battery: { saved_gbp: 20, charging_gbp: 8, excess_saved_gbp: 0, wear_gbp: 2, net_gbp: 10 },
+  };
+  it("shows the sum on each line, scaled to a year", () => {
+    const line = billView(bill, 2).sections[0].lines[0];
+    expect(line.workingWo).toBe("2,000 kWh × 10.00p");
+    expect(line.with).toBe(180);
+    expect(line.change).toBe(-20);
+  });
+  it("reads capacity in kVA-days", () => {
+    expect(billView(bill, 1).sections[1].lines[1].workingWo).toBe("100 kVA-days × 3.82p");
+  });
+  it("keeps inside-your-rate lines and drops empty sections", () => {
+    const v = billView(bill, 1);
+    expect(v.sections.map((s) => s.title)).toEqual(["Energy", "Network charges"]);
+    expect(v.sections[1].lines[0].included).toBe(true);
+  });
+  it("adds VAT and a battery panel that sums to the net saving", () => {
+    const v = billView(bill, 1);
+    expect(v.vatWo).toBeCloseTo(20.764);
+    expect(v.battery.slice(0, -1).reduce((s, r) => s + r.value, 0)).toBe(v.battery.at(-1).value);
   });
 });

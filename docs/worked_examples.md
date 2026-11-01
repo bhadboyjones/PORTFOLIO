@@ -3,6 +3,8 @@
 Every figure here is derived step by step, for study. Rates are Northern
 Powergrid (NPG) LV 2026/27 from `src/duos_rates.py`; non-energy is the app's
 default. Prices of £70 and −£20 are examples, not market data, unless stated.
+The default non-energy figure is now £104.01 after the CCL update; these sums use
+£103.75.
 
 ## 1. Rates and unit conversion
 

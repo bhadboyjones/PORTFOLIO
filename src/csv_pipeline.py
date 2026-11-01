@@ -520,7 +520,6 @@ def build_csv_optimiser_input(
     df["da_forecast_gbp"]  = df["da_actual_gbp"]
     df["imb_forecast_gbp"] = df["imb_actual_gbp"]
 
-    df = df.drop(columns=["rag_band"], errors="ignore")
     df = df.sort_values("startTime").reset_index(drop=True)
 
     # Tag contiguity groups: a new group starts wherever there's a gap larger

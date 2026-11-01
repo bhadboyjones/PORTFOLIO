@@ -175,10 +175,10 @@ NETWORK_CONFIG_NEC_HV = {
 NEC_COMPONENTS = {
     "policy_levies_gbp_mwh": 60.00,   # RO + FiT + CfD upper bound
     "bsuos_gbp_mwh":         16.00,   # BSUoS — 100% on demand since April 2023
-    "ccl_gbp_mwh":            7.75,   # CCL flat rate
+    "ccl_gbp_mwh":            8.01,   # CCL main rate, 0.801p/kWh from 1 April 2026
     "cm_gbp_mwh":            20.00,   # Capacity Market upper bound
 }
-NEC_GBP_MWH = sum(NEC_COMPONENTS.values())  # 103.75 £/MWh
+NEC_GBP_MWH = sum(NEC_COMPONENTS.values())  # 104.01 £/MWh
 
 # Backwards-compatible alias — imported by data_builder, optimiser, csv_pipeline
 TOTAL_IMPORT_LEVIES_GBP_PER_MWH = NEC_GBP_MWH

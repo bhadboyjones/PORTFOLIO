@@ -28,6 +28,11 @@ test("upload, run, read the answer, refresh and go back", async ({ page }) => {
   await expect(page.getByText("Year-1 saving, best size")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Why this result" })).toBeVisible();
   await expect(page.getByText(/breaks even if capex falls to about £[\d,]+/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Modelled site bill" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "How the battery got there" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Battery sizes compared" })).toHaveCount(0);
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(".png", "-bill.png"), fullPage: true });
+  await page.getByRole("button", { name: "Show full analysis" }).click();
   await expect(page.getByRole("heading", { name: "Battery sizes compared" })).toBeVisible();
 
   // Copy rules: no em dashes, money with a true minus
@@ -53,6 +58,7 @@ test("a real MIC gets breach pricing and a MIC suggestion", async ({ page }) => 
   await page.getByRole("button", { name: /Run optimisation/ }).click();
 
   await expect(page).toHaveURL(/#\/results\//, { timeout: 200_000 });
+  await page.getByRole("button", { name: "Show full analysis" }).click();
   await expect(page.getByRole("heading", { name: "Months over the MIC" })).toBeVisible({ timeout: 30_000 });
   const body = await page.locator("body").innerText();
   expect(body).not.toContain("—");
@@ -88,11 +94,11 @@ test("a flat all-inclusive tariff says the battery has nothing to trade", async 
 test("landing shows the live price, and works without it", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText(/highest £[\d,.]+ at \d\d:\d\d, average £[\d,.]+, cheapest £[\d,.]+ at \d\d:\d\d/)).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".live-line polyline")).toBeAttached();
+  await expect(page.locator(".live-bg polyline")).toBeAttached();
   if (process.env.SHOT) { await page.waitForTimeout(2600); await page.screenshot({ path: process.env.SHOT.replace(".png", "-live.png") }); }
 
   await page.route("**/data.elexon.co.uk/**", (r) => r.abort());
   await page.reload();
   await expect(page.getByRole("button", { name: "Upload meter data" })).toBeVisible();
-  await expect(page.locator(".live-line")).toHaveCount(0);
+  await expect(page.locator(".live-bg")).toHaveCount(0);
 });

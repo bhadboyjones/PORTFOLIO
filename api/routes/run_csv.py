@@ -200,6 +200,7 @@ def _serialise_scenario(
     power_mw: float = None,
     capacity_mwh: float = None,
     capacity_breaches: list = None,
+    bill: dict = None,
 ) -> dict:
     """Build summary stats and SP-level timeseries for one settled scenario."""
     net_benefit_gbp      = float(settled["net_settlement_gbp"].sum())
@@ -254,6 +255,7 @@ def _serialise_scenario(
         "excess_wo_bess_gbp":    _f(float(settled["excess_wo_bess_gbp"].sum()) if priced else 0.0, 2),
         "excess_w_bess_gbp":     _f(float(settled["excess_w_bess_gbp"].sum()) if priced else 0.0, 2),
         "capacity_breaches":     capacity_breaches or [],
+        "bill":                  bill,
         "total_throughput_mwh":  _f(total_throughput_mwh, 2),
         "peak_dispatch_mw":      _f(peak_dispatch_mw, 3),
         "gbp_per_kwh":           _f(gbp_per_kwh, 4),
@@ -334,6 +336,7 @@ def _sweep_mic(
 def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> None:
     from src.csv_pipeline import load_and_validate_csv, build_csv_optimiser_input
     from src.duos_rates import excess_rate_gbp_per_kva_day, get_duos_rates
+    from src.bill import build_bill
     from src.tariff import apply_tariff, has_time_signal
     from src.optimiser import (
         apply_excess_capacity, calculate_baseline, calculate_settlement, run_optimiser,
@@ -506,6 +509,10 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
                     power_mw=bess_cfg["power_mw"],
                     capacity_mwh=bess_cfg["capacity_mwh"],
                     capacity_breaches=capacity_breaches,
+                    bill=build_bill(
+                        settled, actual_col, params.tariff, params.voltage_level, contracted_kva,
+                        coverage_days, sp_duration_hrs, capacity_breaches,
+                    ),
                 ))
 
                 pkl_path = os.path.join(tmp_dir, f"scenario_{scenario_idx}.pkl")
