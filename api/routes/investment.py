@@ -52,6 +52,7 @@ def evaluate_investment(req: InvestmentEvaluateRequest):
             escalation_rate=a.escalation_pct_yr / 100.0,
             dispatch_efficiency=a.dispatch_efficiency_pct / 100.0,
             period_wear_cost_gbp=s.period_wear_cost_gbp,
+            period_fixed_benefit_gbp=s.period_fixed_benefit_gbp,
         )
         scenarios_out.append({
             "scenario_label":          s.scenario_label,

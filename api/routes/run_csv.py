@@ -528,7 +528,13 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
 
         # 6. Build XLSX
         xlsx_path = os.path.join(tmp_dir, "bess_csv_results.xlsx")
-        xlsx_path = build_report(pkl_paths, xlsx_path, job_id=job_id)
+        breaches = [
+            {**month, "scenario": r["scenario_label"], "export_limit_mw": r["export_limit_mw"]}
+            for r in all_results for month in r["capacity_breaches"]
+        ]
+        xlsx_path = build_report(
+            pkl_paths, xlsx_path, job_id=job_id, mic_sweep=mic_sweep, capacity_breaches=breaches,
+        )
         for p in pkl_paths:
             os.unlink(p)
 

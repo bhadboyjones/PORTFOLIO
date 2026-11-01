@@ -15,6 +15,8 @@ export function bandsFromWindows({
   amberMorningEnd,
   amberEveningStart,
   amberEveningEnd,
+  extraRed = [],
+  extraAmber = [],
 } = {}) {
   const bands = Array(48).fill("green");
   const paint = (start, end, band) => {
@@ -25,7 +27,9 @@ export function bandsFromWindows({
   };
   paint(amberMorningStart, amberMorningEnd, "amber");
   paint(amberEveningStart, amberEveningEnd, "amber");
+  for (const [start, end] of extraAmber) paint(start, end, "amber");
   paint(redStart, redEnd, "red");
+  for (const [start, end] of extraRed) paint(start, end, "red");
   return bands;
 }
 

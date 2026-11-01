@@ -170,3 +170,13 @@ describe("micRows", () => {
     expect(micRows(null, 1)).toEqual([]);
   });
 });
+
+describe("bandsFromWindows", () => {
+  it("paints London's second red window", async () => {
+    const { bandsFromWindows } = await import("../../components/dayTapeBands");
+    const bands = bandsFromWindows({ redStart: "11:00", redEnd: "14:00", extraRed: [["16:00", "19:00"]], extraAmber: [["19:00", "23:00"]] });
+    expect(bands[24]).toBe("red");   // 12:00
+    expect(bands[34]).toBe("red");   // 17:00
+    expect(bands[40]).toBe("amber"); // 20:00
+  });
+});

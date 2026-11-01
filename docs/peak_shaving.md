@@ -192,15 +192,18 @@ value = capacity saved + change in dispatch value − change in excess paid
 Excess at 1× is cheap against arbitrage, so the solver sometimes pays it. Solve time
 for that year rose from about 4 s to 7 to 10 s per scenario on a Mac.
 
+**Investment case.** The tickbox sends the capacity saving as a fixed benefit: no
+dispatch efficiency cut and no capacity fade, because a lower MIC is a contract term.
+It still escalates. Dispatch and excess changes stay with the backtest benefit.
+
+**Report.** The XLSX gains "MIC sweep" and "Months over MIC" sheets when a MIC is entered.
+
 **Known limits.**
 - Chunks are 3 days, so the battery can't hold charge for a peak in the next chunk.
 - kVA uses a fixed power factor; statements use metered reactive power.
-- Dispatch efficiency (85%) also cuts the capacity saving when added to the
-  investment case, though that saving is contractually certain.
+- Capacity saved by a lower MIC starts in the investment case from year 1, though a
+  real reduction starts the billing period after it's agreed.
 - The MEC is not priced.
-- The XLSX report has no MIC sweep sheet yet.
-- London has two red windows. They are priced correctly, but the band chart and the
-  red share in "Why this result" only show the first.
 
 ## 7. Original slice 2 design (agreed 2026-10-25)
 

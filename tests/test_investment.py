@@ -221,3 +221,14 @@ def test_wear_add_back_then_haircut_order():
 def test_fractional_coverage_days():
     # 59.5 days of coverage annualises by 365/59.5, not truncated to an int.
     assert annualise_benefit(1000.0, 59.5) == pytest.approx(1000.0 * 365 / 59.5)
+
+
+def test_fixed_benefit_takes_no_efficiency_cut_or_fade():
+    # £1,000/yr dispatch at 85% is £850; a £100/yr capacity saving stays £100.
+    r = evaluate_scenario(**_base_kwargs(dispatch_efficiency=0.85, period_fixed_benefit_gbp=0.0))
+    f = evaluate_scenario(**_base_kwargs(dispatch_efficiency=0.85, period_fixed_benefit_gbp=100.0))
+    n_days = _base_kwargs()["n_days"]
+    assert f["annual_benefit_yr1_gbp"] - r["annual_benefit_yr1_gbp"] == pytest.approx(100.0 * 365 / n_days)
+    # No fade: the gap between years grows with escalation only.
+    a = build_cashflows(0.0, 0.0, 0.0, 3, 0.5, 0.0, 100.0)
+    assert a == [0.0, 100.0, 100.0, 100.0]

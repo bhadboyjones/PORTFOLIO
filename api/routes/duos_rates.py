@@ -76,6 +76,9 @@ def get_duos_rate_defaults(dno: str, voltage: str):
         "capacity_p_per_kva_day":     rates["capacity_p_per_kva_day"],
         "gduos_fixed_p_per_day":      rates["gduos_fixed_p_per_day"],
         **_flatten_rag(rag_schedule),
+        # Full weekday windows: some areas have more than the form's fields hold.
+        "rag_weekday_red":            rag_schedule["red"]["weekday"],
+        "rag_weekday_amber":          rag_schedule["amber"]["weekday"],
     }
 
     if rag_warning:

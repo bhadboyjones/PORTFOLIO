@@ -144,6 +144,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         ragAmberEveningEnd:   d.rag_amber_evening_end    || "23:00",
         ragWeekendAmberStart: d.rag_weekend_amber_start  || "",
         ragWeekendAmberEnd:   d.rag_weekend_amber_end    || "",
+        ragWeekdayRed:        d.rag_weekday_red          ?? [],
+        ragWeekdayAmber:      d.rag_weekday_amber        ?? [],
       }));
       setAdvancedDirty(false);
       setRagWarning(d.rag_warning || null);
@@ -266,6 +268,11 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
       fd.append("bess_deg_cost_gbp_mwh", advanced.degCostGbpMwh || "8");
 
       // Weekday DUoS band shape actually used — drives the results-page tape
+      // Same rule as the API: an untouched form means the DNO's full schedule.
+      const fullRed = advanced.ragWeekdayRed ?? [], fullAmber = advanced.ragWeekdayAmber ?? [];
+      const untouched = fullRed[0]?.join() === `${advanced.ragRedStart},${advanced.ragRedEnd}`
+        && fullAmber[0]?.join() === `${advanced.ragAmberMorningStart},${advanced.ragAmberMorningEnd}`
+        && fullAmber[1]?.join() === `${advanced.ragAmberEveningStart},${advanced.ragAmberEveningEnd}`;
       const tapeBands = bandsFromWindows({
         redStart:          advanced.ragRedStart          || "16:00",
         redEnd:            advanced.ragRedEnd            || "19:00",
@@ -273,6 +280,8 @@ export default function CsvConfigPage({ onRunStarted, jobError, jobErrorCode }) 
         amberMorningEnd:   advanced.ragAmberMorningEnd   || "16:00",
         amberEveningStart: advanced.ragAmberEveningStart || "19:00",
         amberEveningEnd:   advanced.ragAmberEveningEnd   || "23:00",
+        extraRed:          untouched ? fullRed.slice(1) : [],
+        extraAmber:        untouched ? fullAmber.slice(2) : [],
       });
 
       const { job_id } = await postRunCsv(fd);

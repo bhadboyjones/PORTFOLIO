@@ -57,11 +57,14 @@ def build_cashflows(
     lifetime_yrs: int,
     fade_rate: float,
     escalation_rate: float,
+    annual_fixed_benefit_gbp: float = 0.0,
 ) -> list:
     """Year-0..N nominal cashflows.
 
     Benefit erodes with capacity fade and grows with price escalation;
     opex only escalates (a smaller battery does not get cheaper to insure).
+    annual_fixed_benefit_gbp escalates but doesn't fade: a lower MIC is a
+    contract term, so it pays the same however much capacity the battery has lost.
     """
     if lifetime_yrs < 1:
         raise ValueError(f"lifetime_yrs must be >= 1, got {lifetime_yrs}")
@@ -69,6 +72,7 @@ def build_cashflows(
     for n in range(1, lifetime_yrs + 1):
         growth = (1.0 + escalation_rate) ** (n - 1)
         benefit = annual_benefit_gbp * (1.0 - fade_rate) ** (n - 1) * growth
+        benefit += annual_fixed_benefit_gbp * growth
         opex = annual_opex_gbp * growth
         cashflows.append(benefit - opex)
     return cashflows
@@ -138,6 +142,7 @@ def evaluate_scenario(
     escalation_rate: float,
     dispatch_efficiency: float = 1.0,
     period_wear_cost_gbp: float = 0.0,
+    period_fixed_benefit_gbp: float = 0.0,
 ) -> dict:
     """Full appraisal of one optimiser scenario. Returns unrounded values;
     the API layer handles presentation rounding.
@@ -156,6 +161,9 @@ def evaluate_scenario(
     0, so it is added back here to avoid charging for the asset twice. The
     optimiser keeps the wear cost in its objective as a dispatch signal; only
     the investment cashflow drops it. See docs/investment_case.md §6.
+
+    period_fixed_benefit_gbp is saving that foresight can't touch: the capacity
+    charge saved by a lower MIC. It takes no dispatch_efficiency cut and no fade.
     """
     if not 0.0 <= dispatch_efficiency <= 1.0:
         raise ValueError(f"dispatch_efficiency must be in [0, 1], got {dispatch_efficiency}")
@@ -167,13 +175,14 @@ def evaluate_scenario(
 
     # Ceiling = raw perfect-foresight backtest; realistic = ceiling × efficiency.
     ceiling_benefit = annualise_benefit(period_benefit_gbp + period_wear_cost_gbp, n_days)
+    annual_fixed = annualise_benefit(period_fixed_benefit_gbp, n_days)
     annual_benefit = ceiling_benefit * dispatch_efficiency
 
     cashflows = build_cashflows(
-        annual_benefit, capex, annual_opex, lifetime_yrs, fade_rate, escalation_rate
+        annual_benefit, capex, annual_opex, lifetime_yrs, fade_rate, escalation_rate, annual_fixed
     )
     cashflows_ceiling = build_cashflows(
-        ceiling_benefit, capex, annual_opex, lifetime_yrs, fade_rate, escalation_rate
+        ceiling_benefit, capex, annual_opex, lifetime_yrs, fade_rate, escalation_rate, annual_fixed
     )
 
     npv_gbp = npv(discount_rate, cashflows)
@@ -189,8 +198,8 @@ def evaluate_scenario(
 
     return {
         "capex_gbp": capex,
-        "annual_benefit_yr1_gbp": annual_benefit,
-        "annual_benefit_ceiling_yr1_gbp": ceiling_benefit,
+        "annual_benefit_yr1_gbp": annual_benefit + annual_fixed,
+        "annual_benefit_ceiling_yr1_gbp": ceiling_benefit + annual_fixed,
         "annual_opex_yr1_gbp": annual_opex,
         "dispatch_efficiency": dispatch_efficiency,
         "npv_gbp": npv_gbp,

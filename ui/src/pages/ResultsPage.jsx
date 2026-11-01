@@ -41,7 +41,11 @@ export default function ResultsPage({ results, jobId, mode, validationWarnings, 
   const micUplift = useMemo(() => {
     const row = sweep?.rows.find((r) => r.mic_kva === sweep.best_mic_kva);
     return micApplied && row
-      ? { key: `${sweep.scenario_label}|${sweep.export_limit_mw}`, gbp: row.value_gbp }
+      ? {
+          key: `${sweep.scenario_label}|${sweep.export_limit_mw}`,
+          dispatch: row.dispatch_change_gbp - row.excess_change_gbp,
+          capacity: row.capacity_saved_gbp,
+        }
       : null;
   }, [sweep, micApplied]);
   const inv = useInvestment(scenarios, nDays, form, micUplift);

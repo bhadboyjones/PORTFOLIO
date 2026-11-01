@@ -72,6 +72,8 @@ class InvestmentScenarioIn(BaseModel):
     # period_benefit_gbp. Added back before the cashflow: the battery's cost
     # sits in year 0 as capex, so charging wear as well double-counts it.
     period_wear_cost_gbp: float = Field(0.0, ge=0)
+    # Capacity charge saved by a lower MIC: certain, so no efficiency cut or fade.
+    period_fixed_benefit_gbp: float = Field(0.0, ge=0)
 
 
 class InvestmentAssumptions(BaseModel):

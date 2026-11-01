@@ -87,8 +87,10 @@ export default function useInvestment(scenarios, nDays, form, micUplift = null) 
           export_limit_mw:    s.export_limit_mw,
           power_mw:           d.power_mw,
           capacity_mwh:       d.capacity_mwh,
-          // A chosen MIC cut adds its value to the scenario it was swept on.
-          period_benefit_gbp: s.net_benefit_gbp + (micUplift?.key === scenarioKey(s) ? micUplift.gbp : 0),
+          // A chosen MIC cut adds to the scenario it was swept on: dispatch and
+          // excess changes with the backtest, the capacity saving as a fixed sum.
+          period_benefit_gbp: s.net_benefit_gbp + (micUplift?.key === scenarioKey(s) ? micUplift.dispatch : 0),
+          period_fixed_benefit_gbp: micUplift?.key === scenarioKey(s) ? micUplift.capacity : 0,
           // Wear is added back server-side: capex already pays for the
           // battery, so charging wear in the cashflow too would double-count.
           period_wear_cost_gbp: Math.max(s.deg_cost_gbp ?? 0, 0),
