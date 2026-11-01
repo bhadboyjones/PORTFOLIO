@@ -80,7 +80,7 @@ test("a flat all-inclusive tariff says the battery has nothing to trade", async 
 
 test("landing shows the live price, and works without it", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText(/GB market price £[\d,.]+\/MWh at \d\d:\d\d/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/highest £[\d,.]+ at \d\d:\d\d, average £[\d,.]+, cheapest £[\d,.]+ at \d\d:\d\d/)).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".live-line polyline")).toBeAttached();
   if (process.env.SHOT) { await page.waitForTimeout(2600); await page.screenshot({ path: process.env.SHOT.replace(".png", "-live.png") }); }
 

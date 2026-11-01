@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchLivePrices, linePoints, LIVE_REFRESH_MS } from "../lib/livePrice";
+import { fetchLivePrices, linePoints, LIVE_REFRESH_MS, todayStats } from "../lib/livePrice";
 import { gbp } from "../format";
 
 const W = 392, H = 104;
@@ -30,11 +30,12 @@ export function LivePriceLine({ points }) {
 }
 
 export function LivePriceCaption({ points }) {
-  const last = points?.at(-1);
-  if (!last) return null;
+  const day = todayStats(points);
+  if (!day) return null;
+  const at = (p) => clock.format(new Date(p.time));
   return (
     <p className="tnum" style={{ margin: "8px 0 0", fontSize: 14, color: "var(--muted)" }}>
-      GB market price {gbp(last.price)}/MWh at {clock.format(new Date(last.time))}. Elexon market index, last 24 hours shown.
+      GB market price today, £/MWh: highest {gbp(day.high.price)} at {at(day.high)}, average {gbp(day.average)}, cheapest {gbp(day.low.price)} at {at(day.low)}. Source: Elexon. Chart shows the last 24 hours.
     </p>
   );
 }

@@ -26,6 +26,19 @@ export function linePoints(points, width, height, pad = 8) {
   }).join(" ");
 }
 
+const ukDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" });
+
+/** Highest, average and cheapest half-hour of the current UK day so far, or null. */
+export function todayStats(points, now = new Date()) {
+  const today = ukDay.format(now);
+  const rows = (points ?? []).filter((p) => ukDay.format(new Date(p.time)) === today);
+  if (!rows.length) return null;
+  const high = rows.reduce((a, b) => (b.price > a.price ? b : a));
+  const low = rows.reduce((a, b) => (b.price < a.price ? b : a));
+  const average = rows.reduce((sum, p) => sum + p.price, 0) / rows.length;
+  return { high, low, average };
+}
+
 export async function fetchLivePrices(now = new Date()) {
   const from = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
   const url = `${URL_BASE}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(now.toISOString())}&dataProviders=APXMIDP`;
