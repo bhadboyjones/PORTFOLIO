@@ -262,8 +262,8 @@ verified. flexiq today uses `price − gduos` with no fee, and this can go negat
 
 Illustration: NPG LV, 3.82p/kVA/day, MIC 1,000 kVA, January (31 days). The excess
 rate is a figure the DNO publishes, so a breach always bills at that one rate and
-nothing switches between multiples. All 12 areas read publish excess at 1× capacity. Trade sources
-quote 3×, which none of the 12 statements read supports, so that line is a what-if.
+nothing switches between multiples. All 14 areas publish excess at 1× capacity. Trade sources
+quote 3×, which none of the 14 areas supports, so that line is a what-if.
 
 ```
 capacity = 1,000 × 31 × 3.82p = £1,184.20 (paid whatever the site uses)

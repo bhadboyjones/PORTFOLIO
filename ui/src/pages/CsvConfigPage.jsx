@@ -16,7 +16,8 @@ const DNO_OPTIONS = [
   { key: "ENWL",   label: "Electricity North West" },
   { key: "SEPD",   label: "SSEN: Southern England" },
   { key: "SHEPD",  label: "SSEN: North Scotland" },
-  { key: "SPEN",   label: "SP Energy Networks (unverified rates)" },
+  { key: "SPD",    label: "SP Energy Networks: Central and South Scotland" },
+  { key: "SPM",    label: "SP Energy Networks: Merseyside and North Wales" },
 ];
 
 

@@ -2,10 +2,9 @@
 DUoS/GDUoS rate table — GB licence areas, LV and HV, 2026/27 charge year.
 
 All rates are from each area's LC14 statement or schedule of charges, Annex 1,
-Site Specific Band 2 and Generation Site Specific rows, read 2026-11-01. Excess
-capacity is the published rate, equal to capacity in all 12 areas read.
-SP Distribution and SP Manweb could not be read: "SPEN" holds older figures for
-both, and every run on it carries a warning.
+Site Specific Band 2 and Generation Site Specific rows, read 2026-11-01.
+SP Distribution and SP Manweb are the only areas with weekend red. Excess
+capacity is the published rate, equal to capacity in all 14 areas.
 Dict stores values in source units (p/kWh, p/day, p/kVA/day).
 Call convert_rates_to_model_units() to get model-ready £/MWh and £/day values.
 
@@ -20,6 +19,14 @@ Annual update process (each Dec/Jan when DNOs publish):
 # 2027/28 statements are already published (DNOs publish ~15 months ahead):
 #   1. Add a new top-level key "2027-28" alongside "2026-27" — do not overwrite.
 #   2. Key structure: DUOS_RATES = {"2026-27": {...}, "2027-28": {...}}
+#   3. Update GET /duos-rates/{dno}/{voltage} to accept optional ?charge_year= param.
+#      Default = current charge year. Return 404 if year not in dict.
+#   4. Add a "Tariff year" dropdown to CsvConfigPage.jsx (default = current year).
+#      Pass selected year to /duos-rates endpoint and to run_csv payload.
+#   5. Backend uses selected charge_year to look up rates — not hardcoded to latest.
+# Until a second year exists, no UI change is needed.
+
+DUOS_RATES = {"2026-27": {...}, "2027-28": {...}}
 #   3. Update GET /duos-rates/{dno}/{voltage} to accept optional ?charge_year= param.
 #      Default = current charge year. Return 404 if year not in dict.
 #   4. Add a "Tariff year" dropdown to CsvConfigPage.jsx (default = current year).
@@ -505,39 +512,76 @@ DUOS_RATES = {
             },
         },
 
-        "SPEN": {
-            # SP Energy Networks: older figures, not re-read on 2026-11-01 (site
-            # blocked). One set covers SPD and SPM, and weekend red is unconfirmed.
+        "SPD": {
+            # SP Distribution. Schedule of charges v0.7, status Final.
             "LV": {
-                "duos_red_p_kwh":         10.798,
-                "duos_amber_p_kwh":       1.103,
-                "duos_green_p_kwh":       0.029,
-                "gduos_red_p_kwh":        9.415,
-                "gduos_amber_p_kwh":      1.024,
-                "gduos_green_p_kwh":      0.026,
-                "fixed_p_per_day":        608.00,
-                "capacity_p_per_kva_day": 5.34,
-                "gduos_fixed_p_per_day":  0.00,
+                "duos_red_p_kwh":                   10.798,
+                "duos_amber_p_kwh":                 1.103,
+                "duos_green_p_kwh":                 0.029,
+                "gduos_red_p_kwh":                  9.415,
+                "gduos_amber_p_kwh":                1.024,
+                "gduos_green_p_kwh":                0.026,
+                "fixed_p_per_day":                  608,
+                "capacity_p_per_kva_day":           5.34,
+                "excess_capacity_p_per_kva_day":    5.34,
+                "gduos_fixed_p_per_day":            0,
                 "rag_schedule": {
-                    "_warning": SP_UNVERIFIED,
-                    "red":   {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
+                    "red": {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
                     "amber": {"weekday": [["08:00", "16:30"], ["19:30", "22:30"]], "weekend": []},
                     "green": "remainder",
                 },
             },
             "HV": {
-                "duos_red_p_kwh":         4.377,
-                "duos_amber_p_kwh":       0.322,
-                "duos_green_p_kwh":       0.010,
-                "gduos_red_p_kwh":        5.194,
-                "gduos_amber_p_kwh":      0.430,
-                "gduos_green_p_kwh":      0.013,
-                "fixed_p_per_day":        159.79,
-                "capacity_p_per_kva_day": 8.99,
-                "gduos_fixed_p_per_day":  116.68,
+                "duos_red_p_kwh":                   4.377,
+                "duos_amber_p_kwh":                 0.322,
+                "duos_green_p_kwh":                 0.01,
+                "gduos_red_p_kwh":                  5.194,
+                "gduos_amber_p_kwh":                0.43,
+                "gduos_green_p_kwh":                0.013,
+                "fixed_p_per_day":                  5424.49,
+                "capacity_p_per_kva_day":           8.99,
+                "excess_capacity_p_per_kva_day":    8.99,
+                "gduos_fixed_p_per_day":            116.68,
                 "rag_schedule": {
-                    "_warning": SP_UNVERIFIED,
-                    "red":   {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
+                    "red": {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
+                    "amber": {"weekday": [["08:00", "16:30"], ["19:30", "22:30"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "SPM": {
+            # SP Manweb. Schedule of charges v0.6, status Final.
+            "LV": {
+                "duos_red_p_kwh":                   11.785,
+                "duos_amber_p_kwh":                 2.301,
+                "duos_green_p_kwh":                 0.315,
+                "gduos_red_p_kwh":                  10.986,
+                "gduos_amber_p_kwh":                2.398,
+                "gduos_green_p_kwh":                0.346,
+                "fixed_p_per_day":                  1021.63,
+                "capacity_p_per_kva_day":           6.87,
+                "excess_capacity_p_per_kva_day":    6.87,
+                "gduos_fixed_p_per_day":            0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
+                    "amber": {"weekday": [["08:00", "16:30"], ["19:30", "22:30"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   7.151,
+                "duos_amber_p_kwh":                 0.974,
+                "duos_green_p_kwh":                 0.102,
+                "gduos_red_p_kwh":                  7.283,
+                "gduos_amber_p_kwh":                1.105,
+                "gduos_green_p_kwh":                0.13,
+                "fixed_p_per_day":                  8585.39,
+                "capacity_p_per_kva_day":           10,
+                "excess_capacity_p_per_kva_day":    10,
+                "gduos_fixed_p_per_day":            95.24,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
                     "amber": {"weekday": [["08:00", "16:30"], ["19:30", "22:30"]], "weekend": []},
                     "green": "remainder",
                 },

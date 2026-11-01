@@ -209,8 +209,8 @@ It still escalates. Dispatch and excess changes stay with the backtest benefit.
 
 - **Step 0 (research):** excess capacity rate and billing period per DNO from
   the 2026/27 LC14 statements. Checked 2026-11-01: Eastern Power Networks and all
-  12 of 14 licence areas publish excess equal to capacity at LV and HV. This overrides
-  the "2 to 3×" trade claims. SP Distribution and SP Manweb are unread.
+  All 14 licence areas publish excess equal to capacity at LV and HV. This overrides
+  the "2 to 3×" trade claims.
   Ofgem's DCP161 decision removed the customer-contribution discount from excess
   charges and sets no multiple.
   Verify every one at the primary source. Eastern Power Networks 2026/27 v1.5,

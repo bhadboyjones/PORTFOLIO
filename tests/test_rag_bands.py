@@ -6,14 +6,14 @@ from src.csv_pipeline import map_rag_bands
 from src.duos_rates import get_duos_rates, convert_rates_to_model_units
 
 
-def _bands(times, dno="SPEN", voltage="HV"):
+def _bands(times, dno="SPD", voltage="HV"):
     sched = convert_rates_to_model_units(get_duos_rates(dno, voltage))["rag_schedule"]
     ts = pd.to_datetime(times).tz_localize("Europe/London").tz_convert("UTC")
     df = pd.DataFrame({"startTime": ts})
     return list(map_rag_bands(df, sched["red"], sched["amber"], "startTime"))
 
 
-def test_spen_weekend_red():
+def test_sp_weekend_red():
     # SPEN carries a confirmed weekend Red window 16:00–20:00.
     assert _bands(["2026-05-02 17:00"]) == ["red"]    # Saturday evening
     assert _bands(["2026-05-02 10:00"]) == ["green"]  # Saturday morning
