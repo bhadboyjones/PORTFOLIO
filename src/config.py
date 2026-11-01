@@ -55,7 +55,7 @@ SITE_ARCHETYPES = {
         "chp_kw":         0,
         "pv_kwp":         400,
         "contracted_kva": 1000,   # peak_mw x 1000, unity PF assumption
-        "dno_key":        "NPG",
+        "dno_key":        "NPGY",
         "voltage_level":  "HV",
     },
     "medium_industrial": {
@@ -67,7 +67,7 @@ SITE_ARCHETYPES = {
         "chp_kw":         500,
         "pv_kwp":         600,
         "contracted_kva": 2000,   # peak_mw x 1000, unity PF assumption
-        "dno_key":        "NPG",
+        "dno_key":        "NPGY",
         "voltage_level":  "HV",
     },
     "large_industrial": {
@@ -79,7 +79,7 @@ SITE_ARCHETYPES = {
         "chp_kw":         1000,
         "pv_kwp":         800,
         "contracted_kva": 3000,   # peak_mw x 1000, unity PF assumption
-        "dno_key":        "NPG",
+        "dno_key":        "NPGY",
         "voltage_level":  "HV",
     },
 }
@@ -137,7 +137,7 @@ EXPORT_SCENARIOS = [0.0, 0.25, 0.5, 1.0]  # MW
 
 # RAG bands defined in minutes from midnight (local UK time).
 # Red = peak, Amber = shoulder, Green = off-peak.
-# Weekends and bank holidays always green.
+# Weekends green here; bank holidays are priced as the weekday they fall on.
 
 NETWORK_CONFIG_NEC_HV = {
     "dno":        "Northern Powergrid (Northeast)",
@@ -150,7 +150,7 @@ NETWORK_CONFIG_NEC_HV = {
         # green = everything else (23:00-07:00)
     },
     "weekends_are_green":     True,
-    "bank_holidays_are_green": True,
+    "bank_holidays_are_green": False,
 
     # Volumetric rates £/MWh — apply to imports (dduos) and exports (gduos)
     "dduos_gbp_per_mwh": {"red": 88.0,  "amber": 5.0,  "green": 0.5},

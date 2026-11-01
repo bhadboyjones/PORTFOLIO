@@ -41,7 +41,7 @@ def _params(**kw):
     """Build CsvRunParams with plain values (FastAPI Form defaults bypassed)."""
     from api.schemas import CsvRunParams
     base = dict(
-        dno_key="NPG", voltage_level="HV",
+        dno_key="NPGY", voltage_level="HV",
         bess_configs_json='[{"power_mw": 1, "capacity_mwh": 2}]', export_limits_json="[0]",
         bess_rte_pct=90.0, bess_max_cycles=1.5, bess_charge_eff_pct=None,
         bess_discharge_eff_pct=None, bess_soc_min_pct=5.0, bess_soc_max_pct=95.0,

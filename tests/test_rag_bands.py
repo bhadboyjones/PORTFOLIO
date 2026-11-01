@@ -23,11 +23,10 @@ def test_weekday_red():
     assert _bands(["2026-05-01 17:00"]) == ["red"]    # Friday in the red window
 
 
-def test_bank_holiday_is_green():
-    # 2026-05-04 is the early May bank holiday (Monday) — Green despite the
-    # weekday red window; the following Tuesday is back to Red.
-    assert _bands(["2026-05-04 17:00"]) == ["green"]
-    assert _bands(["2026-05-05 17:00"]) == ["red"]
+def test_bank_holiday_is_priced_as_a_weekday():
+    # 2026-05-04 is the early May bank holiday (Monday). Statements say
+    # "Monday to Friday (Including Bank Holidays)".
+    assert _bands(["2026-05-04 17:00"]) == ["red"]
 
 
 def test_midnight_crossing_window():

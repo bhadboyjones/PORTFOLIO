@@ -4,12 +4,19 @@ import { bandsFromWindows } from "../components/dayTapeBands";
 import { parseCsvMeta, peakKw, dataIssues } from "../lib/csvMeta";
 
 const DNO_OPTIONS = [
-  { key: "UKPN", label: "UK Power Networks (SE / East / London)" },
-  { key: "NGED", label: "National Grid ED (SW / East Midlands)" },
-  { key: "NPG",  label: "Northern Powergrid (NE / Yorkshire)" },
-  { key: "ENWL", label: "Electricity North West (NW England)" },
-  { key: "SPEN", label: "SP Energy Networks (Scotland / Merseyside)" },
-  { key: "SSEN", label: "Scottish & Southern EN (N Scotland / South)" },
+  { key: "EPN",    label: "UK Power Networks: Eastern" },
+  { key: "LPN",    label: "UK Power Networks: London" },
+  { key: "SPN",    label: "UK Power Networks: South East" },
+  { key: "EMID",   label: "NGED: East Midlands" },
+  { key: "WMID",   label: "NGED: West Midlands" },
+  { key: "SWEST",  label: "NGED: South West" },
+  { key: "SWALES", label: "NGED: South Wales" },
+  { key: "NPGN",   label: "Northern Powergrid: Northeast" },
+  { key: "NPGY",   label: "Northern Powergrid: Yorkshire" },
+  { key: "ENWL",   label: "Electricity North West" },
+  { key: "SEPD",   label: "SSEN: Southern England" },
+  { key: "SHEPD",  label: "SSEN: North Scotland" },
+  { key: "SPEN",   label: "SP Energy Networks (unverified rates)" },
 ];
 
 

@@ -1,7 +1,11 @@
 """
-DUoS/GDUoS rate table — 6 DNOs, LV and HV, 2026/27 charge year.
+DUoS/GDUoS rate table — GB licence areas, LV and HV, 2026/27 charge year.
 
-All rates sourced from LC14 statements (April 2026 effective).
+All rates are from each area's LC14 statement or schedule of charges, Annex 1,
+Site Specific Band 2 and Generation Site Specific rows, read 2026-11-01. Excess
+capacity is the published rate, equal to capacity in all 12 areas read.
+SP Distribution and SP Manweb could not be read: "SPEN" holds older figures for
+both, and every run on it carries a warning.
 Dict stores values in source units (p/kWh, p/day, p/kVA/day).
 Call convert_rates_to_model_units() to get model-ready £/MWh and £/day values.
 
@@ -13,7 +17,7 @@ Annual update process (each Dec/Jan when DNOs publish):
 
 # CHARGE YEAR VERSIONING — V2
 # Current structure: single dict entry for 2026/27.
-# When 2027/28 LC14 statements publish (expected late March / early April 2027):
+# 2027/28 statements are already published (DNOs publish ~15 months ahead):
 #   1. Add a new top-level key "2027-28" alongside "2026-27" — do not overwrite.
 #   2. Key structure: DUOS_RATES = {"2026-27": {...}, "2027-28": {...}}
 #   3. Update GET /duos-rates/{dno}/{voltage} to accept optional ?charge_year= param.
@@ -23,116 +27,361 @@ Annual update process (each Dec/Jan when DNOs publish):
 #   5. Backend uses selected charge_year to look up rates — not hardcoded to latest.
 # Until a second year exists, no UI change is needed.
 
+SP_UNVERIFIED = (
+    "SP Energy Networks rates are unverified: its 2026/27 statements could not be "
+    "read, so one set of older figures covers SP Distribution and SP Manweb."
+)
+
 DUOS_RATES = {
     "charge_year": "2026-27",
     "effective_from": "2026-04-01",
     "dnos": {
 
-        "UKPN": {
-            # Average of EPN + LPN + SPN — all confirmed from LC14 statements.
-            # LPN has seasonal summer Red shift (Jun-Aug 11:00-14:00) — ignored in avg.
-            # Users on London sites should override rates in the Advanced section.
+        "EPN": {
+            # Eastern Power Networks. V1.5.
+            # https://media.umbraco.io/ukpn-cms/fr2evo4j/eastern-power-networks-lc14-statement-2026-v1-5.pdf
             "LV": {
-                "duos_red_p_kwh":         7.949,
-                "duos_amber_p_kwh":       0.496,
-                "duos_green_p_kwh":       0.084,
-                "gduos_red_p_kwh":        9.698,
-                "gduos_amber_p_kwh":      0.696,
-                "gduos_green_p_kwh":      0.109,
-                "fixed_p_per_day":        33.75,
-                "capacity_p_per_kva_day": 7.95,
-                "gduos_fixed_p_per_day":  0.00,
+                "duos_red_p_kwh":                   8.149,
+                "duos_amber_p_kwh":                 0.937,
+                "duos_green_p_kwh":                 0.108,
+                "gduos_red_p_kwh":                  9.135,
+                "gduos_amber_p_kwh":                1.124,
+                "gduos_green_p_kwh":                0.144,
+                "fixed_p_per_day":                  33.09,
+                "capacity_p_per_kva_day":           8.04,
+                "excess_capacity_p_per_kva_day":    8.04,
+                "gduos_fixed_p_per_day":            0.0,
                 "rag_schedule": {
-                    "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
                     "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
                     "green": "remainder",
                 },
             },
             "HV": {
-                "duos_red_p_kwh":         4.762,
-                "duos_amber_p_kwh":       0.299,
-                "duos_green_p_kwh":       0.034,
-                "gduos_red_p_kwh":        5.522,
-                "gduos_amber_p_kwh":      0.363,
-                "gduos_green_p_kwh":      0.044,
-                "fixed_p_per_day":        159.36,
-                "capacity_p_per_kva_day": 7.05,
-                "gduos_fixed_p_per_day":  11.30,
+                "duos_red_p_kwh":                   4.837,
+                "duos_amber_p_kwh":                 0.457,
+                "duos_green_p_kwh":                 0.038,
+                "gduos_red_p_kwh":                  5.466,
+                "gduos_amber_p_kwh":                0.559,
+                "gduos_green_p_kwh":                0.052,
+                "fixed_p_per_day":                  305.47,
+                "capacity_p_per_kva_day":           5.31,
+                "excess_capacity_p_per_kva_day":    5.31,
+                "gduos_fixed_p_per_day":            12.88,
                 "rag_schedule": {
-                    "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
                     "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
                     "green": "remainder",
                 },
             },
         },
 
-        "NGED": {
-            # Average of East Midlands + West Midlands + South West + South Wales.
-            # SW/WA red starts 17:00 — EM/WM 16:00 used as representative.
+        "LPN": {
+            # London Power Networks. V1.3.
+            # https://media.umbraco.io/ukpn-cms/bqthjnqt/london-power-networks-lc14-statement-2026-v1-3.pdf
             "LV": {
-                "duos_red_p_kwh":         10.503,
-                "duos_amber_p_kwh":       0.960,
-                "duos_green_p_kwh":       0.119,
-                "gduos_red_p_kwh":        10.548,
-                "gduos_amber_p_kwh":      1.032,
-                "gduos_green_p_kwh":      0.129,
-                "fixed_p_per_day":        132.79,
-                "capacity_p_per_kva_day": 10.25,
-                "gduos_fixed_p_per_day":  0.00,
+                "duos_red_p_kwh":                   4.388,
+                "duos_amber_p_kwh":                 0.162,
+                "duos_green_p_kwh":                 0.024,
+                "gduos_red_p_kwh":                  7.578,
+                "gduos_amber_p_kwh":                0.516,
+                "gduos_green_p_kwh":                0.043,
+                "fixed_p_per_day":                  2.35,
+                "capacity_p_per_kva_day":           7.23,
+                "excess_capacity_p_per_kva_day":    7.23,
+                "gduos_fixed_p_per_day":            0.0,
                 "rag_schedule": {
-                    "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "red": {"weekday": [["11:00", "14:00"], ["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "11:00"], ["14:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   0.009,
+                "duos_amber_p_kwh":                 0.0,
+                "duos_green_p_kwh":                 0.0,
+                "gduos_red_p_kwh":                  4.094,
+                "gduos_amber_p_kwh":                0.313,
+                "gduos_green_p_kwh":                0.01,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           9.19,
+                "excess_capacity_p_per_kva_day":    9.19,
+                "gduos_fixed_p_per_day":            8.55,
+                "rag_schedule": {
+                    "red": {"weekday": [["11:00", "14:00"], ["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "11:00"], ["14:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "SPN": {
+            # South Eastern Power Networks. V1.3.
+            # https://media.umbraco.io/ukpn-cms/m2aj0zfs/south-eastern-power-networks-lc14-statement-2026-v1-3.pdf
+            "LV": {
+                "duos_red_p_kwh":                   11.311,
+                "duos_amber_p_kwh":                 0.389,
+                "duos_green_p_kwh":                 0.121,
+                "gduos_red_p_kwh":                  12.382,
+                "gduos_amber_p_kwh":                0.448,
+                "gduos_green_p_kwh":                0.139,
+                "fixed_p_per_day":                  65.81,
+                "capacity_p_per_kva_day":           8.57,
+                "excess_capacity_p_per_kva_day":    8.57,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   6.01,
+                "duos_amber_p_kwh":                 0.177,
+                "duos_green_p_kwh":                 0.056,
+                "gduos_red_p_kwh":                  7.007,
+                "gduos_amber_p_kwh":                0.218,
+                "gduos_green_p_kwh":                0.069,
+                "fixed_p_per_day":                  636.85,
+                "capacity_p_per_kva_day":           6.66,
+                "excess_capacity_p_per_kva_day":    6.66,
+                "gduos_fixed_p_per_day":            12.47,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "EMID": {
+            # NGED East Midlands. 0.1.
+            # https://commercial.nationalgrid.co.uk/downloads-view-reciteme/684677
+            "LV": {
+                "duos_red_p_kwh":                   7.777,
+                "duos_amber_p_kwh":                 0.958,
+                "duos_green_p_kwh":                 0.054,
+                "gduos_red_p_kwh":                  7.711,
+                "gduos_amber_p_kwh":                0.998,
+                "gduos_green_p_kwh":                0.06,
+                "fixed_p_per_day":                  85.08,
+                "capacity_p_per_kva_day":           7.68,
+                "excess_capacity_p_per_kva_day":    7.68,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
                     "amber": {"weekday": [["07:30", "16:00"], ["19:00", "21:00"]], "weekend": []},
                     "green": "remainder",
                 },
             },
             "HV": {
-                "duos_red_p_kwh":         4.449,
-                "duos_amber_p_kwh":       0.273,
-                "duos_green_p_kwh":       0.036,
-                "gduos_red_p_kwh":        5.327,
-                "gduos_amber_p_kwh":      0.400,
-                "gduos_green_p_kwh":      0.050,
-                "fixed_p_per_day":        114.43,
-                "capacity_p_per_kva_day": 9.58,
-                "gduos_fixed_p_per_day":  71.62,
+                "duos_red_p_kwh":                   2.837,
+                "duos_amber_p_kwh":                 0.257,
+                "duos_green_p_kwh":                 0.009,
+                "gduos_red_p_kwh":                  3.958,
+                "gduos_amber_p_kwh":                0.431,
+                "gduos_green_p_kwh":                0.021,
+                "fixed_p_per_day":                  866.35,
+                "capacity_p_per_kva_day":           8.57,
+                "excess_capacity_p_per_kva_day":    8.57,
+                "gduos_fixed_p_per_day":            61.51,
                 "rag_schedule": {
-                    "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
                     "amber": {"weekday": [["07:30", "16:00"], ["19:00", "21:00"]], "weekend": []},
                     "green": "remainder",
                 },
             },
         },
 
-        "NPG": {
-            # Northern Powergrid — Yorkshire rates confirmed; used for both NE and Yorkshire.
+        "WMID": {
+            # NGED West Midlands. 0.1.
+            # https://commercial.nationalgrid.co.uk/downloads-view-reciteme/684676
             "LV": {
-                "duos_red_p_kwh":         5.829,
-                "duos_amber_p_kwh":       1.528,
-                "duos_green_p_kwh":       0.172,
-                "gduos_red_p_kwh":        4.895,
-                "gduos_amber_p_kwh":      1.312,
-                "gduos_green_p_kwh":      0.153,
-                "fixed_p_per_day":        293.65,
-                "capacity_p_per_kva_day": 3.82,
-                "gduos_fixed_p_per_day":  0.00,
+                "duos_red_p_kwh":                   6.515,
+                "duos_amber_p_kwh":                 0.827,
+                "duos_green_p_kwh":                 0.1,
+                "gduos_red_p_kwh":                  7.093,
+                "gduos_amber_p_kwh":                0.909,
+                "gduos_green_p_kwh":                0.124,
+                "fixed_p_per_day":                  219.77,
+                "capacity_p_per_kva_day":           10.66,
+                "excess_capacity_p_per_kva_day":    10.66,
+                "gduos_fixed_p_per_day":            0.0,
                 "rag_schedule": {
-                    "red":   {"weekday": [["16:00", "19:30"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:30", "16:00"], ["19:00", "21:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   1.764,
+                "duos_amber_p_kwh":                 0.205,
+                "duos_green_p_kwh":                 0.011,
+                "gduos_red_p_kwh":                  2.752,
+                "gduos_amber_p_kwh":                0.339,
+                "gduos_green_p_kwh":                0.024,
+                "fixed_p_per_day":                  2275.43,
+                "capacity_p_per_kva_day":           9.26,
+                "excess_capacity_p_per_kva_day":    9.26,
+                "gduos_fixed_p_per_day":            66.24,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:30", "16:00"], ["19:00", "21:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "SWEST": {
+            # NGED South West. 0.1.
+            # https://commercial.nationalgrid.co.uk/downloads-view-reciteme/684674
+            "LV": {
+                "duos_red_p_kwh":                   14.833,
+                "duos_amber_p_kwh":                 1.065,
+                "duos_green_p_kwh":                 0.114,
+                "gduos_red_p_kwh":                  14.503,
+                "gduos_amber_p_kwh":                1.156,
+                "gduos_green_p_kwh":                0.126,
+                "fixed_p_per_day":                  60.79,
+                "capacity_p_per_kva_day":           12.18,
+                "excess_capacity_p_per_kva_day":    12.18,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["17:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:30", "17:00"], ["19:00", "21:30"]], "weekend": [["16:30", "19:30"]]},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   7.242,
+                "duos_amber_p_kwh":                 0.302,
+                "duos_green_p_kwh":                 0.028,
+                "gduos_red_p_kwh":                  7.786,
+                "gduos_amber_p_kwh":                0.412,
+                "gduos_green_p_kwh":                0.041,
+                "fixed_p_per_day":                  525.1,
+                "capacity_p_per_kva_day":           10.06,
+                "excess_capacity_p_per_kva_day":    10.06,
+                "gduos_fixed_p_per_day":            78.08,
+                "rag_schedule": {
+                    "red": {"weekday": [["17:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:30", "17:00"], ["19:00", "21:30"]], "weekend": [["16:30", "19:30"]]},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "SWALES": {
+            # NGED South Wales. 0.1.
+            # https://commercial.nationalgrid.co.uk/downloads-view-reciteme/684675
+            "LV": {
+                "duos_red_p_kwh":                   12.885,
+                "duos_amber_p_kwh":                 0.989,
+                "duos_green_p_kwh":                 0.206,
+                "gduos_red_p_kwh":                  12.886,
+                "gduos_amber_p_kwh":                1.063,
+                "gduos_green_p_kwh":                0.204,
+                "fixed_p_per_day":                  165.52,
+                "capacity_p_per_kva_day":           10.49,
+                "excess_capacity_p_per_kva_day":    10.49,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["17:00", "19:30"]], "weekend": []},
+                    "amber": {"weekday": [["07:30", "17:00"], ["19:30", "22:00"]], "weekend": [["12:00", "13:00"], ["16:00", "21:00"]]},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   5.953,
+                "duos_amber_p_kwh":                 0.327,
+                "duos_green_p_kwh":                 0.096,
+                "gduos_red_p_kwh":                  6.811,
+                "gduos_amber_p_kwh":                0.419,
+                "gduos_green_p_kwh":                0.112,
+                "fixed_p_per_day":                  1590.95,
+                "capacity_p_per_kva_day":           10.43,
+                "excess_capacity_p_per_kva_day":    10.43,
+                "gduos_fixed_p_per_day":            80.63,
+                "rag_schedule": {
+                    "red": {"weekday": [["17:00", "19:30"]], "weekend": []},
+                    "amber": {"weekday": [["07:30", "17:00"], ["19:30", "22:00"]], "weekend": [["12:00", "13:00"], ["16:00", "21:00"]]},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "NPGN": {
+            # Northern Powergrid Northeast. 0.2.
+            # https://www.northernpowergrid.com/sites/default/files/assets/Northern%20Powergrid%20(Northeast)%20-%20%202026-27%20LC14%20Charging%20Statement%20-%20v0.2.pdf
+            "LV": {
+                "duos_red_p_kwh":                   8.522,
+                "duos_amber_p_kwh":                 1.255,
+                "duos_green_p_kwh":                 0.179,
+                "gduos_red_p_kwh":                  7.736,
+                "gduos_amber_p_kwh":                1.171,
+                "gduos_green_p_kwh":                0.165,
+                "fixed_p_per_day":                  129.89,
+                "capacity_p_per_kva_day":           5.48,
+                "excess_capacity_p_per_kva_day":    5.48,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:30"]], "weekend": []},
                     "amber": {"weekday": [["08:00", "16:00"], ["19:30", "22:00"]], "weekend": []},
                     "green": "remainder",
                 },
             },
             "HV": {
-                "duos_red_p_kwh":         2.514,
-                "duos_amber_p_kwh":       0.588,
-                "duos_green_p_kwh":       0.052,
-                "gduos_red_p_kwh":        2.826,
-                "gduos_amber_p_kwh":      0.702,
-                "gduos_green_p_kwh":      0.071,
-                "fixed_p_per_day":        421.64,
-                "capacity_p_per_kva_day": 3.78,
-                "gduos_fixed_p_per_day":  93.70,
+                "duos_red_p_kwh":                   3.403,
+                "duos_amber_p_kwh":                 0.427,
+                "duos_green_p_kwh":                 0.066,
+                "gduos_red_p_kwh":                  3.884,
+                "gduos_amber_p_kwh":                0.525,
+                "gduos_green_p_kwh":                0.078,
+                "fixed_p_per_day":                  1316.4,
+                "capacity_p_per_kva_day":           5.6,
+                "excess_capacity_p_per_kva_day":    5.6,
+                "gduos_fixed_p_per_day":            70.64,
                 "rag_schedule": {
-                    "red":   {"weekday": [["16:00", "19:30"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:30"]], "weekend": []},
+                    "amber": {"weekday": [["08:00", "16:00"], ["19:30", "22:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "NPGY": {
+            # Northern Powergrid Yorkshire. 0.2.
+            # https://www.northernpowergrid.com/sites/default/files/assets/Northern%20Powergrid%20(Yorkshire)%20-%20%202026-27%20LC14%20Charging%20Statement%20-%20v0.2.pdf
+            "LV": {
+                "duos_red_p_kwh":                   5.829,
+                "duos_amber_p_kwh":                 1.528,
+                "duos_green_p_kwh":                 0.172,
+                "gduos_red_p_kwh":                  4.895,
+                "gduos_amber_p_kwh":                1.312,
+                "gduos_green_p_kwh":                0.153,
+                "fixed_p_per_day":                  293.65,
+                "capacity_p_per_kva_day":           3.82,
+                "excess_capacity_p_per_kva_day":    3.82,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:30"]], "weekend": []},
+                    "amber": {"weekday": [["08:00", "16:00"], ["19:30", "22:00"]], "weekend": []},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   2.514,
+                "duos_amber_p_kwh":                 0.588,
+                "duos_green_p_kwh":                 0.052,
+                "gduos_red_p_kwh":                  2.826,
+                "gduos_amber_p_kwh":                0.702,
+                "gduos_green_p_kwh":                0.071,
+                "fixed_p_per_day":                  2908.28,
+                "capacity_p_per_kva_day":           3.78,
+                "excess_capacity_p_per_kva_day":    3.78,
+                "gduos_fixed_p_per_day":            93.7,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:30"]], "weekend": []},
                     "amber": {"weekday": [["08:00", "16:00"], ["19:30", "22:00"]], "weekend": []},
                     "green": "remainder",
                 },
@@ -140,48 +389,125 @@ DUOS_RATES = {
         },
 
         "ENWL": {
-            # Electricity North West. Unit rates confirmed from LC14.
-            # RAG schedule UNVERIFIED — source docx embeds schedule as WMF image.
-            # Placeholder schedule used. Verify against ENWL LC14 before production use.
+            # Electricity North West. statement 1.0 (31/1/2025); schedule v1.1.
+            # https://enwl.co.uk/globalassets/about-us/regulatory-information/documents/current-charging-information/26-27/enwl-lc14-statement-2026-27_v1.0-final.docx
             "LV": {
-                "duos_red_p_kwh":         7.317,
-                "duos_amber_p_kwh":       0.425,
-                "duos_green_p_kwh":       0.024,
-                "gduos_red_p_kwh":        9.968,
-                "gduos_amber_p_kwh":      1.578,
-                "gduos_green_p_kwh":      0.092,
-                "fixed_p_per_day":        0.00,
-                "capacity_p_per_kva_day": 6.92,
-                "gduos_fixed_p_per_day":  0.00,
+                "duos_red_p_kwh":                   7.317,
+                "duos_amber_p_kwh":                 0.425,
+                "duos_green_p_kwh":                 0.024,
+                "gduos_red_p_kwh":                  9.968,
+                "gduos_amber_p_kwh":                1.578,
+                "gduos_green_p_kwh":                0.092,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           6.92,
+                "excess_capacity_p_per_kva_day":    6.92,
+                "gduos_fixed_p_per_day":            0.0,
                 "rag_schedule": {
-                    "_warning": "UNVERIFIED: placeholder only, verify against ENWL LC14 docx",
-                    "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
-                    "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["09:00", "16:00"], ["19:00", "20:30"]], "weekend": [["16:00", "19:00"]]},
                     "green": "remainder",
                 },
             },
             "HV": {
-                "duos_red_p_kwh":         4.919,
-                "duos_amber_p_kwh":       0.587,
-                "duos_green_p_kwh":       0.038,
-                "gduos_red_p_kwh":        5.982,
-                "gduos_amber_p_kwh":      0.814,
-                "gduos_green_p_kwh":      0.050,
-                "fixed_p_per_day":        225.05,
-                "capacity_p_per_kva_day": 7.79,
-                "gduos_fixed_p_per_day":  15.15,
+                "duos_red_p_kwh":                   0.64,
+                "duos_amber_p_kwh":                 0.0,
+                "duos_green_p_kwh":                 0.0,
+                "gduos_red_p_kwh":                  5.982,
+                "gduos_amber_p_kwh":                0.814,
+                "gduos_green_p_kwh":                0.05,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           7.79,
+                "excess_capacity_p_per_kva_day":    7.79,
+                "gduos_fixed_p_per_day":            15.15,
                 "rag_schedule": {
-                    "_warning": "UNVERIFIED: placeholder only, verify against ENWL LC14 docx",
-                    "red":   {"weekday": [["16:00", "19:00"]], "weekend": []},
-                    "amber": {"weekday": [["07:00", "16:00"], ["19:00", "23:00"]], "weekend": []},
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["09:00", "16:00"], ["19:00", "20:30"]], "weekend": [["16:00", "19:00"]]},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "SEPD": {
+            # SSEN Southern. V1.2.
+            # https://www.ssen.co.uk/globalassets/library/charging-statements-sepd/202627/sepd-duos-charges-2026-27_v1.2.pdf
+            "LV": {
+                "duos_red_p_kwh":                   6.243,
+                "duos_amber_p_kwh":                 0.509,
+                "duos_green_p_kwh":                 0.028,
+                "gduos_red_p_kwh":                  8.447,
+                "gduos_amber_p_kwh":                1.124,
+                "gduos_green_p_kwh":                0.057,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           10.63,
+                "excess_capacity_p_per_kva_day":    10.63,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:30", "19:30"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "16:30"], ["19:30", "22:00"]], "weekend": [["09:30", "21:30"]]},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   0.377,
+                "duos_amber_p_kwh":                 0.0,
+                "duos_green_p_kwh":                 0.0,
+                "gduos_red_p_kwh":                  5.239,
+                "gduos_amber_p_kwh":                0.404,
+                "gduos_green_p_kwh":                0.017,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           10.06,
+                "excess_capacity_p_per_kva_day":    10.06,
+                "gduos_fixed_p_per_day":            471.07,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:30", "19:30"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "16:30"], ["19:30", "22:00"]], "weekend": [["09:30", "21:30"]]},
+                    "green": "remainder",
+                },
+            },
+        },
+
+        "SHEPD": {
+            # SSEN North Scotland. V1.2.
+            # https://www.ssen.co.uk/globalassets/library/charging-statements-shepd/202627/shepd-duos-charges-2026-27_v1.2.pdf
+            "LV": {
+                "duos_red_p_kwh":                   8.049,
+                "duos_amber_p_kwh":                 2.321,
+                "duos_green_p_kwh":                 0.299,
+                "gduos_red_p_kwh":                  8.397,
+                "gduos_amber_p_kwh":                2.929,
+                "gduos_green_p_kwh":                0.629,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           13.83,
+                "excess_capacity_p_per_kva_day":    13.83,
+                "gduos_fixed_p_per_day":            0.0,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "16:00"], ["19:00", "21:00"]], "weekend": [["12:00", "20:00"]]},
+                    "green": "remainder",
+                },
+            },
+            "HV": {
+                "duos_red_p_kwh":                   1.463,
+                "duos_amber_p_kwh":                 0.018,
+                "duos_green_p_kwh":                 0.0,
+                "gduos_red_p_kwh":                  3.372,
+                "gduos_amber_p_kwh":                0.857,
+                "gduos_green_p_kwh":                0.339,
+                "fixed_p_per_day":                  0.0,
+                "capacity_p_per_kva_day":           20.1,
+                "excess_capacity_p_per_kva_day":    20.1,
+                "gduos_fixed_p_per_day":            1073.07,
+                "rag_schedule": {
+                    "red": {"weekday": [["16:00", "19:00"]], "weekend": []},
+                    "amber": {"weekday": [["07:00", "16:00"], ["19:00", "21:00"]], "weekend": [["12:00", "20:00"]]},
                     "green": "remainder",
                 },
             },
         },
 
         "SPEN": {
-            # SP Energy Networks — SPD confirmed; used for both SPD and SPM.
-            # Weekend Red 16:00-20:00 confirmed. No weekend Amber.
+            # SP Energy Networks: older figures, not re-read on 2026-11-01 (site
+            # blocked). One set covers SPD and SPM, and weekend red is unconfirmed.
             "LV": {
                 "duos_red_p_kwh":         10.798,
                 "duos_amber_p_kwh":       1.103,
@@ -193,6 +519,7 @@ DUOS_RATES = {
                 "capacity_p_per_kva_day": 5.34,
                 "gduos_fixed_p_per_day":  0.00,
                 "rag_schedule": {
+                    "_warning": SP_UNVERIFIED,
                     "red":   {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
                     "amber": {"weekday": [["08:00", "16:30"], ["19:30", "22:30"]], "weekend": []},
                     "green": "remainder",
@@ -209,47 +536,9 @@ DUOS_RATES = {
                 "capacity_p_per_kva_day": 8.99,
                 "gduos_fixed_p_per_day":  116.68,
                 "rag_schedule": {
+                    "_warning": SP_UNVERIFIED,
                     "red":   {"weekday": [["16:30", "19:30"]], "weekend": [["16:00", "20:00"]]},
                     "amber": {"weekday": [["08:00", "16:30"], ["19:30", "22:30"]], "weekend": []},
-                    "green": "remainder",
-                },
-            },
-        },
-
-        "SSEN": {
-            # SSEN Southern confirmed; used for both SSEN South and SSEN North.
-            # Weekend Amber 09:30-21:30 confirmed for SSEN South.
-            "LV": {
-                "duos_red_p_kwh":         6.243,
-                "duos_amber_p_kwh":       0.509,
-                "duos_green_p_kwh":       0.028,
-                "gduos_red_p_kwh":        8.447,
-                "gduos_amber_p_kwh":      1.124,
-                "gduos_green_p_kwh":      0.057,
-                "fixed_p_per_day":        0.00,
-                "capacity_p_per_kva_day": 10.63,
-                "gduos_fixed_p_per_day":  0.00,
-                "rag_schedule": {
-                    "red":   {"weekday": [["16:30", "19:30"]], "weekend": []},
-                    "amber": {"weekday": [["07:00", "16:30"], ["19:30", "22:00"]],
-                              "weekend": [["09:30", "21:30"]]},
-                    "green": "remainder",
-                },
-            },
-            "HV": {
-                "duos_red_p_kwh":         4.198,
-                "duos_amber_p_kwh":       0.288,
-                "duos_green_p_kwh":       0.012,
-                "gduos_red_p_kwh":        5.239,
-                "gduos_amber_p_kwh":      0.404,
-                "gduos_green_p_kwh":      0.017,
-                "fixed_p_per_day":        243.69,
-                "capacity_p_per_kva_day": 10.06,
-                "gduos_fixed_p_per_day":  471.07,
-                "rag_schedule": {
-                    "red":   {"weekday": [["16:30", "19:30"]], "weekend": []},
-                    "amber": {"weekday": [["07:00", "16:30"], ["19:30", "22:00"]],
-                              "weekend": [["09:30", "21:30"]]},
                     "green": "remainder",
                 },
             },

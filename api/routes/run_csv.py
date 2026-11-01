@@ -164,6 +164,34 @@ def _resolve_mic(net_demand_mw, mic_value, mic_unit: str, power_factor: float):
     return import_cap_kw, import_cap_kw / power_factor, "user", None
 
 
+def _rag_windows(params) -> tuple:
+    """
+    Red and amber windows for the run, or (None, None) to use the DNO's own.
+
+    The form holds one red and two amber windows. London has more, so when the
+    form still shows the DNO's first windows, take the full schedule rather than
+    cutting it down to what the form could hold.
+    """
+    from src.duos_rates import get_duos_rates
+
+    sched = get_duos_rates(params.dno_key, params.voltage_level)["rag_schedule"]
+    form_red = [[params.rag_red_start, params.rag_red_end]]
+    form_amber = [
+        [params.rag_amber_morning_start, params.rag_amber_morning_end],
+        [params.rag_amber_evening_start, params.rag_amber_evening_end],
+    ]
+    if sched["red"]["weekday"][:1] == form_red and sched["amber"]["weekday"][:2] == form_amber:
+        return None, None
+    weekend = (
+        [[params.rag_weekend_amber_start, params.rag_weekend_amber_end]]
+        if params.rag_weekend_amber_start and params.rag_weekend_amber_end else []
+    )
+    return (
+        {"weekday": form_red, "weekend": []},
+        {"weekday": form_amber, "weekend": weekend},
+    )
+
+
 def _serialise_scenario(
     settled,
     scenario_label: str,
@@ -345,24 +373,7 @@ def _run_csv_background(job_id: str, csv_path: str, params: CsvRunParams) -> Non
         tmp_dir = tempfile.mkdtemp()
         update_job(job_id, tmp_dir=tmp_dir)
 
-        # Build RAG override dicts from the eight request params.
-        # Frontend always sends these pre-populated from DNO defaults,
-        # so the backend never needs to fall back to guessing.
-        rag_red_windows = {
-            "weekday": [[params.rag_red_start, params.rag_red_end]],
-            "weekend": [],
-        }
-        rag_amber_windows = {
-            "weekday": [
-                [params.rag_amber_morning_start, params.rag_amber_morning_end],
-                [params.rag_amber_evening_start, params.rag_amber_evening_end],
-            ],
-            "weekend": (
-                [[params.rag_weekend_amber_start, params.rag_weekend_amber_end]]
-                if params.rag_weekend_amber_start and params.rag_weekend_amber_end
-                else []
-            ),
-        }
+        rag_red_windows, rag_amber_windows = _rag_windows(params)
 
         # 2. Build full MILP-ready input DataFrame.
         # Capture warnings.warn() calls (e.g. price-NaN fills) so they surface to

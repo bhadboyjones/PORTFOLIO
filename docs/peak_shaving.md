@@ -199,14 +199,15 @@ for that year rose from about 4 s to 7 to 10 s per scenario on a Mac.
   investment case, though that saving is contractually certain.
 - The MEC is not priced.
 - The XLSX report has no MIC sweep sheet yet.
+- London has two red windows. They are priced correctly, but the band chart and the
+  red share in "Why this result" only show the first.
 
 ## 7. Original slice 2 design (agreed 2026-10-25)
 
 - **Step 0 (research):** excess capacity rate and billing period per DNO from
   the 2026/27 LC14 statements. Checked 2026-11-01: Eastern Power Networks and all
-  four NGED areas (statements v0.1, Annex 1, LV and HV) publish excess at 1× capacity:
-  WM LV 10.66p, EM 7.68p, Wales 10.49p, SW 12.18p; HV 9.26p, 8.57p, 10.43p, 10.06p.
-  This overrides the "2 to 3×" trade claims. The other 9 licence areas are unchecked.
+  12 of 14 licence areas publish excess equal to capacity at LV and HV. This overrides
+  the "2 to 3×" trade claims. SP Distribution and SP Manweb are unread.
   Ofgem's DCP161 decision removed the customer-contribution discount from excess
   charges and sets no multiple.
   Verify every one at the primary source. Eastern Power Networks 2026/27 v1.5,
@@ -221,8 +222,9 @@ for that year rose from about 4 s to 7 to 10 s per scenario on a Mac.
     approximation.
   - §2.38 and §2.39: one MIC reduction per 12 months, from the next billing period.
     The old capacity may not come back without reinforcement charges.
-  - §2.15 says invoices are "calculated on a periodic basis". The statement does not
-    define the billing period; monthly comes from secondary sources, so confirm it.
+  - No statement read defines the billing period. UKPN, NGED, NPG and ENWL say "the
+    full duration of the billing period"; SSEN says "the full month". flexiq uses
+    calendar months. No statement gives a kW to kVA rule for a MIC.
   - Annex 1 prices LV Site Specific capacity and excess capacity both at 8.04p/kVA/day
     (1×); HV both at 5.31p. The excess rate is a published figure, so step 0 stores it
     per tariff rather than as a multiple.

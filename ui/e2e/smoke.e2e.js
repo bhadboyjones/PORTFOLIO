@@ -17,7 +17,7 @@ test("upload, run, read the answer, refresh and go back", async ({ page }) => {
   await expect(page.getByText("What flexiq read from small_office_hh.csv")).toBeVisible();
   await expect(page.getByText("60.0 days, no gaps")).toBeVisible();
 
-  await page.getByLabel("Network operator (DNO)").selectOption("NPG");
+  await page.getByLabel("Network operator (DNO)").selectOption("NPGY");
   await page.getByLabel("Export limit 1, MW").fill("0");
   await page.getByRole("button", { name: /Run optimisation/ }).click();
   await expect(page).toHaveURL(/#\/run\//);
@@ -46,7 +46,7 @@ test("a real MIC gets breach pricing and a MIC suggestion", async ({ page }) => 
   await page.goto("/#/upload");
   await page.locator('input[type="file"]').setInputFiles(CSV);
   await expect(page.getByText("What flexiq read from small_office_hh.csv")).toBeVisible();
-  await page.getByLabel("Network operator (DNO)").selectOption("NPG");
+  await page.getByLabel("Network operator (DNO)").selectOption("NPGY");
   await page.getByLabel("Export limit 1, MW").fill("0");
   await page.getByLabel(/Agreed import capacity/).fill("1050");
   await expect(page.getByLabel("MIC safety margin")).toHaveValue("5");

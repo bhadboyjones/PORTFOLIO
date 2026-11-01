@@ -28,7 +28,7 @@ import pandas as pd
 
 from .duos_rates import get_duos_rates, convert_rates_to_model_units
 from .prices import build_price_df
-from .config import TOTAL_IMPORT_LEVIES_GBP_PER_MWH, UK_BANK_HOLIDAYS
+from .config import TOTAL_IMPORT_LEVIES_GBP_PER_MWH
 
 
 # ---------------------------------------------------------------------------
@@ -287,15 +287,6 @@ def _parse_hhmm(s: str) -> int:
     return int(h) * 60 + int(m)
 
 
-def _bank_holiday_dates(years) -> set:
-    """Return the set of England & Wales bank-holiday `date` objects for given years."""
-    out = set()
-    for y in years:
-        for d in UK_BANK_HOLIDAYS.get(y, []):
-            out.add(pd.Timestamp(d).date())
-    return out
-
-
 def _window_mask(mins: pd.Series, s: int, e: int) -> pd.Series:
     """Boolean mask for minutes inside [s, e); handles windows that cross midnight (s > e)."""
     if s < e:
@@ -323,8 +314,8 @@ def map_rag_bands(
     - Separate weekday and weekend windows per band (e.g. SPEN weekend Red,
       SSEN weekend Amber)
     - Windows that cross midnight (start > end)
-    - England & Wales bank holidays — charged Green (off-peak), overriding both
-      weekday and weekend bands
+    - Bank holidays are not special: statements price them as the weekday they
+      fall on ("Monday to Friday (Including Bank Holidays)")
 
     Returns:
         pd.Series of "red"/"amber"/"green" aligned to df.index.
@@ -337,13 +328,6 @@ def map_rag_bands(
     mins       = local.dt.hour * 60 + local.dt.minute
     is_weekend = local.dt.dayofweek >= 5  # 5=Sat, 6=Sun
 
-    # Bank holidays → forced Green. (Years absent from UK_BANK_HOLIDAYS are simply
-    # not flagged — band assignment still proceeds on weekday/weekend rules.)
-    hols       = _bank_holiday_dates(local.dt.year.unique().tolist())
-    is_holiday = (
-        local.dt.date.isin(hols) if hols else pd.Series(False, index=df.index)
-    )
-
     def _in_windows(windows: dict) -> pd.Series:
         """True where SP falls inside any window for its day type."""
         mask = pd.Series(False, index=df.index)
@@ -355,8 +339,8 @@ def map_rag_bands(
             mask |= is_weekend & _window_mask(mins, s, e)
         return mask
 
-    red_mask   = (~is_holiday) & _in_windows(red_windows)
-    amber_mask = (~is_holiday) & _in_windows(amber_windows)
+    red_mask   = _in_windows(red_windows)
+    amber_mask = _in_windows(amber_windows)
 
     # Red takes priority over amber where windows overlap
     return pd.Series(

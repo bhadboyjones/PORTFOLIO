@@ -500,10 +500,14 @@ April 2026. If SP reissues, the SPD and SPM year-on-year figures need recomputin
 bands were pulled only to test claimed ranges. LDNO, sub-LV, generation, EHV/EDCM
 and unmetered tariffs are not covered.
 
-**Excess capacity rate.** Eastern Power Networks and all four NGED areas publish
-excess at 1 times the capacity rate for 2026/27 (LC14 Annex 1, checked 2026-11-01).
-The earlier "2 to 3 times" note for NGED and trade claims of 3 times are not supported
-by those statements. The other 9 licence areas are unchecked.
+**Excess capacity rate.** 12 of 14 licence areas publish excess equal to the capacity
+rate for 2026/27, at LV and HV (Annex 1, checked 2026-11-01). The earlier "2 to 3
+times" note for NGED and trade claims of 3 times are not supported. SP Distribution
+and SP Manweb are unread.
+
+**Bank holidays** are priced as the weekday they fall on, not green, in all 12 areas
+read. **Weekend amber** exists in South West, South Wales, ENWL, SEPD and SHEPD.
+**London** has weekday red at 11:00 to 14:00 and 16:00 to 19:00 all year.
 
 **No published evidence that C&I sites are actually reducing agreed capacity** in
 response to the capacity shift. Every source found is a consultancy marketing a kVA
